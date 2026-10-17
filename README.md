@@ -2,6 +2,8 @@
 
 A self-hostable agentic AI platform in Rust. You define agents in YAML. They can use any model provider, call tools and MCP servers, remember things, search your documents and delegate to each other. You run them from a CLI, an HTTP API (including an OpenAI-compatible one) or a web dashboard.
 
+Website: https://aksh-b.github.io/gai
+
 > Status: early and moving fast (v0.1). Phases 1–8 and 10 of a 12-phase plan are built; see [STATUS.md](STATUS.md) for details and known gaps.
 
 ## Features

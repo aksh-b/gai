@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gai · agentic AI platform in Rust</title>
+<meta name="description" content="gai is a self-hostable agentic AI platform in Rust: any model, tools and MCP, memory and RAG, multi-agent workflows, an OpenAI-compatible API and a web dashboard.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23e8590c'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='16' font-weight='700' fill='white' text-anchor='middle'%3Eg%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fbfaf8;
+    --surface: #ffffff;
+    --surface-2: #f3f1ed;
+    --text: #1c1917;
+    --muted: #6b645d;
+    --border: #e7e3dd;
+    --accent: #e8590c;
+    --accent-soft: #fff1e8;
+    --code-bg: #1c1917;
+    --code-text: #f5f1ec;
+    --code-dim: #a39b92;
+    --code-accent: #ffa36b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f0e0d;
+      --surface: #181614;
+      --surface-2: #211e1b;
+      --text: #f2eee9;
+      --muted: #a39b92;
+      --border: #2c2824;
+      --accent: #ff8a3d;
+      --accent-soft: #2a1a10;
+      --code-bg: #0a0908;
+      --code-text: #f2eee9;
+      --code-dim: #8a8279;
+      --code-accent: #ffa36b;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, pre { font-family: "JetBrains Mono", ui-monospace, Consolas, monospace; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+
+  /* nav */
+  nav { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+  nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 60px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; color: var(--text); }
+  .logo:hover { text-decoration: none; }
+  .logo-mark { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: #fff; display: grid; place-items: center; font: 700 16px "JetBrains Mono", monospace; }
+  .nav-links { display: flex; gap: 24px; align-items: center; font-size: 15px; }
+  .nav-links a { color: var(--muted); }
+  .nav-links a:hover { color: var(--text); text-decoration: none; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-weight: 600; font-size: 15px; border: 1px solid var(--border); color: var(--text); background: var(--surface); }
+  .btn:hover { text-decoration: none; border-color: var(--muted); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .nav-links .btn { padding: 7px 14px; color: var(--text); }
+
+  /* hero */
+  .hero { padding: 88px 0 64px; text-align: center; }
+  .pill { display: inline-block; padding: 5px 12px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 600; margin-bottom: 22px; }
+  h1 { font-size: clamp(36px, 6vw, 60px); line-height: 1.08; letter-spacing: -0.03em; margin: 0 auto 20px; max-width: 820px; font-weight: 800; }
+  h1 em { font-style: normal; color: var(--accent); }
+  .lede { font-size: clamp(17px, 2.2vw, 20px); color: var(--muted); max-width: 680px; margin: 0 auto 34px; }
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+  .terminal { margin: 56px auto 0; max-width: 760px; text-align: left; background: var(--code-bg); border-radius: 14px; border: 1px solid var(--border); box-shadow: 0 20px 60px -20px rgba(0,0,0,.35); overflow: hidden; }
+  .terminal-bar { display: flex; gap: 7px; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .terminal-bar span { width: 11px; height: 11px; border-radius: 50%; background: #3a3633; }
+  pre { margin: 0; padding: 18px 20px; color: var(--code-text); font-size: 14px; line-height: 1.7; overflow-x: auto; }
+  pre .c { color: var(--code-dim); }
+  pre .p { color: var(--code-accent); user-select: none; }
+  pre .k { color: var(--code-accent); }
+
+  /* sections */
+  section { padding: 72px 0; }
+  section.alt { background: var(--surface-2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .eyebrow { color: var(--accent); font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
+  h2 { font-size: clamp(28px, 4vw, 38px); letter-spacing: -0.02em; line-height: 1.15; margin: 0 0 14px; }
+  .sub { color: var(--muted); max-width: 640px; margin: 0 0 40px; font-size: 17px; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; }
+  .card h3 { margin: 0 0 8px; font-size: 17px; display: flex; align-items: center; gap: 10px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  .icon { width: 32px; height: 32px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; flex-shrink: 0; }
+  .icon svg { width: 18px; height: 18px; }
+
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+  .split ul { padding: 0; margin: 0; list-style: none; }
+  .split li { padding: 10px 0 10px 28px; position: relative; color: var(--muted); border-bottom: 1px solid var(--border); }
+  .split li:last-child { border-bottom: 0; }
+  .split li strong { color: var(--text); font-weight: 600; }
+  .split li::before { content: ""; position: absolute; left: 4px; top: 19px; width: 8px; height: 8px; border-radius: 2px; background: var(--accent); }
+  .code-card { background: var(--code-bg); border-radius: 14px; border: 1px solid var(--border); overflow: hidden; }
+  .code-card .label { font: 600 12px "JetBrains Mono", monospace; color: var(--code-dim); padding: 12px 20px 0; }
+
+  .providers { display: flex; flex-wrap: wrap; gap: 8px; }
+  .providers span { padding: 6px 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); font: 500 14px "JetBrains Mono", monospace; }
+
+  .steps { display: grid; gap: 16px; max-width: 760px; }
+  .step { display: grid; grid-template-columns: 36px 1fr; gap: 16px; }
+  .step-n { width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 700; }
+  .step h3 { margin: 4px 0 8px; font-size: 17px; }
+  .step .code-card pre { padding: 14px 18px; font-size: 13.5px; }
+
+  footer { padding: 40px 0; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+
+  @media (max-width: 860px) {
+    .grid { grid-template-columns: 1fr 1fr; }
+    .split { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) {
+    .wrap { padding: 0 16px; }
+    .grid { grid-template-columns: 1fr; }
+    .nav-links a:not(.btn) { display: none; }
+    .hero { padding: 56px 0 40px; }
+    section { padding: 52px 0; }
+    pre { font-size: 12.5px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="logo" href="#"><span class="logo-mark">g</span>gai</a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#agents">Agents</a>
+      <a href="#start">Get started</a>
+      <a class="btn" href="https://github.com/aksh-b/gai">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="pill">Open source · Rust · v0.1</span>
+    <h1>The agentic AI platform you <em>run yourself</em></h1>
+    <p class="lede">Define agents in YAML, give them any model, tools, memory and each other, and run them from a CLI, an OpenAI-compatible API or a web dashboard. One binary, one SQLite file.</p>
+    <div class="cta">
+      <a class="btn primary" href="#start">Get started</a>
+      <a class="btn" href="https://github.com/aksh-b/gai">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        View on GitHub
+      </a>
+    </div>
+
+    <div class="terminal">
+      <div class="terminal-bar"><span></span><span></span><span></span></div>
+<pre><span class="p">$ </span>gai serve
+<span class="c">  gai listening on http://127.0.0.1:8484  ·  dashboard /  ·  docs /docs</span>
+
+<span class="p">$ </span>gai run -a researcher "Brief me on WebGPU adoption"
+<span class="c">  ▸ http_fetch   https://caniuse.com/webgpu</span>
+<span class="c">  ▸ ask_writer   {"task": "Turn these notes into a brief"}</span>
+<span class="c">  ✓ done in 6 steps · $0.0142</span>
+
+<span class="p">$ </span>gai replay run_8f2c --from 3 -m openai/gpt-4o-mini
+<span class="c">  forked → run_a91d  (steps 1–2 replayed from recording)</span></pre>
+    </div>
+  </div>
+</header>
+
+<section id="features" class="alt">
+  <div class="wrap">
+    <div class="eyebrow">Features</div>
+    <h2>Everything an agent needs, in one place</h2>
+    <p class="sub">gai covers the whole path from a model call to a production agent: tools, memory, orchestration, an API with keys and budgets, and a UI to watch it all.</p>
+
+    <div class="grid">
+      <div class="card">
+        <h3><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg></span>Any model</h3>
+        <p>Anthropic, OpenAI-compatible APIs and local models through one <code>provider/model</code> name, with retry, fallback, metering and a cost-aware router.</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg></span>Tools &amp; MCP</h3>
+        <p>Built-in tools plus any MCP server over stdio or HTTP, with OAuth sign-in and per-tool approval policies.</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span>Memory &amp; RAG</h3>
+        <p>Self-editing memory blocks, archival memory, and knowledge collections with hybrid vector + keyword search over docs and PDFs.</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><path d="M8 8l3 7M16 8l-3 7"/></svg></span>Multi-agent workflows</h3>
+        <p>Agents delegate to each other, and YAML DAG workflows add parallel nodes, fan-out, conditions, retries and human approval steps.</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 3"/></svg></span>Durable &amp; replayable</h3>
+        <p>Runs survive restarts. Fork any run from any step with a new model, prompt or tools, and compare the results side by side.</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9"/></svg></span>Versioned specs</h3>
+        <p>Every save of an agent or workflow is an immutable version you can diff, label and roll back to.</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>Triggers</h3>
+        <p>Start agents and workflows on cron schedules, signed webhooks or file changes, with no double-firing.</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></svg></span>Media</h3>
+        <p>Speech-to-text, text-to-speech and image generation as agent tools and API endpoints.</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM17 14v6M14 17h6"/></svg></span>Interop</h3>
+        <p>Expose your agents as an MCP server or over A2A, and call remote A2A agents as tools or delegates.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="agents">
+  <div class="wrap split">
+    <div>
+      <div class="eyebrow">Agents as config</div>
+      <h2>A few lines of YAML</h2>
+      <p class="sub" style="margin-bottom:24px">An agent is a model, a prompt and what it may use. gai handles the loop, approvals, budgets and context.</p>
+      <ul>
+        <li><strong>Tools</strong> by name or glob, MCP tools included</li>
+        <li><strong>Knowledge</strong> scopes RAG search to your collections</li>
+        <li><strong>Delegates</strong> turn other agents into <code>ask_&lt;name&gt;</code> tools</li>
+        <li><strong>Limits</strong> cap steps, tokens and spend per run</li>
+      </ul>
+    </div>
+    <div class="code-card">
+      <div class="label">researcher.yaml</div>
+<pre><span class="k">model</span>: anthropic/claude-sonnet-5-5
+<span class="k">description</span>: Researches a topic and writes a brief.
+<span class="k">system</span>: You are {{ agent }}. Today is {{ date }}.
+<span class="k">tools</span>: [http_fetch, rag_search]
+<span class="k">knowledge</span>: [handbook]
+<span class="k">delegates</span>: [writer]
+<span class="k">memory</span>:
+  <span class="k">blocks</span>:
+    - { <span class="k">label</span>: notes, <span class="k">value</span>: "" }
+<span class="k">limits</span>:
+  <span class="k">max_steps</span>: 20</pre>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap split">
+    <div class="code-card">
+      <div class="label">research-brief.yaml</div>
+<pre><span class="k">name</span>: research-brief
+<span class="k">inputs</span>:
+  <span class="k">topics</span>: { <span class="k">default</span>: [webgpu, wasm] }
+<span class="k">nodes</span>:
+  - <span class="k">id</span>: research
+    <span class="k">map</span>: inputs.topics
+    <span class="k">agent</span>: researcher
+    <span class="k">input</span>: "Research {{ item }}"
+  - <span class="k">id</span>: review
+    <span class="k">human</span>: "Approve the notes?"
+    <span class="k">needs</span>: [research]
+  - <span class="k">id</span>: brief
+    <span class="k">agent</span>: writer
+    <span class="k">input</span>: "{{ nodes.research.output }}"
+    <span class="k">needs</span>: [review]</pre>
+    </div>
+    <div>
+      <div class="eyebrow">Workflows</div>
+      <h2>Orchestrate many agents</h2>
+      <p class="sub" style="margin-bottom:24px">Workflows are checkpointed DAGs. A crash or restart picks up where it left off, without repeating finished work.</p>
+      <ul>
+        <li><strong>Node types</strong>: agent, tool, template, value and human</li>
+        <li><strong>map</strong> fans out over a list in parallel</li>
+        <li><strong>if</strong>, retries and timeouts on any node</li>
+        <li><strong>Live DAG</strong> view in the dashboard</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="eyebrow">Providers</div>
+    <h2>Bring any model</h2>
+    <p class="sub">Presets are built in; set the provider's API key and use <code>provider/model</code>. Anything OpenAI-compatible can be declared in <code>gai.toml</code>.</p>
+    <div class="providers">
+      <span>anthropic</span><span>openai</span><span>gemini</span><span>groq</span><span>openrouter</span><span>deepseek</span><span>mistral</span><span>together</span><span>fireworks</span><span>xai</span><span>elevenlabs</span><span>ollama</span><span>lmstudio</span><span>vllm</span>
+    </div>
+  </div>
+</section>
+
+<section id="start" class="alt">
+  <div class="wrap">
+    <div class="eyebrow">Get started</div>
+    <h2>Running in a minute</h2>
+    <p class="sub">Requires Rust 1.91+. Everything works offline with the built-in <code>mock/echo</code> model, so you can try it before adding a key.</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-n">1</div>
+        <div>
+          <h3>Build</h3>
+          <div class="code-card"><pre><span class="p">$ </span>git clone https://github.com/aksh-b/gai.git
+<span class="p">$ </span>cd gai &amp;&amp; cargo build -p gai-cli</pre></div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">2</div>
+        <div>
+          <h3>Try it offline</h3>
+          <div class="code-card"><pre><span class="p">$ </span>cargo run -p gai-cli -- workflow run examples/workflows/hello.yaml</pre></div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">3</div>
+        <div>
+          <h3>Add a model and chat</h3>
+          <div class="code-card"><pre><span class="p">$ </span>export ANTHROPIC_API_KEY=...
+<span class="p">$ </span>cargo run -p gai-cli -- chat -m anthropic/claude-sonnet-5-5</pre></div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">4</div>
+        <div>
+          <h3>Serve the API and dashboard</h3>
+          <div class="code-card"><pre><span class="p">$ </span>cargo run -p gai-cli -- serve
+<span class="c">  → http://localhost:8484  ·  API docs at /docs</span></pre></div>
+        </div>
+      </div>
+    </div>
+    <p style="margin-top:32px"><a href="https://github.com/aksh-b/gai#readme">Read the full README →</a></p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>gai · MIT OR Apache-2.0</span>
+    <span>Built by <a href="https://github.com/aksh-b">Aksh Bhati</a></span>
+  </div>
+</footer>
+
+</body>
+</html>
