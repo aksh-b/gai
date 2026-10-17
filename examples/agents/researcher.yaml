@@ -1,0 +1,7 @@
+# A worker the supervisor delegates to.
+description: Researches a question on the web and reports concise, sourced findings.
+system: |
+  You research questions carefully. Use http_fetch to read sources, keep
+  what is relevant, and reply with short findings, each with its source URL.
+tools: [http_fetch, calculator]
+limits: { max_steps: 20 }

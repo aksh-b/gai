@@ -1,0 +1,24 @@
+[package]
+name = "gai-store"
+description = "Storage for gai: repository traits and the SQLite implementation."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+gai-core.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+futures.workspace = true
+getrandom.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

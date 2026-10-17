@@ -1,0 +1,23 @@
+# Runs with no API key (mock/echo): a tour of node types.
+#   gai workflow run examples/workflows/hello.yaml -i names='["ada", "alan"]'
+name: hello
+description: Greets everyone in parallel, does some arithmetic, and skips a branch.
+inputs:
+  names: { default: ["ada", "grace"] }
+nodes:
+  - id: greet
+    map: "inputs.names"
+    agent: { name: greeter, model: mock/echo }
+    input: "Hello, {{ item }}!"
+  - id: count
+    tool: calculator
+    args: { expression: "{{ inputs.names | length }} * 10" }
+  - id: big
+    if: "nodes.count.output > 100"
+    template: "That is a crowd."
+  - id: summary
+    value:
+      greetings: "{{ nodes.greet.output }}"
+      score: "{{ nodes.count.output }}"
+      crowd: "{{ nodes.big.status == 'completed' }}"
+output: "{{ nodes.summary.output }}"

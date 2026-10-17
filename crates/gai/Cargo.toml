@@ -1,0 +1,29 @@
+[package]
+name = "gai"
+description = "gai: an agentic AI platform. The SDK facade: config loading and the entry point to every gai subsystem."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+gai-agent.workspace = true
+gai-core.workspace = true
+gai-llm.workspace = true
+gai-memory.workspace = true
+gai-orchestra.workspace = true
+gai-triggers.workspace = true
+gai-skills.workspace = true
+gai-store.workspace = true
+gai-tools.workspace = true
+dirs.workspace = true
+figment.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+regex.workspace = true
+tempfile.workspace = true

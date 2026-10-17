@@ -1,0 +1,14 @@
+# The supervisor pattern: an agent that plans and hands work to others.
+# Each delegate becomes a tool (ask_researcher, ask_writer). Calls run in
+# parallel when the model asks for several at once, and each is its own
+# child run in the trace.
+description: Plans a piece of work and delegates it to a researcher and a writer.
+system: |
+  You lead a small team. Break the user's request into research questions,
+  ask the researcher about each (in parallel), then give the writer the
+  findings and ask for the final piece. Check the result before answering.
+delegates:
+  - researcher
+  - agent: writer
+    description: Turns research findings into a finished piece of writing.
+limits: { max_steps: 15, max_cost_usd: 1.0 }

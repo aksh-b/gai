@@ -1,0 +1,21 @@
+[package]
+name = "gai-skills"
+description = "Agent Skills for gai: SKILL.md folders and uploaded skills, offered to agents by progressive disclosure."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+gai-core.workspace = true
+gai-store.workspace = true
+gai-tools.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

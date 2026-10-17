@@ -1,0 +1,34 @@
+[package]
+name = "gai-tools"
+description = "Tools for gai agents: the Tool trait, typed tools, a registry and built-in tools."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+gai-core.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+evalexpr.workspace = true
+futures.workspace = true
+reqwest.workspace = true
+rmcp.workspace = true
+reqwest013.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+axum.workspace = true
+rmcp = { workspace = true, features = ["server", "macros", "transport-streamable-http-server", "transport-io"] }
+tempfile.workspace = true
+wiremock.workspace = true
+
+[[test]]
+name = "mcp"
+harness = false

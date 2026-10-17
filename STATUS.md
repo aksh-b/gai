@@ -1,0 +1,144 @@
+# gai: development status
+
+*Last updated 2026-10-15. Read this first when resuming work.*
+
+gai is a self-hostable agentic AI platform in Rust: a model layer that works with any provider, agents with tools and MCP, a server with an OpenAI-compatible API, a CLI/TUI, and a React dashboard. The full 12-phase plan is in
+`C:\Users\akshbhati\.claude\plans\create-a-full-fledged-velvety-chipmunk.md`.
+
+**Done:** phases 1–8 and 10, plus the parts of phase 11 (dashboard) that those phases needed. **Skipped for now (by choice):** phase 9 (code sandbox, browser agent).
+
+Size: about 27k lines of Rust (tests included) in 12 crates, about 5k lines of hand-written TypeScript, and 171 tests, all passing; `clippy -D warnings` is clean.
+
+---
+
+## Running it
+
+Rust can't link on this Windows machine (no MSVC linker), so everything Rust runs in podman via `scripts/`. Node runs natively.
+
+| Command | What it does |
+|---|---|
+| `scripts/serve.sh` | Build and serve API + dashboard on http://localhost:8484 (data in the `gai-data` volume) |
+| `scripts/gai.sh <args>` | The `gai` CLI against the same data, e.g. `scripts/gai.sh keys create --name me --scope admin` |
+| `scripts/cargo.sh test --workspace` | Run cargo in the dev container (`localhost/gai-dev`, built by `scripts/dev-image.sh`) |
+| `scripts/check.sh` | fmt check + clippy `-D warnings` + tests |
+| `scripts/q.sh <cargo args>` | Like `cargo.sh`, without colour codes or progress lines (for reading logs) |
+| `scripts/gai.sh workflow run examples/workflows/hello.yaml -i names='["ada"]'` | Run a workflow and follow its nodes (also `workflow list/show/validate/save/delete`) |
+| `scripts/gai.sh replay <run> --from 2 -m ollama/gemma3:1b` | Fork a run: replay steps before 2 from the recording, run the rest live (also `--system`, `--tools`, `-V <agent version>`, `--edit 1=TEXT`) |
+| `scripts/gai.sh image "a fox" -m mock/image -o fox.svg` | Generate images (also `speak "text" -o hi.mp3`, `transcribe file.wav`); models default to `[media]` |
+| `scripts/gai.sh triggers save t.yaml` | Create or replace a trigger (also `list/show/fire/events/enable/disable/delete/secret`); schedules and watchers run inside `gai serve` |
+| `scripts/gai.sh mcp serve` | gai as an MCP server over stdio (stdin is forwarded into the container) |
+| `scripts/gai.sh agents diff <name> [from] [to]` | Diff two versions (also `agents rollback`, `workflow versions/diff/rollback/label`) |
+| `scripts/gai.sh ingest ./docs -c handbook` | Add files or folders to a knowledge collection (also `collections`, `memory`, `skills` subcommands) |
+| `scripts/ollama.sh [models…]` | Run Ollama inside podman (container `gai-ollama`, network `gai-net`) and pull models; default `gemma3:1b` |
+| `cd web && npm run dev` | Dashboard dev server on :5190, proxying `/v1` to :8484 |
+| `cd web && npm run build` | Build `web/dist`, which `gai serve` serves |
+| `cd web && npm run gen:api` | Regenerate `web/src/api.gen.ts` from the running server's `/openapi.json` |
+
+If podman says "Cannot connect", run `podman machine stop`, then `podman machine start`. Podman needs an empty authfile and `--pull=never` because of a gcloud credential helper; the scripts already handle this.
+
+**Local state (not in git):**
+- `.admin-key` holds the user's admin API key. The server has auth on, because keys exist.
+- `gai.toml` (repo root) declares `ollama/gemma3:1b` with no tool support.
+- MCP servers added through the API live in the database: **Atlassian** (signed in, 21 tools) and **PDFParse** (signed in, 29 tools; confirmed connecting on 2026-10-14).
+- Phase-6 demo data: stored workflow `hello` (from examples/workflows/hello.yaml) and a few of its runs.
+- Phase-5 demo data from the end-to-end check: collection `gai-docs` (STATUS.md), memory block `agent:librarian/notes`, archival collection `memory:agent:librarian`, uploaded skill `release-notes`. All safe to delete.
+- Stored agents: `researcher`, `gemma` (plain chat on gemma3:1b), and possibly `atlassian`.
+- No cloud API keys are set; the default model is `mock/echo`.
+- `gai.toml` also has `[routers.auto]`: `ollama/gemma3:1b` (easy) and `mock/echo` (hard, stands in for a real model). `[media]` is commented out, so `serve.sh` passes `GAI_MEDIA__*=mock/image|voice|ears`.
+- Phase-10 demo data: a few blobs (mock SVG images, WAV speech) and runs of agents `artist`, `router-demo`, `r2`.
+
+---
+
+## Crates
+
+| Crate | Responsibility |
+|---|---|
+| `gai-core` | Message / ContentBlock / ToolSpec / Usage / Pricing / ids |
+| `gai-llm` | `ChatModel` / `EmbeddingModel` traits; dialects (anthropic, openai-compatible, mock); config-declared providers + 14 presets; registry with `provider/model` and aliases; retry / fallback / metering middleware; reasoning effort mapping |
+| `gai-tools` | `Tool` trait, `typed_tool` (schemars), registry; built-ins (calculator, current_time, fs_read/write/edit/list, http_fetch with private-network guard, shell); **MCP client** (`mcp.rs`, rmcp 3.5: stdio + streamable HTTP + OAuth) |
+| `gai-store` | Repository traits (Agent/Session/Run/Key/Mcp/Memory/Knowledge/Skill stores) + SQLite (sqlx, WAL, `BEGIN IMMEDIATE` for writes); migrations `0001`–`0005`. Chunks hold f32 embedding blobs plus an FTS5 index kept in sync by triggers |
+| `gai-memory` | Memory blocks (`RunMemory`, `MemoryConfig`), archival memory, `Knowledge` (collections, ingest, hybrid search with RRF), loaders (text/md/html/pdf via `pdf-extract`), heading-aware chunker, and the tools `memory_append/replace/rethink`, `remember`, `memory_search`, `rag_search` |
+| `gai-skills` | Agent Skills: SKILL.md folders (`skills_dirs`) + uploaded skills in the store, `index()` for the prompt, `load_skill` tool (copies bundled files to `<workspace>/.skills/<name>/`) |
+| `gai-orchestra` | Workflows: `WorkflowSpec` (YAML DAG, validation, dependency graph), minijinja templates/expressions (`lines`, `fromjson` filters), the `Workflows` engine (scheduling, parallel nodes, `map` fan-out, retries, `if`, human steps, checkpoints, resume, background queue via a runtime launcher) |
+| `gai-agent` | `AgentSpec` (YAML/TOML/JSON; now with `memory`, `knowledge`, `skills`, `delegates`); `Runtime`: model/tool loop, parallel tools, policies + approvals, budgets, cancel, context manager (clearing + compaction), step journal, events, **resume/recover**, **hooks** (`RedactSecrets`, `DenyShell`), **background queue** (`enqueue` / `start_queue`), finish hooks, run callbacks; **multi-agent** (`multi.rs`): `resolve_agent`, `run_child` (deduped child runs), `ask_<name>` delegate tools, `attach`/`ExternalRun` and `set_launcher` for runs other engines drive |
+| `gai-triggers` | Triggers: `TriggerSpec` (YAML; kinds `cron` / `webhook` / `file`), the `Triggers` engine (create/update/fire, schedule loop, file watchers via `notify`, HMAC webhook verification) |
+| `gai` | Facade: `Config` (`gai.toml` + `GAI_*` env), lazy runtime, agent resolution (`name`, `name@v3`, `name@label`, files), wires hooks, MCP, and the credential store |
+| `gai-server` | axum: REST `/v1/*`, SSE run events, API-key auth + scopes + budgets + rate limit, OpenAI-compatible `/openai/v1`, OpenAPI 3.1 at `/openapi.json` + Scalar `/docs`, MCP management + OAuth callback, serves `web/dist` |
+| `gai-cli` | `gai serve / run / chat (ratatui TUI) / ask / agents / sessions / runs (incl. resume) / replay / speak / transcribe / image / tools / models / providers / keys / mcp` |
+
+The dashboard (`web/`) is React 19 + Vite. It imports flame components from `../../flame/src` via the `@flame` alias. Pages: Playground, Runs (+ detail with step waterfall, live events, child runs, and the node graph for workflow runs), Approvals, Agents (YAML editor + versions), **Workflows** (list, SVG DAG with live node status, run with inputs, inline human approvals, YAML editor with live validation, recent runs), **Knowledge** (collections, file/text/URL ingest, chunk viewer, search with hybrid/meaning/keyword modes), **Memory** (blocks by scope, edit, read-only, history), **Skills** (list, instructions, upload), Models, Tools (+ MCP servers with Sign in / out), Usage, API keys. Hash routing; API key kept in localStorage.
+
+---
+
+## Behaviour worth knowing
+
+- **Auth:** `auto` mode stays open while no key exists and the server is only reachable locally (`--local`, which `serve.sh` passes); after that, every `/v1` and `/openai` request needs a key. Public paths: `/v1/health`, `/v1/mcp/oauth/callback`, `/docs`, `/openapi.json`, and the dashboard's static files.
+- **Scopes:** `GET` needs `read`. Writing to `/v1/keys`, or anything non-GET under `/v1/agents` or `/v1/mcp`, needs `admin`. Everything else needs `run`.
+- **MCP tool names** are `mcp__<server>__<tool>` (provider-safe characters; the planned `mcp:server/tool` is not valid for models). Destructive tools (by MCP annotation) default to `approve`. Connection is lazy, except that `gai serve` connects at startup.
+- **MCP OAuth:** `POST /v1/mcp/{name}/sign-in` returns `auth_url`. The provider redirects to the public callback, matched by OAuth `state`. The code exchange runs in a spawned task, so repeated or abandoned callbacks share one outcome. Tokens go in table `mcp_oauth` and refresh automatically.
+- **Durable runs:**
+  - Tool steps are journaled as `{call_id, input}`. `Runtime::recover()` (called when the server starts) resumes unfinished runs.
+  - Journaled results are reused, pending approvals are asked again, and in-flight non-idempotent tools need approval again.
+  - `RunHandle::abort()` simulates a crash in tests.
+- **Models without tool support** (`capabilities.tools = false`) run without tools and emit a warning.
+- **Context:** tool results are cleared at 60% of the window and compaction runs at 80%. Summaries are stored as `compaction` rows and put in the system prompt.
+- **Hooks** (`[hooks]` config): secret redaction is on by default, and `deny_shell` blocks `rm -rf /`-style commands, `mkfs`, `dd` to disks, and fork bombs.
+- **Agent memory** (`memory:` in a spec): blocks have scope `agent` (default), `user` (a profile shared by all agents; stored as `user:<user_id>`, where the user comes from the run's `user_id`, then the session's, then `default`), or `shared:<name>`. They are seeded once from the spec's `value`, rendered into the system prompt as `<memory_blocks>` before every model call (after the static prompt, for caching), size-limited, and every edit is versioned with the run id as actor. `archival: true` adds `remember`/`memory_search` over the collection `memory:agent:<name>` (or `memory:user:<id>`).
+- **Knowledge:** `knowledge: [collection]` adds `rag_search` limited to those collections; listing `rag_search` in `tools` without `knowledge` searches every non-memory collection. Each collection fixes its embedding model; the default is `knowledge.embedding_model`, falling back to `mock/hash` (hashed bag of words, keyword-level only). For real semantic search, set e.g. `ollama/nomic-embed-text` or `openai/text-embedding-3-small`. Hybrid search = brute-force cosine + FTS5 BM25 fused with RRF (k=60). Re-ingesting a source with identical text is a no-op; with new text it replaces the document.
+- **Skills:** `skills: [name or prefix*]` puts only names and descriptions in the prompt (`<skills>`) and adds `load_skill`. Folder skills win over uploaded skills with the same name. Uploading or deleting skills over the API needs `admin`.
+- **Background runs:** `mode: "background"` stores the run as `queued` with `metadata.background = true` and returns 202. `gai serve` runs a queue worker (`server.max_background_runs`, default 4) that claims runs atomically (`UPDATE … RETURNING`), so queued runs survive restarts. `/v1/runs/{id}/events` waits while a run is queued. `callback_url` (any mode) gets the `RunOutcome` POSTed when the run ends (`x-gai-event: run.finished`, three tries); private addresses are refused unless `tools.allow_private_network`.
+- **Key spend** is now charged by a runtime finish hook (`charge-key`, set in `router`) for every run that has `metadata.key_id`, so every mode, the OpenAI endpoint and resumed runs are charged the same way. Workflow runs are skipped by that hook: their cost is their agent runs', which are charged themselves.
+- **Delegation:** `delegates: [agent | {agent, name, description}]` adds an `ask_<name>` tool per delegate (input `{task, context?}`). Each call is a child run (`parent_run_id`, `metadata.child_key` = the tool call id, `depth`, inheriting the parent's user, key and auto-approve; max depth 5). The tool is idempotent: after a restart the same call finds its child run instead of starting another. A supervisor is just an agent with delegates (`examples/agents/supervisor.yaml`).
+- **Workflows:** stored and versioned in the `workflows` tables (admin to save/delete; `run` scope to run or validate), or files in `workflows_dirs` (default `./workflows`, `<data_dir>/workflows`). A run is a run record with `agent = workflow:<name>` and `metadata.kind = workflow`; each node is a `node` step journaled with `{status, output, error}`. Dependencies are `needs` plus every `nodes.<id>` named in a template. Without `if`, a node is skipped only when all its dependencies were skipped. Agent nodes run as child runs keyed by node id (`id[i]` for map items, `~n` per retry), so a resumed workflow reuses them. Human nodes and approve-policy tool nodes wait in the approvals inbox (call id = node id). `/v1/runs/{id}/resume` now resumes any kind of run (`Runtime::resume_any`); startup recovery resumes agent runs first, then workflow runs.
+
+- **Versions:** every save of an agent or workflow is an immutable version. Rollback (`POST /v1/{agents|workflows}/{name}/rollback {version}`) saves the old spec again as the newest version, so history is never rewritten. Labels exist for both (`/labels/{label}`), and `name@label` / `name@v3` resolve for both. `GET …/diff?from=&to=` returns both YAMLs and a unified diff (`similar`).
+- **Recording + replay:** model steps journal the full `ChatRequest` in `input.request` (`record_requests = false` in gai.toml turns that off). `POST /v1/runs/{id}/replay {from_step, overrides: {model, system_prompt, tools, agent_version, auto_approve, step_edits}, mode}` forks a run into a copy of its session (rows before the run's first message, compactions included, same seqs). Model steps before `from_step` take the recorded output verbatim (step input gets `replayed_from`, the step keeps the original model name, no usage or cost); their tool calls reuse the recorded tool step (same input and output), recorded approval decisions and recorded compaction summaries, so nothing is called. `metadata.fork = {run_id, from_step, overrides}`; `GET /v1/runs?fork_of=<id>` lists forks. A fork interrupted by a restart rebuilds its recording from `metadata.fork` on resume. Workflow runs can't be replayed yet. Dashboard: Fork dialog (header button or "Fork from step N" per model step), `#/runs/{a}/compare/{b}` side-by-side view (per-step same/different/replayed and a line diff of the outputs), Forks list on a run, Versions panels with Changes/Label/Roll back and a version-to-version diff for agents and workflows.
+
+- **Media models (`gai-llm`):** `SpeechToText`, `TextToSpeech` and `ImageModel` traits next to chat and embeddings, resolved by `models.transcription/speech/image("provider/model")`. Model kinds `transcription`, `speech`, `image`; prices in `media_pricing` (per minute, per million characters, per image). Dialects: `openai` (`/audio/transcriptions` multipart, `/audio/speech`, `/images/generations`; option `transcription_path`, used by the `whispercpp` preset at :8080 `/inference`), new `elevenlabs` (TTS + Scribe STT, `xi-api-key`), and `mock` (any `mock/<name>`: speech is a silent WAV carrying its text in a `gaiT` chunk, transcription reads it back, images are SVG cards). Presets list OpenAI whisper/gpt-4o(-mini)-transcribe/tts-1(-hd)/gpt-4o-mini-tts/gpt-image-1/dall-e-3, ElevenLabs flash/multilingual/scribe, and Gemini `imagen-4.0-generate-001` (through Gemini's OpenAI-compatible endpoint). Prices are approximate.
+- **Content and blobs:** `ContentBlock::Audio` and `MediaSource::Blob {id, media_type}`. Blobs live in table `blobs` (bytes in SQLite, migration 0008; `BlobStore` trait). The runtime swaps blob references for base64 just before each model call (after journaling, so the journal keeps ids), drops images for models without `vision`, audio without `audio`, and SVG always (providers take raster only) — replacing them with a short note. The OpenAI dialect sends audio as `input_audio`; Anthropic gets a note.
+- **Media tools:** `image_gen`, `speak`, `transcribe` are built per run when listed in `tools`, with models from the agent's `media:` over `[media]` (`image`, `speech`, `voice`, `transcription`). Outputs are stored as blobs (with `run_id`, `source`, prompt/text metadata), copied into the workspace (`images/`, `audio/`), and returned as Image/Audio blocks. `ToolOutput.cost` (new) is added to the run's cost and to the usage log; replayed or resumed tool results are not charged again.
+- **Router (`gai-llm::router`):** `[routers.<name>]` gives `router/<name>`: `models` (name, or `{model, level: easy|medium|hard}`; plain names get levels by position), optional `classifier` model, `escalate` (default true), `sticky` (default true: keep a conversation's first pick), `max_cost_per_call`. Per request it works out needs (tools, vision, audio, JSON schema, ~tokens vs context window), rates difficulty (classifier JSON, else rules: high effort, >6k chars or words like prove/refactor/debug → hard; <280 chars and no tools → easy), and takes the cheapest capable model at that level or above. On provider failure, or invalid JSON when a schema was asked for, it escalates to the next level up (raising reasoning effort to high if the model reasons). It streams `ChatEvent::Routed {model, reason, pricing, extra_cost}` first; the runtime emits `model_routed`, records `routed` in the step output, and charges the real model's price plus the classifier. Router capabilities are the union of its models'. Routers cannot nest; candidates without keys are skipped.
+- **Server:** `/v1/blobs` (POST raw body with content-type, GET list `?run_id`), `/v1/blobs/{id}` (bytes, served with `nosniff` and a sandboxing CSP so uploaded SVG/HTML cannot script the dashboard), `/v1/blobs/{id}/info`, `/v1/media` (defaults), `/v1/audio/transcriptions` (JSON: `blob_id` or `audio_base64` + `media_type`), `/v1/audio/speech` and `/v1/images/generations` (results stored as blobs). Media routes accept bodies up to 50 MB. Costs are logged and charged to the key.
+- **Dashboard:** Playground mic button (MediaRecorder → transcription into the composer), "read aloud" on replies, images/audio from tool results and user messages shown inline (blobs fetched with the API key into object URLs), routing notes; Media page (Images / Speech / Transcribe / Library); `model_routed` in run events.
+
+- **gai as an MCP server (`gai-server::mcp_server`):** streamable HTTP at `/mcp` (rmcp 3.5 `StreamableHttpService`, behind the normal API-key auth: POST needs `run`) and stdio via `gai mcp serve`. Tools: `agent_<name>` (input `{task, session_id?}`; runs the stored agent, waits up to `call_timeout_secs`, answers with text plus structured `{run_id, session_id, status, output, cost_usd}`; approvals wait in the inbox unless `auto_approve`), `workflow_<name>` (inputs from the workflow's `inputs`), `search_knowledge`. Resources: `gai://collections/<name>` (markdown listing) and `gai://collections/<name>/documents/<id>` (text). `[server.mcp]`: `enabled`, `agents`/`workflows`/`collections` patterns (default `*`; memory collections never), `auto_approve`, `call_timeout_secs`, `allowed_hosts` (empty = localhost only, `*` = any). Runs get `metadata.source = mcp` and the caller's `key_id`.
+- **Triggers:** table `triggers` (spec JSON, `secret`, `next_fire_at`, `last_fired_at`) and `trigger_events` (migration 0009). Cron uses croner 4 with chrono-tz time zones; the loop fires a due time only if it wins `advance_trigger` (compare-and-set on `next_fire_at`), so two processes never double-fire; a time more than 90 s late is `missed` and fires once (`catch_up: once`, default) or is recorded as skipped (`skip`). `skip_if_running` (default true) records `skipped` while the last firing's run is unfinished. Runs go through the persisted background queue (`rt.enqueue` / `wf.enqueue`) with `metadata.source = trigger`, `trigger`, `trigger_id`. Inputs are minijinja templates over `trigger, reason, now, date, payload, path, event, content` (small text files are inlined); a workflow input that is exactly `{{ expr }}` keeps its JSON type; webhook objects also fill matching workflow inputs. Webhooks: `POST /v1/webhooks/{id}` (no API key) with `X-Gai-Signature`/`X-Hub-Signature-256: sha256=<hex HMAC of body>` or `X-Gai-Token: <secret>`; unknown/disabled hooks are 404. Management under `/v1/triggers` (writes need `admin`; the secret only via `POST /v1/triggers/{id}/secret`). File watchers run in `gai serve` (inotify; changes made on the Windows side of a bind mount may not be seen).
+- **A2A:** server: cards at `/.well-known/agent-card.json` (+ `agent.json`; all exposed agents as skills, endpoint `/a2a`, agent picked by `message.metadata.agent`/`skill` or `[server.a2a] default_agent`) and `/a2a/{agent}/.well-known/agent-card.json`; JSON-RPC at `POST /a2a[/{agent}]` (guarded by keys; cards are public): `message/send` (blocking by default, up to `wait_secs`), `message/stream` (SSE: task, streamed `artifact-update` chunks, final `status-update`), `tasks/get`, `tasks/cancel`. Task = run, contextId = session (reused if it exists), states submitted/working/completed/failed/canceled (`unknown` for a run left "running" by a crash); keys only see their own tasks. Text, data and file parts (images, text files) become input. Client (`gai_tools::a2a`): `[a2a_agents.<name>] url (endpoint or card URL), headers (${VAR}), description, timeout_secs` → tool `a2a__<name>`; agent `delegates: [{a2a: url, name, headers}]` → `ask_<name>` (private addresses refused unless `tools.allow_private_network`). Polls `tasks/get` until terminal; returns the answer and a `context_id` to continue.
+- **Auth change:** the middleware now also guards `/mcp` and `/a2a/*` (it used to guard only `/v1/*` and `/openai/*`), and treats `/v1/webhooks/*` as public.
+
+- **Forms (dashboard):** agents and triggers are edited with forms, with a YAML tab kept in sync both ways (`web/src/forms.tsx`: `SpecEditor`, `PickList`, `Section`...; `AgentForm.tsx`, `TriggerForm.tsx`). The agent form covers basics and model picker, prompt with insertable variables, tools as a searchable checklist grouped by source with a per-tool policy, delegates (local and A2A), knowledge, skills, memory blocks, media models, limits, reasoning, output schema and context. The trigger form has kind switching, schedule presets, time zones and a live check through `POST /v1/triggers/preview` (errors, the schedule in words, the next run times). Values the form does not know (typed in YAML) are kept. Still YAML-only: workflows and MCP server configs.
+
+## Deviations from the plan (intentional)
+
+- OpenAPI comes from schemars + a route table, not utoipa. API keys are SHA-256 hashed, not argon2, because they're random 160-bit tokens.
+- The dashboard has no TanStack Router/Query, xyflow, or CodeMirror yet: it uses a simple router and textareas.
+- OTLP trace export was skipped; traces are stored and served by `/v1/runs/{id}/trace`.
+- The dashboard is served from disk (`--ui web/dist`), not embedded with rust-embed yet.
+- MCP sign-in works only through the dashboard; the CLI can't receive the browser redirect from inside the container.
+- Phase 5: the planned `VectorStore` trait is the store's `KnowledgeStore` (vector + text search methods); fusion lives in `gai-memory`. Gemini embeddings come through the existing OpenAI-compatible `gemini` preset rather than a native dialect. Memory, knowledge and skill tools are built per run from the agent spec, not registered globally, so they don't appear in `/v1/tools`. Skill scripts run through the existing `shell` tool from the copied folder until the phase-9 sandbox exists.
+- Phase 8: webhooks live at `/v1/webhooks/{id}` (not `/v1/hooks/{id}`, which already lists run hooks). A2A follows protocol 0.3 (`agent-card.json`, `kind` fields); push notifications and `tasks/resubscribe` are not implemented, and a task cannot be continued with more input (send a new message in the same context instead). Remote A2A agents can be delegates and tools (so workflows reach them through agent or tool nodes), not workflow nodes of their own.
+- Phase 10: blob bytes are stored in SQLite rather than on the filesystem (one file to back up). There is no native Gemini dialect yet (Gemini images go through its OpenAI-compatible endpoint); whisper.cpp is reached through the `openai` dialect. The router has cost limits but no latency targets. Speech and image endpoints are not mirrored under `/openai/v1`.
+- Phase 7: rollback creates a new version instead of moving an `active` pointer (the latest version is the active one). Step edits can change a replayed reply's text or content and tool results, but not tool inputs. The fork view is a step table, not an xyflow graph.
+- Phase 6: the planned `condition` and `parallel` node types are covered by `if:` on any node and by independent nodes running in parallel; there is no separate supervisor runtime (a supervisor is an agent with `delegates`). The DAG view is a hand-rolled SVG layered layout, not xyflow.
+
+## Known gaps / small follow-ups
+
+- The `researcher` agent lists `atlassianUserInfo`; it should be `mcp__Atlassian__atlassianUserInfo`.
+- The "dashboard" test API key can be revoked.
+- `serve.sh` rebuilds the CLI on every start (a few seconds when nothing changed).
+- No embedding model is configured, so collections use `mock/hash`. Pull one into the podman Ollama (`scripts/ollama.sh nomic-embed-text`) and set `[knowledge] embedding_model = "ollama/nomic-embed-text"` in gai.toml for semantic search. Existing collections keep their model; re-create them to switch.
+- Brute-force vector search reads every embedding of the searched collections per query (fine to about 100k chunks).
+- Delegation and workflows were exercised end to end with `mock/echo` and scripted models only; with no tool-capable model configured, `examples/agents/supervisor.yaml` and `examples/workflows/research-brief.yaml` haven't run against a real model yet.
+- A workflow's `timeout_secs` restarts from zero when a run resumes, and a human step that was waiting asks again after a restart (by design, but the old answer window is lost).
+- The local gemma3:1b can't call tools, so memory/RAG tools were exercised end to end only through `mock/echo` (`call:<tool> {json}`) and scripted tests.
+
+---
+
+## Next
+
+Remaining phases:
+- 9: code sandbox and browser agent (skipped by choice so far)
+- 11: dashboard polish and embedding (UI built into the binary, CodeMirror, xyflow)
+- 12: SDK polish, bundles, templates, Dockerfile, Postgres
+
+Follow-ups: no real speech/image model or tool-capable cloud model has been tried yet (no keys); MCP was tested with gai's own client and rmcp's, not yet with Claude Code/Desktop themselves; A2A was tested gai-to-gai only.

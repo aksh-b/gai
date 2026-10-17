@@ -1,0 +1,31 @@
+[package]
+name = "gai-triggers"
+description = "Things that start gai runs on their own: cron schedules, webhooks and file watchers."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+gai-agent.workspace = true
+gai-orchestra.workspace = true
+gai-store.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+croner.workspace = true
+getrandom.workspace = true
+hmac.workspace = true
+minijinja.workspace = true
+notify.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+gai-llm.workspace = true
+gai-tools.workspace = true
+tempfile.workspace = true

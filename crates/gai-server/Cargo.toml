@@ -1,0 +1,29 @@
+[package]
+name = "gai-server"
+description = "The gai HTTP API (REST + SSE + OpenAI-compatible), auth, and dashboard host."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+gai.workspace = true
+axum.workspace = true
+chrono.workspace = true
+futures.workspace = true
+governor.workspace = true
+base64.workspace = true
+reqwest.workspace = true
+rmcp = { workspace = true, features = ["server", "transport-streamable-http-server", "transport-io"] }
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+similar.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+reqwest = { workspace = true, features = ["json"] }
+tempfile.workspace = true

@@ -1,0 +1,34 @@
+[package]
+name = "gai-agent"
+description = "The gai agent runtime: agent specs, the model/tool loop, budgets, approvals, context management and run events."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+base64.workspace = true
+gai-core.workspace = true
+gai-llm.workspace = true
+gai-memory.workspace = true
+gai-skills.workspace = true
+gai-store.workspace = true
+gai-tools.workspace = true
+chrono.workspace = true
+futures.workspace = true
+minijinja.workspace = true
+regex.workspace = true
+async-trait.workspace = true
+reqwest.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+toml.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+wiremock.workspace = true

@@ -1,0 +1,7 @@
+# A tiny agent that runs entirely offline on the mock model.
+model: mock/echo
+description: Echoes, and calls tools when asked with `call:<tool> <json>`.
+system: You are {{ agent }}. Today is {{ date }}.
+tools: [calculator, current_time, fs_*]
+limits:
+  max_steps: 10

@@ -1,0 +1,40 @@
+# A research brief: research, outline, a human check, then sections written
+# in parallel and stitched together. Needs a tool-capable model; run with
+#   gai workflow run examples/workflows/research-brief.yaml -i topic="solid-state batteries"
+name: research-brief
+description: Research a topic and write a short brief, with a human check on the outline.
+inputs:
+  topic: { description: What the brief is about }
+  sections: { description: How many sections, default: 3 }
+nodes:
+  - id: research
+    agent: researcher
+    input: "Find the most important current facts about {{ inputs.topic }}."
+    retries: 1
+  - id: outline
+    agent: writer
+    input: |
+      Propose {{ inputs.sections }} section titles for a brief on {{ inputs.topic }},
+      one per line, nothing else. Notes:
+      {{ nodes.research.output }}
+  - id: approve
+    human: "Use this outline for the {{ inputs.topic }} brief?\n\n{{ nodes.outline.output }}"
+  - id: sections
+    map: "nodes.outline.output | lines"
+    concurrency: 3
+    agent: writer
+    input: |
+      Write the section "{{ item }}" (about 150 words) of a brief on {{ inputs.topic }}.
+      Notes:
+      {{ nodes.research.output }}
+    needs: [approve]
+  - id: brief
+    template: |
+      # {{ inputs.topic }}
+      {% set titles = nodes.outline.output | lines %}
+      {%- for s in nodes.sections.output %}
+      ## {{ titles[loop.index0] }}
+
+      {{ s }}
+      {% endfor %}
+output: "{{ nodes.brief.output }}"
