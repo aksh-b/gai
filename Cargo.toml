@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.91"
-repository = "https://github.com/akshbhati/gai"
+repository = "https://github.com/aksh-b/gai"
 
 [workspace.dependencies]
 gai-core = { path = "crates/gai-core" }
