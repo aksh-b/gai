@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Run Ollama inside the podman machine, next to the gai server, and pull
 # models into it. gai reaches it over the gai-net network, so nothing on
-# Windows (Ollama settings, firewall) is involved. CPU only.
+# Windows (Ollama settings, firewall) is involved. CPU only. Models get a
+# 12k-token context (OLLAMA_CONTEXT_LENGTH): Ollama's own default is small
+# and it cuts longer prompts off silently. To change it, remove the
+# container (podman rm -f gai-ollama; the models are kept) and run again.
 #
 #   scripts/ollama.sh                    # start, and pull gemma3:1b
 #   scripts/ollama.sh qwen3:4b llama3.2  # start, and pull these models
@@ -21,6 +24,7 @@ if ! podman container exists gai-ollama; then
   podman run -d --name gai-ollama --network gai-net \
     -v gai-ollama:/root/.ollama \
     -e OLLAMA_KEEP_ALIVE=30m \
+    -e OLLAMA_CONTEXT_LENGTH="${OLLAMA_CONTEXT_LENGTH:-12288}" \
     docker.io/ollama/ollama:latest >/dev/null
 elif [ "$(podman inspect -f '{{.State.Running}}' gai-ollama)" != "true" ]; then
   podman start gai-ollama >/dev/null
