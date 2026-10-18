@@ -10,6 +10,9 @@ import sys
 import time
 import urllib.request
 
+# Model output has arrows and quotes the Windows console code page lacks.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 # GAI_KEY overrides; an empty GAI_KEY sends none (for an open test server).
 KEY = os.environ.get("GAI_KEY")

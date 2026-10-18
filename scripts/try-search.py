@@ -11,6 +11,9 @@ import sys
 import time
 import urllib.request
 
+# Model output has arrows and quotes the Windows console code page lacks.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 BASE = os.environ.get("GAI_URL", "http://127.0.0.1:8485")
 KEY = os.environ.get("GAI_KEY", "")
 
