@@ -141,6 +141,8 @@ cargo clippy --workspace -- -D warnings
 
 On machines without a native Rust toolchain, `scripts/` runs everything in a podman container: `scripts/cargo.sh`, `scripts/check.sh` (fmt, clippy and tests), `scripts/serve.sh` and `scripts/ollama.sh`.
 
+Changes on their way to the next release are listed under **Unreleased** in [CHANGELOG.md](CHANGELOG.md). When you change something users will notice, add a line there in the same pull request.
+
 ## License
 
 Licensed under either of
