@@ -59,6 +59,8 @@ pub struct Config {
     /// /v1/audio and /v1/images endpoints: transcription, speech, voice,
     /// image.
     pub media: gai_agent::MediaSettings,
+    /// Where `code_exec` runs code: a container per call by default.
+    pub sandbox: gai_sandbox::SandboxSettings,
     #[serde(flatten)]
     pub llm: LlmConfig,
 }

@@ -11,6 +11,10 @@ const TOOLS: Record<string, { label: string; verb: (i: Record<string, unknown>) 
   fs_list: { label: 'List files', verb: (i) => `List files in ${str(i.path, 'the workspace')}` },
   http_fetch: { label: 'Open a web page', verb: (i) => `Open ${str(i.url, 'a web page')}` },
   shell: { label: 'Run a command', verb: (i) => `Run ${str(i.command, 'a command')}` },
+  code_exec: {
+    label: 'Run code',
+    verb: (i) => `Run ${({ node: 'JavaScript', javascript: 'JavaScript', js: 'JavaScript', bash: 'a script', sh: 'a script', shell: 'a script' } as Record<string, string>)[String(i.language)] ?? 'Python'} code`,
+  },
   rag_search: { label: 'Search your documents', verb: (i) => `Search documents for ${str(i.query)}` },
   memory_search: { label: 'Search memories', verb: (i) => `Search memories for ${str(i.query)}` },
   remember: { label: 'Remember something', verb: () => 'Remember this' },

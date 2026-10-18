@@ -856,6 +856,13 @@ const TEMPLATES: &[Template] = &[
         yaml: include_str!("../../../examples/agents/docs-helper.yaml"),
     },
     Template {
+        id: "data-analyst",
+        kind: "agent",
+        title: "Data analyst (runs code)",
+        needs: &[],
+        yaml: include_str!("../../../examples/agents/data-analyst.yaml"),
+    },
+    Template {
         id: "companion",
         kind: "agent",
         title: "Remembers you",

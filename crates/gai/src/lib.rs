@@ -30,6 +30,7 @@ pub use gai_core as core;
 pub use gai_llm as llm;
 pub use gai_memory as memory;
 pub use gai_orchestra as orchestra;
+pub use gai_sandbox as sandbox;
 pub use gai_skills as skills;
 pub use gai_store as store;
 pub use gai_tools as tools;
@@ -266,6 +267,15 @@ impl Gai {
                 if let Some(m) = store.get_setting(SETTING_DEFAULT_MODEL).await? {
                     rt.set_default_model(Some(m));
                 }
+                match gai_sandbox::from_settings(&self.config.sandbox) {
+                    Ok(Some(sb)) => rt.register_tool(Arc::new(gai_sandbox::code_exec(
+                        sb,
+                        self.config.sandbox.clone(),
+                        Some(Arc::new(BlobArtifacts(store.clone()))),
+                    ))),
+                    Ok(None) => {}
+                    Err(e) => tracing::warn!(error = %e, "no code sandbox"),
+                }
                 for (name, cfg) in &self.config.a2a_agents {
                     let agent = gai_tools::a2a::A2aAgent::new(name, cfg.clone(), rt.http().clone());
                     rt.register_tool(gai_tools::a2a::a2a_tool(agent, &format!("a2a__{name}")));
@@ -335,6 +345,34 @@ impl Gai {
             .triggers
             .get_or_init(|| async { gai_triggers::Triggers::new(rt.clone(), wf.clone()) })
             .await)
+    }
+}
+
+/// Files written by `code_exec`, kept as blobs of the run.
+struct BlobArtifacts(SharedStore);
+
+#[async_trait::async_trait]
+impl gai_sandbox::ArtifactSink for BlobArtifacts {
+    async fn save(
+        &self,
+        ctx: &gai_tools::ToolCtx,
+        path: &str,
+        media_type: &str,
+        data: Vec<u8>,
+    ) -> Result<String, String> {
+        let name = path.rsplit('/').next().unwrap_or(path).to_owned();
+        self.0
+            .put_blob(gai_store::NewBlob {
+                media_type: media_type.to_owned(),
+                name: Some(name),
+                run_id: (!ctx.run_id.is_empty()).then(|| ctx.run_id.clone()),
+                source: Some("code_exec".into()),
+                metadata: serde_json::json!({"path": path}),
+                data,
+            })
+            .await
+            .map(|b| b.id)
+            .map_err(|e| e.to_string())
     }
 }
 

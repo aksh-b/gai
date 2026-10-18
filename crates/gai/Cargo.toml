@@ -5,6 +5,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = ["sandbox"]
+# The container backend of the code sandbox (Docker/Podman via bollard).
+sandbox = ["gai-sandbox/container"]
+
 [dependencies]
 async-trait.workspace = true
 gai-agent.workspace = true
@@ -13,6 +18,7 @@ gai-llm.workspace = true
 gai-memory.workspace = true
 gai-orchestra.workspace = true
 gai-triggers.workspace = true
+gai-sandbox.workspace = true
 gai-skills.workspace = true
 gai-store.workspace = true
 gai-tools.workspace = true
