@@ -1,6 +1,6 @@
 # gai: development status
 
-*Last updated 2026-10-15. Read this first when resuming work.*
+*Last updated 2026-10-17. Read this first when resuming work.*
 
 gai is a self-hostable agentic AI platform in Rust: a model layer that works with any provider, agents with tools and MCP, a server with an OpenAI-compatible API, a CLI/TUI, and a React dashboard. The full 12-phase plan is in
 `C:\Users\akshbhati\.claude\plans\create-a-full-fledged-velvety-chipmunk.md`.
@@ -38,13 +38,13 @@ If podman says "Cannot connect", run `podman machine stop`, then `podman machine
 
 **Local state (not in git):**
 - `.admin-key` holds the user's admin API key. The server has auth on, because keys exist.
-- `gai.toml` (repo root) declares `ollama/gemma3:1b` with no tool support.
+- `gai.toml` (repo root) sets `default_model = "router/auto"` and declares `ollama/gemma3:1b` (no tools), `qwen3:4b-instruct` and `qwen3:4b` (tools; the latter thinks), and `nomic-embed-text` (embeddings, the knowledge default). Contexts are 12288 tokens to match `scripts/ollama.sh`.
 - MCP servers added through the API live in the database: **Atlassian** (signed in, 21 tools) and **PDFParse** (signed in, 29 tools; confirmed connecting on 2026-10-14).
 - Phase-6 demo data: stored workflow `hello` (from examples/workflows/hello.yaml) and a few of its runs.
 - Phase-5 demo data from the end-to-end check: collection `gai-docs` (STATUS.md), memory block `agent:librarian/notes`, archival collection `memory:agent:librarian`, uploaded skill `release-notes`. All safe to delete.
 - Stored agents: `researcher`, `gemma` (plain chat on gemma3:1b), and possibly `atlassian`.
-- No cloud API keys are set; the default model is `mock/echo`.
-- `gai.toml` also has `[routers.auto]`: `ollama/gemma3:1b` (easy) and `mock/echo` (hard, stands in for a real model). `[media]` is commented out, so `serve.sh` passes `GAI_MEDIA__*=mock/image|voice|ears`.
+- No cloud API keys are set. Settings saved from the dashboard (default model, provider keys, pulled Ollama models) live in the `settings` table and win over gai.toml.
+- `gai.toml` also has `[routers.auto]`: `ollama/gemma3:1b` (easy) and `ollama/qwen3:4b-instruct` (hard, anything needing tools). `[media]` is commented out, so `serve.sh` passes `GAI_MEDIA__*=mock/image|voice|ears`.
 - Phase-10 demo data: a few blobs (mock SVG images, WAV speech) and runs of agents `artist`, `router-demo`, `r2`.
 
 ---
@@ -66,7 +66,7 @@ If podman says "Cannot connect", run `podman machine stop`, then `podman machine
 | `gai-server` | axum: REST `/v1/*`, SSE run events, API-key auth + scopes + budgets + rate limit, OpenAI-compatible `/openai/v1`, OpenAPI 3.1 at `/openapi.json` + Scalar `/docs`, MCP management + OAuth callback, serves `web/dist` |
 | `gai-cli` | `gai serve / run / chat (ratatui TUI) / ask / agents / sessions / runs (incl. resume) / replay / speak / transcribe / image / tools / models / providers / keys / mcp` |
 
-The dashboard (`web/`) is React 19 + Vite. It imports flame components from `../../flame/src` via the `@flame` alias. Pages: Playground, Runs (+ detail with step waterfall, live events, child runs, and the node graph for workflow runs), Approvals, Agents (YAML editor + versions), **Workflows** (list, SVG DAG with live node status, run with inputs, inline human approvals, YAML editor with live validation, recent runs), **Knowledge** (collections, file/text/URL ingest, chunk viewer, search with hybrid/meaning/keyword modes), **Memory** (blocks by scope, edit, read-only, history), **Skills** (list, instructions, upload), Models, Tools (+ MCP servers with Sign in / out), Usage, API keys. Hash routing; API key kept in localStorage.
+The dashboard (`web/`) is React 19 + Vite, organised simple-first (see **Dashboard (simple-first)** below). It imports flame components from `../../flame/src` via the `@flame` alias. Pages: Playground, Runs (+ detail with step waterfall, live events, child runs, and the node graph for workflow runs), Approvals, Agents (YAML editor + versions), **Workflows** (list, SVG DAG with live node status, run with inputs, inline human approvals, YAML editor with live validation, recent runs), **Knowledge** (collections, file/text/URL ingest, chunk viewer, search with hybrid/meaning/keyword modes), **Memory** (blocks by scope, edit, read-only, history), **Skills** (list, instructions, upload), Models, Tools (+ MCP servers with Sign in / out), Usage, API keys. Hash routing; API key kept in localStorage.
 
 ---
 
@@ -106,7 +106,15 @@ The dashboard (`web/`) is React 19 + Vite. It imports flame components from `../
 - **A2A:** server: cards at `/.well-known/agent-card.json` (+ `agent.json`; all exposed agents as skills, endpoint `/a2a`, agent picked by `message.metadata.agent`/`skill` or `[server.a2a] default_agent`) and `/a2a/{agent}/.well-known/agent-card.json`; JSON-RPC at `POST /a2a[/{agent}]` (guarded by keys; cards are public): `message/send` (blocking by default, up to `wait_secs`), `message/stream` (SSE: task, streamed `artifact-update` chunks, final `status-update`), `tasks/get`, `tasks/cancel`. Task = run, contextId = session (reused if it exists), states submitted/working/completed/failed/canceled (`unknown` for a run left "running" by a crash); keys only see their own tasks. Text, data and file parts (images, text files) become input. Client (`gai_tools::a2a`): `[a2a_agents.<name>] url (endpoint or card URL), headers (${VAR}), description, timeout_secs` → tool `a2a__<name>`; agent `delegates: [{a2a: url, name, headers}]` → `ask_<name>` (private addresses refused unless `tools.allow_private_network`). Polls `tasks/get` until terminal; returns the answer and a `context_id` to continue.
 - **Auth change:** the middleware now also guards `/mcp` and `/a2a/*` (it used to guard only `/v1/*` and `/openai/*`), and treats `/v1/webhooks/*` as public.
 
-- **Forms (dashboard):** agents and triggers are edited with forms, with a YAML tab kept in sync both ways (`web/src/forms.tsx`: `SpecEditor`, `PickList`, `Section`...; `AgentForm.tsx`, `TriggerForm.tsx`). The agent form covers basics and model picker, prompt with insertable variables, tools as a searchable checklist grouped by source with a per-tool policy, delegates (local and A2A), knowledge, skills, memory blocks, media models, limits, reasoning, output schema and context. The trigger form has kind switching, schedule presets, time zones and a live check through `POST /v1/triggers/preview` (errors, the schedule in words, the next run times). Values the form does not know (typed in YAML) are kept. Still YAML-only: workflows and MCP server configs.
+- **Forms (dashboard):** agents and triggers are edited with forms, with a YAML tab kept in sync both ways (`web/src/forms.tsx`: `SpecEditor`, `PickList`, `Section`...; `AgentForm.tsx`, `TriggerForm.tsx`). The agent form covers basics and model picker, prompt with insertable variables, tools as a searchable checklist grouped by source with a per-tool policy, delegates (local and A2A), knowledge, skills, memory blocks, media models, limits, reasoning, output schema and context. The trigger form has kind switching, schedule presets, time zones and a live check through `POST /v1/triggers/preview` (errors, the schedule in words, the next run times). Values the form does not know (typed in YAML) are kept. Workflows have a step form too (see below); MCP server configs are still YAML-only.
+
+- **Dashboard (simple-first, 2026-10-17):** six sections instead of fifteen pages: Chat, Assistants (+ Memory, Skills tabs), Automations (Workflows, Schedules & webhooks), Knowledge, Activity (History, Needs your OK, Spending), Settings (AI models, Tools & connections, Voice & images, Access keys, Use from other apps, Preferences). Old routes (`#/playground`, `#/agents`, `#/runs`, `#/workflows`, `#/triggers`, `#/models`) still work. Wording lives in `web/src/labels.ts` (tool calls as sentences, friendly model names, plain run states). **Developer details** (Settings → Preferences, or Ctrl+K) shows IDs, YAML tabs, raw JSON, events, token counts and CLI hints; it is off by default (`web/src/prefs.ts`, also the light/dark theme). Ctrl+K opens a command palette.
+  - **First run:** `GET /v1/setup/status` (public) says whether a key is needed, whether this browser may claim one, whether a real chat model is usable, Ollama's state and the cloud providers. `POST /v1/setup/claim` (public) mints an admin key for the dashboard only when the server is local (`--local`/loopback), the `Host` is a loopback name (stops DNS rebinding) and the `Origin` matches it (stops other sites). The dashboard claims silently on load, so the paste-a-key dialog only shows for remote servers. With no usable model it opens `#/welcome`: cloud (paste a key, tested with one tiny call), local (Ollama library with downloads and progress), or demo.
+  - **Runtime settings** (`crates/gai-server/src/setup.rs`, migration `0010_settings.sql`, `SettingsStore`): `PUT /v1/settings {default_model}` (overrides gai.toml and the env var, `null` goes back), `PUT|DELETE /v1/providers/{name}/key` (stored keys win over env/literal keys; responses only give the last 4 characters; `ModelRegistry::set_key` takes effect without a restart), `POST /v1/providers/{name}/test`, `GET /v1/providers/ollama/library`, `POST /v1/providers/ollama/pull` + `GET …/pulls` (progress polled). Installed Ollama models gai.toml doesn't list are added to the catalog with Ollama's own capabilities (`ModelRegistry::add_model`, persisted as `model:<provider>/<id>`), so a no-tools model is never sent tools. Providers whose preset lists no chat model (OpenAI, Gemini, OpenRouter) get one picked from their live model list when a key is saved.
+  - **Templates:** `GET /v1/templates`, `POST /v1/templates/{id}/install` (saves the agents it uses when missing), from `examples/agents` (+ new `docs-helper`, `companion`) and `examples/workflows`. Assistants can also be drafted from one sentence ("Draft it for me", a throwaway run whose session is deleted).
+  - **Chat:** grouped model picker (only usable models), tool calls as sentences with details on demand, inline "Allow once / Always allow in this chat / Don't allow", errors with a fix link, drag-and-drop or paste files (images/audio as blobs, small text inline, other documents into the `my-documents` collection), "Save this setup as an assistant". The built-in assistant now has `rag_search`.
+  - **Workflows** have a step form (`web/src/WorkflowForm.tsx`: assistant / tool with schema-driven fields / ask a person / text, with "use the result of" chips, only-if, repeat-for-each, retries); workflows it can't show open as YAML. **Knowledge** takes files dropped anywhere on the page.
+  - OpenAI-dialect tools: an object schema without `properties` now gets `"properties": {}` (Ollama refused `current_time` otherwise).
 
 ## Deviations from the plan (intentional)
 
@@ -121,16 +129,31 @@ The dashboard (`web/`) is React 19 + Vite. It imports flame components from `../
 - Phase 7: rollback creates a new version instead of moving an `active` pointer (the latest version is the active one). Step edits can change a replayed reply's text or content and tool results, but not tool inputs. The fork view is a step table, not an xyflow graph.
 - Phase 6: the planned `condition` and `parallel` node types are covered by `if:` on any node and by independent nodes running in parallel; there is no separate supervisor runtime (a supervisor is an agent with `delegates`). The DAG view is a hand-rolled SVG layered layout, not xyflow.
 
+## Real-model shakedown (2026-10-17)
+
+Local models in the podman Ollama (`scripts/ollama.sh`, now started with a 12k context): `gemma3:1b` (chat, no tools), `qwen3:4b-instruct` (tools; ~9 s per warm step on this CPU, ~70 s to load after 30 min idle), `qwen3:4b` (thinking-only: correct but 1.5-6 min per step; kept but not routed to), `nomic-embed-text` (embeddings). `gai.toml`: `default_model = "router/auto"`, the router sends tool work to qwen3:4b-instruct, knowledge embeds with nomic-embed-text. `serve.sh` no longer forces mock/echo when gai.toml names a default model. `scripts/serve-test.sh` runs a second server on :8485 with its own data (volume `gai-shake`) for trying changes without touching the main one; `scripts/try-run.py`, `try-workflow.py`, `try-mcp.py` and `try-search.py` drive it.
+
+Worked with the real model: tool calls (calculator, current_time, http_fetch), delegation (supervisor -> researcher fetched rust-lang.org -> writer; 164 s), the research-brief workflow with its human approval (6.5 min), user-profile memory across sessions, a cron trigger, and calling an agent over MCP (3 s).
+
+Fixed along the way:
+- The calculator did integer division (`17 / 100 * 2340` gave 0). Numbers are now decimals, whole results print without `.0`, and `X% of Y` works.
+- One long tool result (a whole web page, ~14.7k tokens) could exceed a small model's window and fail the run. Tool results are now capped at a quarter of the context window (and `max_output_chars`).
+- Knowledge search: embedding models trained with task prefixes get them (`nomic-embed-text`, `mxbai-embed-large`, e5; or `query_prefix`/`document_prefix` on a model in config); keyword search drops stopwords; hybrid fusion weights keywords at 0.3 with RRF k = 20. On 5 paraphrased questions over STATUS.md, hybrid went from 2/5 first and 3/5 in the top 3 (one missing from the top 10) to 3/5 first and all 5 in the top 5. `scripts/try-search.py` measures it.
+- The `researcher` agent's tool name (now v4, using the default model).
+
+Seen but not changed:
+- The router treats a request as needing tools whenever the agent has tools, so small talk with the default assistant goes to qwen3, not gemma. It should look at whether the request needs them.
+- qwen3:4b-instruct sometimes skips a tool it was told to use and answers from memory (a cron run named the wrong weekday), and refused to fetch example.com as "a placeholder". Fine for trying things; check its unattended work.
+- Workflow sections written in parallel from the same notes overlap; each section repeats its title.
+- The main server (:8484) still runs the code from before these fixes; restart it (`scripts/serve.sh`) when nobody is mid-run.
+
 ## Known gaps / small follow-ups
 
-- The `researcher` agent lists `atlassianUserInfo`; it should be `mcp__Atlassian__atlassianUserInfo`.
 - The "dashboard" test API key can be revoked.
 - `serve.sh` rebuilds the CLI on every start (a few seconds when nothing changed).
-- No embedding model is configured, so collections use `mock/hash`. Pull one into the podman Ollama (`scripts/ollama.sh nomic-embed-text`) and set `[knowledge] embedding_model = "ollama/nomic-embed-text"` in gai.toml for semantic search. Existing collections keep their model; re-create them to switch.
+- Collections created before 2026-10-17 use `mock/hash` (keyword-level); new ones use `ollama/nomic-embed-text`. Re-create old ones to switch.
 - Brute-force vector search reads every embedding of the searched collections per query (fine to about 100k chunks).
-- Delegation and workflows were exercised end to end with `mock/echo` and scripted models only; with no tool-capable model configured, `examples/agents/supervisor.yaml` and `examples/workflows/research-brief.yaml` haven't run against a real model yet.
 - A workflow's `timeout_secs` restarts from zero when a run resumes, and a human step that was waiting asks again after a restart (by design, but the old answer window is lost).
-- The local gemma3:1b can't call tools, so memory/RAG tools were exercised end to end only through `mock/echo` (`call:<tool> {json}`) and scripted tests.
 
 ---
 
@@ -141,4 +164,4 @@ Remaining phases:
 - 11: dashboard polish and embedding (UI built into the binary, CodeMirror, xyflow)
 - 12: SDK polish, bundles, templates, Dockerfile, Postgres
 
-Follow-ups: no real speech/image model or tool-capable cloud model has been tried yet (no keys); MCP was tested with gai's own client and rmcp's, not yet with Claude Code/Desktop themselves; A2A was tested gai-to-gai only.
+Follow-ups: no real speech/image model or cloud model has been tried yet (no keys); MCP was tested with gai's own client, rmcp's and a plain JSON-RPC client, not yet from Claude Code/Desktop themselves; A2A was tested gai-to-gai only.
