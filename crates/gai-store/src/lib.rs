@@ -184,6 +184,17 @@ pub trait McpStore: Send + Sync {
     async fn delete_mcp_oauth(&self, server: &str) -> Result<()>;
 }
 
+/// Settings changed at runtime, as name/value pairs. Values may be secret
+/// (provider API keys), so they are never listed by value.
+#[async_trait]
+pub trait SettingsStore: Send + Sync {
+    async fn get_setting(&self, name: &str) -> Result<Option<String>>;
+    async fn put_setting(&self, name: &str, value: &str) -> Result<()>;
+    async fn delete_setting(&self, name: &str) -> Result<bool>;
+    /// Names and values of every setting whose name starts with `prefix`.
+    async fn list_settings(&self, prefix: &str) -> Result<Vec<(String, String)>>;
+}
+
 /// Memory blocks and their history.
 #[async_trait]
 pub trait MemoryStore: Send + Sync {
@@ -347,6 +358,7 @@ pub trait Store:
     + RunStore
     + KeyStore
     + McpStore
+    + SettingsStore
     + MemoryStore
     + KnowledgeStore
     + SkillStore
@@ -361,6 +373,7 @@ impl<T> Store for T where
         + RunStore
         + KeyStore
         + McpStore
+        + SettingsStore
         + MemoryStore
         + KnowledgeStore
         + SkillStore

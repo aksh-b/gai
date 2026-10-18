@@ -11,6 +11,7 @@ pub mod mcp_server;
 mod media;
 mod openai;
 mod openapi;
+mod setup;
 mod triggers;
 mod versions;
 mod workflows;
@@ -103,6 +104,7 @@ pub async fn router(
         .merge(versions::routes())
         .merge(media::routes())
         .merge(triggers::routes())
+        .merge(setup::routes())
         .merge(a2a::routes())
         .merge(openai::routes())
         .route("/openapi.json", get(openapi::spec))

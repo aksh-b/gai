@@ -15,6 +15,7 @@ use crate::api::*;
 use crate::knowledge::*;
 use crate::media::*;
 use crate::openai::ChatCompletionRequest;
+use crate::setup::*;
 use crate::triggers::*;
 use crate::versions::*;
 use crate::workflows::*;
@@ -622,6 +623,78 @@ pub fn document() -> Value {
             "OpenAI-compatible model list",
         )
         .ok(json!({"type": "object"})),
+        op(
+            "get",
+            "/v1/setup/status",
+            "setup",
+            "What first-run setup still needs (public)",
+        )
+        .ok(s::<SetupStatus>(&mut g)),
+        op(
+            "post",
+            "/v1/setup/claim",
+            "setup",
+            "Get an admin key for the dashboard on this computer (local servers only)",
+        )
+        .ok(s::<Claimed>(&mut g)),
+        op("get", "/v1/settings", "setup", "Runtime settings").ok(s::<SettingsView>(&mut g)),
+        op("put", "/v1/settings", "setup", "Change runtime settings")
+            .body(s::<Settings>(&mut g))
+            .ok(s::<SettingsView>(&mut g)),
+        op(
+            "put",
+            "/v1/providers/{name}/key",
+            "setup",
+            "Save an API key for a provider",
+        )
+        .body(s::<ProviderKey>(&mut g))
+        .ok(s::<ProviderKeyView>(&mut g)),
+        op(
+            "delete",
+            "/v1/providers/{name}/key",
+            "setup",
+            "Forget a provider key saved from the dashboard",
+        )
+        .ok(s::<ProviderKeyView>(&mut g)),
+        op(
+            "post",
+            "/v1/providers/{name}/test",
+            "setup",
+            "Try a provider with one tiny request",
+        )
+        .body(s::<TestRequest>(&mut g))
+        .ok(s::<TestResult>(&mut g)),
+        op(
+            "get",
+            "/v1/providers/ollama/library",
+            "setup",
+            "Recommended Ollama models and what is installed",
+        )
+        .ok(s::<OllamaLibrary>(&mut g)),
+        op(
+            "post",
+            "/v1/providers/ollama/pull",
+            "setup",
+            "Start downloading a model into Ollama",
+        )
+        .body(s::<PullRequest>(&mut g))
+        .ok(s::<PullProgress>(&mut g)),
+        op(
+            "get",
+            "/v1/providers/ollama/pulls",
+            "setup",
+            "Progress of Ollama downloads",
+        )
+        .ok(list::<PullProgress>(&mut g)),
+        op("get", "/v1/templates", "setup", "Starter agents and workflows")
+            .ok(list::<TemplateView>(&mut g)),
+        op(
+            "post",
+            "/v1/templates/{id}/install",
+            "setup",
+            "Save a template (and the agents it uses)",
+        )
+        .ok(s::<Installed>(&mut g)),
     ];
 
     let mut paths = Map::new();

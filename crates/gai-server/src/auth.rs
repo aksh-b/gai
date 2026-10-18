@@ -119,6 +119,9 @@ pub fn required_scope(method: &Method, path: &str) -> Scope {
         || (path.starts_with("/v1/triggers") && path != "/v1/triggers/preview")
         || path.starts_with("/v1/mcp")
         || path.starts_with("/v1/skills")
+        || path.starts_with("/v1/settings")
+        || path.starts_with("/v1/providers")
+        || path.starts_with("/v1/templates")
         || workflow_admin)
         && method != Method::GET;
     if path.starts_with("/v1/keys") || admin_write {
@@ -131,7 +134,11 @@ pub fn required_scope(method: &Method, path: &str) -> Scope {
 }
 
 fn token(req: &Request) -> Option<String> {
-    let h = req.headers();
+    header_token(req.headers())
+}
+
+/// The API key a request carries (`Authorization: Bearer` or `x-api-key`).
+pub(crate) fn header_token(h: &axum::http::HeaderMap) -> Option<String> {
     h.get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| {
@@ -148,7 +155,10 @@ pub async fn authenticate(State(s): State<AppState>, mut req: Request, next: Nex
     // The OAuth callback is reached by a browser redirect, without a key;
     // it only completes a sign-in an admin started (matched by `state`).
     // Webhooks carry their trigger's signature instead of a key.
+    // Setup status and claiming check for themselves who may use them.
     let public = path == "/v1/health"
+        || path == "/v1/setup/status"
+        || path == "/v1/setup/claim"
         || path == "/v1/mcp/oauth/callback"
         || path.starts_with("/v1/webhooks/");
     // Agent cards are public: they are how other agents find gai.
@@ -226,6 +236,12 @@ mod tests {
         assert_eq!(required_scope(&Method::POST, "/v1/triggers"), Scope::Admin);
         assert_eq!(required_scope(&Method::GET, "/v1/triggers"), Scope::Read);
         assert_eq!(required_scope(&Method::POST, "/mcp"), Scope::Run);
+        assert_eq!(
+            required_scope(&Method::PUT, "/v1/providers/openai/key"),
+            Scope::Admin
+        );
+        assert_eq!(required_scope(&Method::PUT, "/v1/settings"), Scope::Admin);
+        assert_eq!(required_scope(&Method::GET, "/v1/settings"), Scope::Read);
         assert_eq!(required_scope(&Method::GET, "/mcp"), Scope::Read);
         assert_eq!(required_scope(&Method::POST, "/a2a/helper"), Scope::Run);
         assert_eq!(

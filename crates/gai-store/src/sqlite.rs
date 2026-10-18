@@ -917,9 +917,71 @@ impl McpStore for SqliteStore {
     }
 }
 
+#[async_trait]
+impl SettingsStore for SqliteStore {
+    async fn get_setting(&self, name: &str) -> Result<Option<String>> {
+        Ok(
+            sqlx::query_scalar("SELECT value FROM settings WHERE name = ?")
+                .bind(name)
+                .fetch_optional(&self.pool)
+                .await?,
+        )
+    }
+
+    async fn put_setting(&self, name: &str, value: &str) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO settings (name, value, updated_at) VALUES (?, ?, ?)
+             ON CONFLICT(name) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+        )
+        .bind(name)
+        .bind(value)
+        .bind(now())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn delete_setting(&self, name: &str) -> Result<bool> {
+        let r = sqlx::query("DELETE FROM settings WHERE name = ?")
+            .bind(name)
+            .execute(&self.pool)
+            .await?;
+        Ok(r.rows_affected() > 0)
+    }
+
+    async fn list_settings(&self, prefix: &str) -> Result<Vec<(String, String)>> {
+        let rows: Vec<(String, String)> = sqlx::query_as(
+            "SELECT name, value FROM settings WHERE substr(name, 1, length(?1)) = ?1 ORDER BY name",
+        )
+        .bind(prefix)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn settings_round_trip() {
+        let s = SqliteStore::temporary().await.unwrap();
+        assert_eq!(s.get_setting("default_model").await.unwrap(), None);
+        s.put_setting("default_model", "mock/echo").await.unwrap();
+        s.put_setting("default_model", "ollama/gemma3:1b")
+            .await
+            .unwrap();
+        s.put_setting("provider_key:openai", "sk-1").await.unwrap();
+        assert_eq!(
+            s.get_setting("default_model").await.unwrap().as_deref(),
+            Some("ollama/gemma3:1b")
+        );
+        let keys = s.list_settings("provider_key:").await.unwrap();
+        assert_eq!(keys, [("provider_key:openai".into(), "sk-1".into())]);
+        assert!(s.delete_setting("provider_key:openai").await.unwrap());
+        assert!(!s.delete_setting("provider_key:openai").await.unwrap());
+    }
 
     #[tokio::test]
     async fn concurrent_writers_wait_instead_of_failing() {

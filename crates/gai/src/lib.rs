@@ -65,13 +65,25 @@ pub enum Error {
     Workflow(#[from] gai_orchestra::WorkflowError),
 }
 
+/// Setting names in the store.
+const SETTING_DEFAULT_MODEL: &str = "default_model";
+const SETTING_PROVIDER_KEY: &str = "provider_key:";
+const SETTING_MODEL: &str = "model:";
+
 /// The general assistant used when no agent is named.
 pub fn default_agent() -> AgentSpec {
     AgentSpec::new("assistant")
         .system(
             "You are a capable, careful assistant. Use the tools when they help: files you read or write live in the workspace {{ workspace }}. Think before acting, check your work, and be concise in your final answer. Today is {{ date }}.",
         )
-        .tools(["calculator", "current_time", "fs_*", "http_fetch", "shell"])
+        .tools([
+            "calculator",
+            "current_time",
+            "fs_*",
+            "http_fetch",
+            "shell",
+            "rag_search",
+        ])
 }
 
 /// A loaded gai instance. The store and runtime open on first use, so
@@ -126,13 +138,74 @@ impl Gai {
         &self.models
     }
 
-    /// The model to use when none is named: `default_model` from config, or
-    /// the first provider with a key.
+    /// The model to use when none is named: the one chosen in the dashboard
+    /// (once the runtime is open), `default_model` from config, or the first
+    /// provider with a key.
     pub fn default_model(&self) -> Option<String> {
-        self.config
-            .default_model
-            .clone()
-            .or_else(|| self.models.default_model())
+        self.default_model_with_source().map(|(m, _)| m)
+    }
+
+    /// The default model and where it came from: `settings` (chosen at
+    /// runtime), `config` (gai.toml or `GAI_DEFAULT_MODEL`), or `detected`
+    /// (the first provider with a key).
+    pub fn default_model_with_source(&self) -> Option<(String, &'static str)> {
+        if let Some(m) = self.runtime.get().and_then(|rt| rt.stored_default_model()) {
+            return Some((m, "settings"));
+        }
+        if let Some(m) = &self.config.default_model {
+            return Some((m.clone(), "config"));
+        }
+        self.models.default_model().map(|m| (m, "detected"))
+    }
+
+    /// Choose the default model, kept in the database across restarts.
+    /// `None` goes back to the configured one.
+    pub async fn set_default_model(&self, model: Option<String>) -> Result<(), Error> {
+        let rt = self.runtime().await?;
+        match &model {
+            Some(m) => {
+                self.models.resolve(m)?;
+                rt.store().put_setting(SETTING_DEFAULT_MODEL, m).await?;
+            }
+            None => {
+                rt.store().delete_setting(SETTING_DEFAULT_MODEL).await?;
+            }
+        }
+        rt.set_default_model(model);
+        Ok(())
+    }
+
+    /// Add a model to a provider's catalog (say, one just pulled into
+    /// Ollama), kept in the database across restarts.
+    pub async fn add_model(
+        &self,
+        provider: &str,
+        model: gai_llm::ModelConfig,
+    ) -> Result<(), Error> {
+        let rt = self.runtime().await?;
+        self.models.add_model(provider, model.clone())?;
+        let value = serde_json::to_string(&model).expect("model config serializes");
+        rt.store()
+            .put_setting(&format!("{SETTING_MODEL}{provider}/{}", model.id), &value)
+            .await?;
+        Ok(())
+    }
+
+    /// Save an API key for a provider (kept in the database, used instead
+    /// of the configured key). `None` removes it.
+    pub async fn set_provider_key(&self, provider: &str, key: Option<String>) -> Result<(), Error> {
+        let rt = self.runtime().await?;
+        let name = format!("{SETTING_PROVIDER_KEY}{provider}");
+        let key = key.map(|k| k.trim().to_owned()).filter(|k| !k.is_empty());
+        self.models
+            .set_key(provider, key.clone().map(secrecy::SecretString::from))?;
+        match key {
+            Some(k) => rt.store().put_setting(&name, &k).await?,
+            None => {
+                rt.store().delete_setting(&name).await?;
+            }
+        }
+        Ok(())
     }
 
     /// A chat model by address, or the default when `spec` is `None`.
@@ -162,12 +235,37 @@ impl Gai {
                     record_requests: self.config.record_requests.unwrap_or(true),
                     media: self.config.media.clone(),
                 };
+                for (name, key) in store.list_settings(SETTING_PROVIDER_KEY).await? {
+                    let provider = &name[SETTING_PROVIDER_KEY.len()..];
+                    if let Err(e) = self
+                        .models
+                        .set_key(provider, Some(secrecy::SecretString::from(key)))
+                    {
+                        tracing::warn!(provider, error = %e, "ignoring a stored API key");
+                    }
+                }
+                for (name, value) in store.list_settings(SETTING_MODEL).await? {
+                    let Some((provider, _)) = name[SETTING_MODEL.len()..].split_once('/') else {
+                        continue;
+                    };
+                    match serde_json::from_str::<gai_llm::ModelConfig>(&value) {
+                        Ok(m) => {
+                            if let Err(e) = self.models.add_model(provider, m) {
+                                tracing::warn!(setting = %name, error = %e, "ignoring a stored model");
+                            }
+                        }
+                        Err(e) => tracing::warn!(setting = %name, error = %e, "ignoring a stored model"),
+                    }
+                }
                 let rt = Runtime::new(
                     self.models.clone(),
                     ToolRegistry::with_builtins(),
                     store.clone(),
                     config,
                 );
+                if let Some(m) = store.get_setting(SETTING_DEFAULT_MODEL).await? {
+                    rt.set_default_model(Some(m));
+                }
                 for (name, cfg) in &self.config.a2a_agents {
                     let agent = gai_tools::a2a::A2aAgent::new(name, cfg.clone(), rt.http().clone());
                     rt.register_tool(gai_tools::a2a::a2a_tool(agent, &format!("a2a__{name}")));

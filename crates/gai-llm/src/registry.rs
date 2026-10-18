@@ -1,14 +1,15 @@
 use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
+use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
 
 use crate::dialect::{self, Dialect, Provider, RemoteModel};
 use crate::middleware::{Fallback, Metered, Retry, UsageSink};
 use crate::router::{RouterConfig, RouterModel};
 use crate::{
-    AliasConfig, KeyStatus, LlmConfig, LlmError, ModelInfo, ModelKind, ProviderConfig, RetryConfig,
-    SharedChatModel, SharedEmbeddingModel, SharedImageModel, SharedSpeechToText,
+    AliasConfig, KeyStatus, LlmConfig, LlmError, ModelConfig, ModelInfo, ModelKind, ProviderConfig,
+    RetryConfig, SharedChatModel, SharedEmbeddingModel, SharedImageModel, SharedSpeechToText,
     SharedTextToSpeech,
 };
 
@@ -23,6 +24,12 @@ pub struct ModelRegistry {
     routers: BTreeMap<String, RouterConfig>,
     dialects: HashMap<String, Arc<dyn Dialect>>,
     built: Mutex<HashMap<String, Arc<dyn Provider>>>,
+    /// Keys set at runtime (say, from the dashboard). They win over the
+    /// config's literal key and environment variable.
+    stored_keys: RwLock<HashMap<String, SecretString>>,
+    /// Catalog entries added at runtime (say, a model just pulled into
+    /// Ollama), by provider. Entries in config win over these.
+    added_models: RwLock<BTreeMap<String, Vec<ModelConfig>>>,
     retry: RetryConfig,
     sink: Option<Arc<dyn UsageSink>>,
 }
@@ -151,6 +158,8 @@ impl RegistryBuilder {
             routers: self.config.routers,
             dialects,
             built: Mutex::new(built),
+            stored_keys: RwLock::new(HashMap::new()),
+            added_models: RwLock::new(BTreeMap::new()),
             retry: self.config.retry,
             sink: self.sink,
         })
@@ -307,6 +316,21 @@ impl ModelRegistry {
         let chain = self.chain(spec)?;
         let mut info = self.resolve(chain[0])?;
         info.kind = kind;
+        if kind == ModelKind::Embedding {
+            let cfg = self.configs[&info.provider].model(&info.model);
+            let (q, d) = (
+                cfg.and_then(|m| m.query_prefix.clone()),
+                cfg.and_then(|m| m.document_prefix.clone()),
+            );
+            info.embed_prefixes = if q.is_some() || d.is_some() {
+                Some(crate::EmbedPrefixes {
+                    query: q.unwrap_or_default(),
+                    document: d.unwrap_or_default(),
+                })
+            } else {
+                crate::EmbedPrefixes::known(&info.model)
+            };
+        }
         Ok(info)
     }
 
@@ -338,7 +362,8 @@ impl ModelRegistry {
         };
         let cfg = &self.configs[&provider];
         let mut info = ModelInfo::new(&provider, &model);
-        match cfg.model(&model) {
+        let added = self.added_model(&provider, &model);
+        match cfg.model(&model).or(added.as_ref()) {
             Some(m) => {
                 info.kind = m.kind;
                 info.media_pricing = m.media_pricing;
@@ -392,20 +417,112 @@ impl ModelRegistry {
             .configs
             .get(name)
             .ok_or_else(|| LlmError::Config(format!("unknown provider {name:?}")))?;
-        let p = self.dialects[&cfg.dialect].build(name, cfg)?;
+        let stored = self.stored_key(name);
+        let p = match stored {
+            Some(key) => {
+                let mut cfg = cfg.clone();
+                cfg.api_key = Some(key);
+                self.dialects[&cfg.dialect].build(name, &cfg)?
+            }
+            None => self.dialects[&cfg.dialect].build(name, cfg)?,
+        };
         built.insert(name.to_owned(), p.clone());
         Ok(p)
+    }
+
+    fn stored_key(&self, provider: &str) -> Option<SecretString> {
+        self.stored_keys
+            .read()
+            .expect("stored keys lock")
+            .get(provider)
+            .cloned()
+    }
+
+    /// Use `key` for `provider` from now on (`None` forgets it, falling back
+    /// to the configured key). Takes effect for the next model handle.
+    pub fn set_key(&self, provider: &str, key: Option<SecretString>) -> Result<(), LlmError> {
+        if !self.configs.contains_key(provider) {
+            return Err(LlmError::Config(format!("unknown provider {provider:?}")));
+        }
+        {
+            let mut keys = self.stored_keys.write().expect("stored keys lock");
+            match key {
+                Some(k) if !k.expose_secret().trim().is_empty() => {
+                    keys.insert(provider.to_owned(), k);
+                }
+                _ => {
+                    keys.remove(provider);
+                }
+            }
+        }
+        self.built.lock().expect("registry lock").remove(provider);
+        Ok(())
+    }
+
+    /// The last four characters of a key set with [`ModelRegistry::set_key`].
+    pub fn stored_key_hint(&self, provider: &str) -> Option<String> {
+        let key = self.stored_key(provider)?;
+        let k = key.expose_secret();
+        let tail: String = k
+            .chars()
+            .rev()
+            .take(4)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        Some(tail)
+    }
+
+    /// Whether `provider` has the key it needs, counting stored keys.
+    pub fn key_status(&self, provider: &str) -> KeyStatus {
+        if self.stored_key(provider).is_some() {
+            return KeyStatus::Present;
+        }
+        match self.configs.get(provider) {
+            Some(c) => c.key_status(),
+            None => KeyStatus::NotNeeded,
+        }
+    }
+
+    fn added_model(&self, provider: &str, id: &str) -> Option<ModelConfig> {
+        self.added_models
+            .read()
+            .expect("added models lock")
+            .get(provider)?
+            .iter()
+            .find(|m| m.id == id)
+            .cloned()
+    }
+
+    /// Add a model to a provider's catalog (replacing one with the same id
+    /// that was added before). Models listed in config are left as they are.
+    pub fn add_model(&self, provider: &str, model: ModelConfig) -> Result<(), LlmError> {
+        if !self.configs.contains_key(provider) {
+            return Err(LlmError::Config(format!("unknown provider {provider:?}")));
+        }
+        let mut added = self.added_models.write().expect("added models lock");
+        let list = added.entry(provider.to_owned()).or_default();
+        list.retain(|m| m.id != model.id);
+        list.push(model);
+        Ok(())
     }
 
     /// Every model listed in provider catalogs, with key status.
     pub fn catalog(&self) -> Vec<CatalogEntry> {
         let mut out = Vec::new();
+        let added = self.added_models.read().expect("added models lock").clone();
         for (name, cfg) in &self.configs {
-            for m in &cfg.models {
+            let extra = added
+                .get(name)
+                .into_iter()
+                .flatten()
+                .filter(|m| cfg.model(&m.id).is_none());
+            for m in cfg.models.iter().chain(extra) {
                 if let Ok(info) = self.resolve(&format!("{name}/{}", m.id)) {
                     out.push(CatalogEntry {
                         info,
-                        key: cfg.key_status().into(),
+                        key: self.key_status(name).into(),
                     });
                 }
             }
@@ -437,11 +554,8 @@ impl ModelRegistry {
     /// A sensible default when nothing is configured: the first provider
     /// with a usable key.
     pub fn default_model(&self) -> Option<String> {
-        let ready = |p: &str| {
-            self.configs
-                .get(p)
-                .is_some_and(|c| c.key_status() == KeyStatus::Present)
-        };
+        let ready =
+            |p: &str| self.configs.contains_key(p) && self.key_status(p) == KeyStatus::Present;
         [("anthropic", "claude-opus-5-5")]
             .iter()
             .find(|(p, _)| ready(p))
