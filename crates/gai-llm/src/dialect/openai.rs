@@ -179,7 +179,7 @@ impl OpenAiModel {
                 .tools
                 .iter()
                 .map(|t| {
-                    let mut f = json!({"name": t.name, "description": t.description, "parameters": t.input_schema});
+                    let mut f = json!({"name": t.name, "description": t.description, "parameters": parameters(&t.input_schema)});
                     if t.strict {
                         f["strict"] = json!(true);
                     }
@@ -814,6 +814,20 @@ impl EmbeddingModel for OpenAiEmbedding {
     }
 }
 
+/// A tool's input schema as function parameters. An object schema without
+/// `properties` (a tool that takes no input) gets an empty one: several
+/// OpenAI-compatible servers (Ollama, llama.cpp) reject it otherwise.
+fn parameters(schema: &Value) -> Value {
+    let mut p = schema.clone();
+    if let Some(o) = p.as_object_mut()
+        && o.get("type").and_then(Value::as_str) == Some("object")
+        && !o.get("properties").is_some_and(Value::is_object)
+    {
+        o.insert("properties".into(), json!({}));
+    }
+    p
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -969,6 +983,11 @@ mod tests {
         assert_eq!(b["reasoning_effort"], "high");
         assert_eq!(b["tool_choice"], "required");
         assert_eq!(b["stream_options"]["include_usage"], true);
+        // Some servers (Ollama, llama.cpp) refuse an object schema without properties.
+        assert_eq!(
+            b["tools"][0]["function"]["parameters"],
+            json!({"type": "object", "properties": {}})
+        );
     }
 }
 

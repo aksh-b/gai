@@ -35,7 +35,7 @@ pub async fn chat(gai: &Gai, args: ChatArgs) -> anyhow::Result<()> {
     let model = spec
         .model
         .clone()
-        .or_else(|| rt.config().default_model.clone())
+        .or_else(|| rt.default_model())
         .unwrap_or_else(|| "(no model)".into());
     let mut app = App::new(spec, version, model, args.session, args.yes);
     if let Some(id) = app.session_id.clone() {

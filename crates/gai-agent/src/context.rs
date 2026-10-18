@@ -4,6 +4,7 @@ use std::collections::HashSet;
 
 use gai_core::{ContentBlock, Message, Role, ToolSpec};
 use gai_store::History;
+use serde_json::Value;
 
 const CLEARED: &str = "[Output of an earlier tool call was cleared to save context. Call the tool again if you still need it.]";
 
@@ -314,6 +315,124 @@ fn clip(s: &str, max: usize) -> String {
     }
 }
 
+/// Rough tokens a set of tool definitions takes in every request.
+pub(crate) fn tools_tokens(tools: &[ToolSpec]) -> u64 {
+    tools
+        .iter()
+        .map(|t| {
+            8 + text_tokens(&t.name)
+                + text_tokens(&t.description)
+                + text_tokens(&t.input_schema.to_string())
+        })
+        .sum()
+}
+
+/// How tool definitions were made to fit a token budget.
+#[derive(Debug, PartialEq)]
+pub(crate) struct ToolFit {
+    pub before: u64,
+    pub after: u64,
+    pub shortened: bool,
+}
+
+/// Shorten tool descriptions (and the descriptions inside their schemas)
+/// until all of them fit in `budget` tokens, in two steps: first to a
+/// sentence or so each, then to a short phrase with schema descriptions
+/// dropped. Names and parameter shapes are never changed, so calls still
+/// work. MCP servers often describe each tool in a page of text, which a
+/// small local model cannot hold.
+pub(crate) fn fit_tools(tools: &mut [ToolSpec], budget: u64) -> ToolFit {
+    let before = tools_tokens(tools);
+    if before <= budget {
+        return ToolFit {
+            before,
+            after: before,
+            shortened: false,
+        };
+    }
+    for (desc_chars, schema_chars) in [(240, Some(100)), (100, None)] {
+        for t in tools.iter_mut() {
+            t.description = first_part(&t.description, desc_chars);
+            trim_schema(&mut t.input_schema, schema_chars);
+        }
+        if tools_tokens(tools) <= budget {
+            break;
+        }
+    }
+    ToolFit {
+        before,
+        after: tools_tokens(tools),
+        shortened: true,
+    }
+}
+
+/// The text up to the first sentence end, at most `max` characters.
+fn first_part(text: &str, max: usize) -> String {
+    let text = text.trim();
+    let sentence = sentence_end(text).map_or(text, |end| &text[..end]).trim();
+    if sentence.chars().count() <= max {
+        return sentence.to_owned();
+    }
+    let cut: String = sentence.chars().take(max.saturating_sub(1)).collect();
+    format!("{}…", cut.trim_end())
+}
+
+/// Where the first sentence ends: a line break, or a period followed by a
+/// space whose word is not an abbreviation like "e.g." or "i.e.".
+fn sentence_end(text: &str) -> Option<usize> {
+    let mut chars = text.char_indices().peekable();
+    while let Some((i, c)) = chars.next() {
+        let next_is_space = chars.peek().is_none_or(|&(_, n)| n.is_whitespace());
+        if i < 20 {
+            continue;
+        }
+        if c == '\n' {
+            return Some(i);
+        }
+        if c == '.' && next_is_space {
+            let word = text[..i].rsplit(char::is_whitespace).next().unwrap_or("");
+            if word.len() > 2 && !word.contains('.') {
+                return Some(i + 1);
+            }
+        }
+    }
+    None
+}
+
+/// Shorten (`Some(max)`) or drop (`None`) the descriptions in a JSON Schema,
+/// and drop examples. Property names called `description` are kept.
+fn trim_schema(v: &mut Value, max: Option<usize>) {
+    match v {
+        Value::Object(o) => {
+            o.remove("examples");
+            if let Some(Value::String(d)) = o.get("description").cloned() {
+                match max {
+                    Some(m) => {
+                        o.insert("description".into(), Value::String(first_part(&d, m)));
+                    }
+                    None => {
+                        o.remove("description");
+                    }
+                }
+            }
+            for (k, child) in o.iter_mut() {
+                if k == "properties" {
+                    // Its keys are parameter names; only their schemas change.
+                    if let Value::Object(props) = child {
+                        for p in props.values_mut() {
+                            trim_schema(p, max);
+                        }
+                    }
+                } else {
+                    trim_schema(child, max);
+                }
+            }
+        }
+        Value::Array(a) => a.iter_mut().for_each(|x| trim_schema(x, max)),
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -409,6 +528,49 @@ mod tests {
         assert_eq!(loop_only.messages[cut].role, Role::Assistant);
         loop_only.apply_compaction(cut, "s".into());
         assert_eq!(loop_only.messages[0].text(), RESUME_NOTE);
+    }
+
+    #[test]
+    fn long_tool_descriptions_are_shortened_to_fit() {
+        let long = "Search issues in Jira. ".to_owned() + &"Lots of detail about JQL. ".repeat(80);
+        let schema = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "jql": {"type": "string", "description": long.clone(), "examples": ["project = X"]},
+                "description": {"type": "string", "description": "The issue description."}
+            },
+            "required": ["jql"]
+        });
+        let mut tools: Vec<ToolSpec> = (0..20)
+            .map(|i| ToolSpec {
+                name: format!("mcp__jira__t{i}"),
+                description: long.clone(),
+                input_schema: schema.clone(),
+                strict: false,
+            })
+            .collect();
+        let fit = fit_tools(&mut tools, 3_000);
+        assert!(
+            fit.shortened && fit.before > 3_000 && fit.after <= 3_000,
+            "{fit:?}"
+        );
+        assert_eq!(tools[0].description, "Search issues in Jira.");
+        assert_eq!(
+            first_part(
+                "Links two entities in the graph (e.g. a page and an issue). More.",
+                200
+            ),
+            "Links two entities in the graph (e.g. a page and an issue)."
+        );
+        let props = &tools[0].input_schema["properties"];
+        // Parameter names and shapes are untouched, even one named `description`.
+        assert_eq!(props["description"]["type"], "string");
+        assert_eq!(tools[0].input_schema["required"][0], "jql");
+        assert!(props["jql"].get("examples").is_none());
+
+        let mut small = vec![tools[0].clone()];
+        let fit = fit_tools(&mut small, 100_000);
+        assert!(!fit.shortened);
     }
 
     #[test]

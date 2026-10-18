@@ -125,7 +125,9 @@ pub struct Knowledge {
 }
 
 /// Rank constant for reciprocal rank fusion; 60 is the usual choice.
-const RRF_K: f32 = 60.0;
+const RRF_K: f32 = 20.0;
+/// Weight of keyword results against vector results in hybrid search.
+const TEXT_WEIGHT: f32 = 0.3;
 
 impl Knowledge {
     pub fn new(
@@ -395,6 +397,13 @@ impl Knowledge {
             return Ok(Vec::new());
         }
         let model = self.models.embedding(&c.embedding_model)?;
+        let prefix = model
+            .info()
+            .embed_prefixes
+            .as_ref()
+            .map(|p| p.document.clone())
+            .unwrap_or_default();
+        let inputs: Vec<String> = inputs.iter().map(|t| format!("{prefix}{t}")).collect();
         let mut out = Vec::with_capacity(inputs.len());
         for batch in inputs.chunks(self.settings.embed_batch.max(1)) {
             let resp = model.embed(batch).await?;
@@ -456,7 +465,13 @@ impl Knowledge {
         if mode != SearchMode::Text {
             for (model, names) in &by_model {
                 let m = self.models.embedding(model)?;
-                let resp = m.embed(&[query.to_owned()]).await?;
+                let prefix = m
+                    .info()
+                    .embed_prefixes
+                    .as_ref()
+                    .map(|p| p.query.as_str())
+                    .unwrap_or_default();
+                let resp = m.embed(&[format!("{prefix}{query}")]).await?;
                 if let Some(q) = resp.vectors.first() {
                     vector.extend(self.store.vector_search(names, q, pool).await?);
                 }
@@ -479,8 +494,10 @@ impl Knowledge {
                 .or_insert_with(|| to_hit(h))
                 .vector_score = Some(score);
         }
+        // Keyword matches count half: for questions in plain words, meaning
+        // is the better signal; keywords mostly help with names and codes.
         for (rank, h) in text.into_iter().enumerate() {
-            *fused.entry(h.chunk.id).or_default() += 1.0 / (RRF_K + rank as f32 + 1.0);
+            *fused.entry(h.chunk.id).or_default() += TEXT_WEIGHT / (RRF_K + rank as f32 + 1.0);
             let score = h.score;
             hits.entry(h.chunk.id)
                 .or_insert_with(|| to_hit(h))

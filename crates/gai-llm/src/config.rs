@@ -186,6 +186,13 @@ pub struct ModelConfig {
     /// characters, per image).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub media_pricing: Option<crate::MediaPricing>,
+    /// For embedding models: text put before search queries. Known models
+    /// (nomic-embed-text, mxbai-embed-large, e5) get theirs without this.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query_prefix: Option<String>,
+    /// For embedding models: text put before documents being indexed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub document_prefix: Option<String>,
 }
 
 impl ModelConfig {
@@ -196,6 +203,8 @@ impl ModelConfig {
             capabilities: Some(capabilities),
             pricing,
             media_pricing: None,
+            query_prefix: None,
+            document_prefix: None,
         }
     }
 
@@ -207,6 +216,8 @@ impl ModelConfig {
             capabilities: None,
             pricing: None,
             media_pricing: Some(pricing),
+            query_prefix: None,
+            document_prefix: None,
         }
     }
 }

@@ -210,6 +210,8 @@ struct Inner {
     tools: RwLock<ToolRegistry>,
     store: SharedStore,
     config: RuntimeConfig,
+    /// Set at runtime (from the dashboard); wins over `config.default_model`.
+    default_model: RwLock<Option<String>>,
     http: reqwest::Client,
     approvals: ApprovalHub,
     active: Mutex<HashMap<String, Active>>,
@@ -250,6 +252,7 @@ impl Runtime {
                 tools: RwLock::new(tools),
                 store,
                 config,
+                default_model: RwLock::new(None),
                 knowledge,
                 skills,
                 queue: Notify::new(),
@@ -345,6 +348,35 @@ impl Runtime {
 
     pub fn config(&self) -> &RuntimeConfig {
         &self.inner.config
+    }
+
+    /// The model used when an agent names none: the one set with
+    /// [`Runtime::set_default_model`], else the configured one.
+    pub fn default_model(&self) -> Option<String> {
+        self.inner
+            .default_model
+            .read()
+            .expect("default model lock")
+            .clone()
+            .or_else(|| self.inner.config.default_model.clone())
+    }
+
+    /// The model set with [`Runtime::set_default_model`], if any.
+    pub fn stored_default_model(&self) -> Option<String> {
+        self.inner
+            .default_model
+            .read()
+            .expect("default model lock")
+            .clone()
+    }
+
+    /// Override the configured default model; `None` goes back to it.
+    pub fn set_default_model(&self, model: Option<String>) {
+        *self
+            .inner
+            .default_model
+            .write()
+            .expect("default model lock") = model;
     }
 
     pub fn approvals(&self) -> &ApprovalHub {
@@ -728,7 +760,7 @@ impl Runtime {
         let model_spec = spec
             .model
             .clone()
-            .or_else(|| self.inner.config.default_model.clone())
+            .or_else(|| self.default_model())
             .ok_or_else(|| {
                 AgentError::Invalid(format!(
                     "agent {:?} names no model and there is no default model",
@@ -884,7 +916,40 @@ impl Runtime {
         } else {
             (l.tools, None)
         };
-        let tool_specs: Vec<ToolSpec> = tools.iter().map(|t| t.spec()).collect();
+        let mut tool_specs: Vec<ToolSpec> = tools.iter().map(|t| t.spec()).collect();
+        // Tool definitions go with every request. Keep them to well under
+        // half of the model's window, so the conversation has room.
+        let window = l
+            .spec
+            .context
+            .max_context_tokens
+            .or(l.model.info().capabilities.context_window)
+            .unwrap_or(128_000) as u64;
+        let fit = crate::context::fit_tools(&mut tool_specs, window * 2 / 5);
+        let fit_notice = if fit.after > window * 4 / 5 {
+            Some(format!(
+                "This assistant's {} tools need about {} tokens, more than {} can hold ({} tokens). Choose fewer tools, or a model with a bigger context window.",
+                tool_specs.len(),
+                fit.after,
+                l.model.info().id,
+                window
+            ))
+        } else if fit.shortened {
+            Some(format!(
+                "Shortened the descriptions of {} tools (about {} → {} tokens) to fit {}'s {}-token context window.",
+                tool_specs.len(),
+                fit.before,
+                fit.after,
+                l.model.info().id,
+                window
+            ))
+        } else {
+            None
+        };
+        let notice = match (notice, fit_notice) {
+            (Some(a), Some(b)) => Some(format!("{a}. {b}")),
+            (a, b) => a.or(b),
+        };
         let tool_map: HashMap<String, SharedTool> =
             tools.into_iter().map(|t| (t.spec().name, t)).collect();
         let ctx = ToolCtx {
@@ -1020,7 +1085,7 @@ impl Runtime {
             .and_then(Value::as_str)
             .map(str::to_owned)
             .or_else(|| spec.model.clone())
-            .or_else(|| self.inner.config.default_model.clone())
+            .or_else(|| self.default_model())
             .ok_or_else(|| AgentError::Invalid("no model to resume with".into()))?;
         let model = self.inner.models.chat(&model_spec)?;
         let summary_model = match &spec.context.summary_model {
@@ -2010,6 +2075,15 @@ impl RunTask {
         Ok((acc.finish(), routed))
     }
 
+    /// Longest tool result passed back, in characters: the configured limit,
+    /// but never more than about a quarter of the context window, so one
+    /// big page cannot crowd out the rest of the conversation (at roughly
+    /// 3.5 characters a token).
+    fn max_tool_output_chars(&self) -> usize {
+        let quarter = (self.window() as f64 * 0.25 * 3.5) as usize;
+        self.ctx.settings.max_output_chars.min(quarter.max(2_000))
+    }
+
     fn window(&self) -> u64 {
         self.spec
             .context
@@ -2215,7 +2289,7 @@ impl RunTask {
         if let Some(c) = output.cost.take() {
             *self.tool_cost.lock().expect("tool cost") += c;
         }
-        let output = output.truncated(self.ctx.settings.max_output_chars);
+        let output = output.truncated(self.max_tool_output_chars());
         self.emit(RunEvent::ToolResult {
             id: id.clone(),
             name,

@@ -12,7 +12,9 @@ if [ ! -f "$here/../web/dist/index.html" ]; then
   (cd "$here/../web" && npm install && npm run build)
 fi
 default_model="${GAI_DEFAULT_MODEL:-}"
-if [ -z "$default_model" ] && [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+# Without a key or a default_model in gai.toml, fall back to the mock model.
+if [ -z "$default_model" ] && [ -z "${ANTHROPIC_API_KEY:-}" ] \
+  && ! grep -q '^default_model' "$here/../gai.toml" 2>/dev/null; then
   default_model="mock/echo"
 fi
 # Ollama: prefer the one scripts/ollama.sh runs next to gai (reached over
@@ -34,5 +36,5 @@ fi
 if ! grep -q '^\[media\]' "$here/../gai.toml" 2>/dev/null; then
   extra="$extra -e GAI_MEDIA__IMAGE=${GAI_MEDIA__IMAGE:-mock/image} -e GAI_MEDIA__SPEECH=${GAI_MEDIA__SPEECH:-mock/voice} -e GAI_MEDIA__TRANSCRIPTION=${GAI_MEDIA__TRANSCRIPTION:-mock/ears}"
 fi
-GAI_PODMAN_ARGS="-p 127.0.0.1:8484:8484 -v gai-data:/data -e GAI_DATA_DIR=/data -e GAI_DEFAULT_MODEL=$default_model $extra" \
+GAI_PODMAN_ARGS="-p 127.0.0.1:8484:8484 -v gai-data:/data -e GAI_DATA_DIR=/data ${default_model:+-e GAI_DEFAULT_MODEL=$default_model} $extra" \
   "$here/in-container.sh" 'cargo build -q -p gai-cli && /target/debug/gai --log "warn,gai_tools=info,gai_agent=info,gai_server=info" serve --bind 0.0.0.0:8484 --local --ui web/dist'

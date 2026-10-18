@@ -325,6 +325,42 @@ pub struct ModelInfo {
     /// Prices for speech and image models.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub media_pricing: Option<crate::MediaPricing>,
+    /// For embedding models trained with task prefixes: what to put before
+    /// search queries and before documents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub embed_prefixes: Option<EmbedPrefixes>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct EmbedPrefixes {
+    pub query: String,
+    pub document: String,
+}
+
+impl EmbedPrefixes {
+    /// The prefixes well-known embedding models were trained with. Without
+    /// them their search quality drops noticeably.
+    pub fn known(model: &str) -> Option<Self> {
+        let m = model.to_lowercase();
+        let p = |q: &str, d: &str| {
+            Some(Self {
+                query: q.into(),
+                document: d.into(),
+            })
+        };
+        if m.contains("nomic-embed-text") {
+            p("search_query: ", "search_document: ")
+        } else if m.contains("mxbai-embed-large") {
+            p(
+                "Represent this sentence for searching relevant passages: ",
+                "",
+            )
+        } else if m.contains("e5-") || m.starts_with("e5") || m.contains("/e5") {
+            p("query: ", "passage: ")
+        } else {
+            None
+        }
+    }
 }
 
 impl ModelInfo {
@@ -337,6 +373,7 @@ impl ModelInfo {
             capabilities: Capabilities::default(),
             pricing: None,
             media_pricing: None,
+            embed_prefixes: None,
         }
     }
 

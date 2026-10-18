@@ -10,6 +10,7 @@ gai-core.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
 evalexpr.workspace = true
+regex.workspace = true
 futures.workspace = true
 reqwest.workspace = true
 rmcp.workspace = true

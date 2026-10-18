@@ -107,12 +107,39 @@ fn push_in(q: &mut QueryBuilder<Sqlite>, column: &str, values: &[String]) {
 
 /// Plain words as an FTS5 query: each word quoted (so operators are text),
 /// any word may match, BM25 ranks documents with more of them higher.
+/// Common English words that match nearly every chunk; ORing them in
+/// drowns out the words that matter.
+const STOPWORDS: &[&str] = &[
+    "a", "about", "after", "all", "also", "am", "an", "and", "any", "are", "as", "at", "be",
+    "because", "been", "before", "being", "between", "both", "but", "by", "can", "could", "did",
+    "do", "does", "doing", "each", "few", "for", "from", "get", "gets", "got", "had", "has",
+    "have", "having", "he", "her", "here", "his", "how", "i", "if", "in", "into", "is", "it",
+    "its", "just", "me", "more", "most", "my", "no", "not", "of", "on", "once", "only", "or",
+    "other", "our", "out", "over", "own", "same", "she", "should", "so", "some", "such", "than",
+    "that", "the", "their", "them", "then", "there", "these", "they", "this", "those", "through",
+    "to", "too", "under", "until", "up", "very", "was", "we", "were", "what", "when", "where",
+    "which", "while", "who", "whom", "why", "will", "with", "would", "you", "your",
+];
+
 fn fts_query(text: &str) -> Option<String> {
-    let words: Vec<String> = text
+    let all: Vec<String> = text
         .split(|c: char| !c.is_alphanumeric())
         .filter(|w| !w.is_empty())
+        .map(str::to_lowercase)
+        .collect();
+    let mut words: Vec<&String> = all
+        .iter()
+        .filter(|w| !STOPWORDS.contains(&w.as_str()))
+        .collect();
+    // A query made only of common words still searches for them.
+    if words.is_empty() {
+        words = all.iter().collect();
+    }
+    words.dedup();
+    let words: Vec<String> = words
+        .into_iter()
         .take(64)
-        .map(|w| format!("\"{}\"", w.to_lowercase()))
+        .map(|w| format!("\"{w}\""))
         .collect();
     (!words.is_empty()).then(|| words.join(" OR "))
 }
