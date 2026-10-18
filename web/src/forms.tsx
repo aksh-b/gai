@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'rea
 import { Field, Tabs } from '@flame';
 import YAML from 'yaml';
 import { ErrorNote } from './components';
+import { useDevMode } from './prefs';
 
 /** Empty values are left out, so specs (and their YAML) stay short. */
 function isEmpty(v: unknown): boolean {
@@ -44,6 +45,7 @@ export function SpecEditor<T extends object>({
   children: ReactNode;
   label: string;
 }) {
+  const [dev] = useDevMode();
   const [tab, setTab] = useState('form');
   const [text, setText] = useState(() => YAML.stringify(value));
   const [error, setError] = useState<string>();
@@ -58,6 +60,15 @@ export function SpecEditor<T extends object>({
     setText(YAML.stringify(value));
     setError(undefined);
   }, [value]);
+
+  // The YAML view is a developer detail.
+  if (!dev && tab === 'form') {
+    return (
+      <div className="spec-editor">
+        <div className="form-body">{children}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="spec-editor">
@@ -223,7 +234,11 @@ export function PickList({
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return items.filter(
-      (i) => !needle || i.value.toLowerCase().includes(needle) || (i.description ?? '').toLowerCase().includes(needle),
+      (i) =>
+        !needle ||
+        i.value.toLowerCase().includes(needle) ||
+        (i.label ?? '').toLowerCase().includes(needle) ||
+        (i.description ?? '').toLowerCase().includes(needle),
     );
   }, [items, q]);
   // Chosen values the list does not know (typed in YAML) stay visible.
@@ -262,7 +277,7 @@ function PickRow({ item, on, onToggle, extra }: { item: PickItem; on: boolean; o
       <label className="pick-main">
         <input type="checkbox" checked={on} onChange={onToggle} />
         <span className="pick-text">
-          <span className="mono small">{item.label ?? item.value}</span>
+          <span className={item.label ? 'small' : 'mono small'}>{item.label ?? item.value}</span>
           {item.description && <span className="muted small pick-desc">{item.description}</span>}
         </span>
       </label>

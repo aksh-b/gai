@@ -19,14 +19,8 @@ export function MediaStudio() {
   return (
     <div className="page">
       <PageHeader
-        title="Media"
-        subtitle={
-          <>
-            Image, speech and transcription models. Agents use them through the <span className="mono">image_gen</span>,{' '}
-            <span className="mono">speak</span> and <span className="mono">transcribe</span> tools; defaults come from{' '}
-            <span className="mono">[media]</span> in gai.toml.
-          </>
-        }
+        title="Voice & images"
+        subtitle="Make images, turn text into speech and speech into text. Assistants can do the same when you give them these abilities."
       />
       <ErrorNote error={defaults.error} />
       <Tabs
@@ -218,7 +212,7 @@ function TranscribePanel({ fallback, models }: { fallback: string | null; models
 function Library({ blobs, error, onChange }: { blobs: StoredBlob[]; error?: string; onChange: () => void }) {
   if (error) return <ErrorNote error={error} />;
   const shown = blobs.filter((b) => b.media_type.startsWith('image/') || b.media_type.startsWith('audio/'));
-  if (!shown.length) return <Empty title="Nothing stored yet">Images and audio made here or by agents show up in this list.</Empty>;
+  if (!shown.length) return <Empty title="Nothing here yet">Images and audio made here or by assistants show up in this list.</Empty>;
   return (
     <div className="media-library">
       {shown.map((b) => {
@@ -233,7 +227,7 @@ function Library({ blobs, error, onChange }: { blobs: StoredBlob[]; error?: stri
               </span>
               <div className="row between">
                 {b.run_id ? (
-                  <a className="small" href={`#/runs/${b.run_id}`}>
+                  <a className="small" href={`#/activity/${b.run_id}`}>
                     run
                   </a>
                 ) : (

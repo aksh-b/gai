@@ -648,6 +648,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/providers/ollama/library": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recommended Ollama models and what is installed */
+        get: operations["get_v1_providers_ollama_library"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/providers/ollama/pull": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start downloading a model into Ollama */
+        post: operations["post_v1_providers_ollama_pull"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/providers/ollama/pulls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Progress of Ollama downloads */
+        get: operations["get_v1_providers_ollama_pulls"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/providers/{name}/key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save an API key for a provider */
+        put: operations["put_v1_providers__name__key"];
+        post?: never;
+        /** Forget a provider key saved from the dashboard */
+        delete: operations["delete_v1_providers__name__key"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/providers/{name}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Try a provider with one tiny request */
+        post: operations["post_v1_providers__name__test"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs": {
         parameters: {
             query?: never;
@@ -855,6 +941,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Runtime settings */
+        get: operations["get_v1_settings"];
+        /** Change runtime settings */
+        put: operations["put_v1_settings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/setup/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Get an admin key for the dashboard on this computer (local servers only) */
+        post: operations["post_v1_setup_claim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/setup/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What first-run setup still needs (public) */
+        get: operations["get_v1_setup_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/skills": {
         parameters: {
             query?: never;
@@ -886,6 +1024,40 @@ export interface paths {
         post?: never;
         /** Delete an uploaded skill */
         delete: operations["delete_v1_skills__name_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Starter agents and workflows */
+        get: operations["get_v1_templates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/templates/{id}/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save a template (and the agents it uses) */
+        post: operations["post_v1_templates__id__install"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1533,6 +1705,23 @@ export interface components {
             seq: number;
             text: string;
         };
+        Claimed: {
+            key: components["schemas"]["ApiKey"];
+            /** @description Shown once; the dashboard keeps it in the browser. */
+            secret: string;
+        };
+        CloudProvider: {
+            /** @description The provider has a key (from the dashboard, config or environment). */
+            connected: boolean;
+            description: string;
+            key_url: string;
+            name: string;
+            /** @description Last four characters of a key saved from the dashboard. */
+            saved_key?: string | null;
+            /** @description A model to try first with this provider. */
+            suggested_model?: string | null;
+            title: string;
+        };
         Collection: {
             /** Format: uint32 */
             chunk_overlap: number;
@@ -1958,6 +2147,12 @@ export interface components {
             default?: unknown;
             description?: string | null;
         };
+        Installed: {
+            /** @description Agents installed along with it because it uses them. */
+            also: string[];
+            kind: string;
+            name: string;
+        };
         KeyState: {
             /** @constant */
             status: "present";
@@ -1972,6 +2167,13 @@ export interface components {
         LabelBody: {
             /** Format: uint32 */
             version: number;
+        };
+        LibraryModel: {
+            description: string;
+            installed: boolean;
+            name: string;
+            size: string;
+            tools: boolean;
         };
         /**
          * @description Hard ceilings for one run. Hitting any ends the run with
@@ -2337,6 +2539,16 @@ export interface components {
             function: components["schemas"]["OaFunctionCall"];
             id: string;
         };
+        OllamaLibrary: {
+            models: components["schemas"]["LibraryModel"][];
+            status: components["schemas"]["OllamaStatus"];
+        };
+        OllamaStatus: {
+            base_url?: string | null;
+            /** @description Installed models, by Ollama name. */
+            models: string[];
+            reachable: boolean;
+        };
         PendingApproval: {
             call_id: string;
             input: unknown;
@@ -2367,12 +2579,36 @@ export interface components {
             name: string;
             scopes: components["schemas"]["Scope"][];
         };
+        ProviderKey: {
+            key: string;
+        };
+        ProviderKeyView: {
+            connected: boolean;
+            provider: string;
+            /** @description Last four characters of the saved key; the key itself is never sent back. */
+            saved_key?: string | null;
+        };
         ProviderView: {
             base_url?: string | null;
             dialect: string;
             key: components["schemas"]["KeyState"];
             models: string[];
             name: string;
+        };
+        PullProgress: {
+            /** Format: uint64 */
+            completed: number;
+            error?: string | null;
+            model: string;
+            /** @description `pulling`, `done` or `failed`. */
+            state: string;
+            /** @description Ollama's own words for the current step. */
+            status: string;
+            /** Format: uint64 */
+            total: number;
+        };
+        PullRequest: {
+            model: string;
         };
         /**
          * @description How hard the model should think. Each dialect maps this onto whatever its
@@ -2631,6 +2867,30 @@ export interface components {
             updated_at: string;
             user_id?: string | null;
         };
+        Settings: {
+            /**
+             * @description The model used when an agent names none. `null` goes back to the
+             *     one in gai.toml.
+             */
+            default_model?: string | null;
+        };
+        SettingsView: {
+            default_model?: string | null;
+            default_model_source?: string | null;
+        };
+        SetupStatus: {
+            /** @description This browser can get a key from `POST /v1/setup/claim`. */
+            can_claim: boolean;
+            default_model?: string | null;
+            /** @description `settings`, `config` or `detected`. */
+            default_model_source?: string | null;
+            /** @description A real chat model (not the demo model) is ready to use. */
+            has_chat_model: boolean;
+            /** @description Requests without a key are refused, and this one had no valid key. */
+            needs_key: boolean;
+            ollama: components["schemas"]["OllamaStatus"];
+            providers: components["schemas"]["CloudProvider"][];
+        };
         SignInRequest: {
             /**
              * @description Where the browser returns after approving: this server's
@@ -2742,6 +3002,30 @@ export interface components {
             agent: string;
         } | {
             workflow: string;
+        };
+        TemplateView: {
+            description: string;
+            id: string;
+            /** @description An agent or workflow with this name is already stored. */
+            installed: boolean;
+            /** @description `agent` or `workflow`. */
+            kind: string;
+            needs: string[];
+            title: string;
+            yaml: string;
+        };
+        TestRequest: {
+            /**
+             * @description The model to try; defaults to a suggested model of the provider.
+             * @default null
+             */
+            model: string | null;
+        };
+        TestResult: {
+            /** @description What went wrong, in plain words. */
+            message: string;
+            model: string;
+            ok: boolean;
         };
         ToolOutput: {
             content: components["schemas"]["ContentBlock"][];
@@ -4721,6 +5005,198 @@ export interface operations {
             };
         };
     };
+    get_v1_providers_ollama_library: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OllamaLibrary"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_providers_ollama_pull: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PullRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PullProgress"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_providers_ollama_pulls: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PullProgress"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put_v1_providers__name__key: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderKey"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderKeyView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_providers__name__key: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderKeyView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_providers__name__test: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get_v1_runs: {
         parameters: {
             query?: {
@@ -5212,6 +5688,126 @@ export interface operations {
             };
         };
     };
+    get_v1_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put_v1_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Settings"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_setup_claim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Claimed"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_setup_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get_v1_skills: {
         parameters: {
             query?: never;
@@ -5322,6 +5918,66 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_templates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateView"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_templates__id__install: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Installed"];
+                };
             };
             /** @description Error */
             default: {

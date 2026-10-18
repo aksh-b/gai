@@ -11,8 +11,8 @@ export function Connect() {
   return (
     <div className="page">
       <PageHeader
-        title="Connect"
-        subtitle="Use gai's agents from other tools: as an MCP server, or as A2A agents. Both use your gai API keys (run scope)."
+        title="Use from other apps"
+        subtitle="Let other AI apps (Claude Desktop, Claude Code, other agents) use your assistants. They sign in with an access key."
       />
 
       <section className="card stack">

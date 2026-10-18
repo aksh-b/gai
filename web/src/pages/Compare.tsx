@@ -42,10 +42,10 @@ export function Compare({ a, b }: { a: string; b: string }) {
   return (
     <div className="page">
       <div className="row gap">
-        <Button variant="ghost" size="sm" leading={<IconBack />} onClick={() => navigate(`/runs/${a}`)}>
+        <Button variant="ghost" size="sm" leading={<IconBack />} onClick={() => navigate(`/activity/${a}`)}>
           Original run
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => navigate(`/runs/${b}`)}>
+        <Button variant="ghost" size="sm" onClick={() => navigate(`/activity/${b}`)}>
           Fork
         </Button>
       </div>
@@ -155,10 +155,10 @@ function RunSummary({ run, title }: { run: Run | undefined; title: string }) {
       </div>
       <a
         className="mono small"
-        href={`#/runs/${run.id}`}
+        href={`#/activity/${run.id}`}
         onClick={(e) => {
           e.preventDefault();
-          navigate(`/runs/${run.id}`);
+          navigate(`/activity/${run.id}`);
         }}
       >
         {run.id}

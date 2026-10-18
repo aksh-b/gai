@@ -28,9 +28,8 @@ export function Memory() {
         title="Memory"
         subtitle={
           <>
-            Memory blocks are text an agent always sees and edits itself as it learns (<span className="mono">memory_append</span>,{' '}
-            <span className="mono">memory_replace</span>, <span className="mono">memory_rethink</span>). Agents declare them under{' '}
-            <span className="mono">memory.blocks</span>; <span className="mono">user</span> blocks form a profile every agent shares.
+            Notes your assistants keep and update as they learn, like what they know about you. You can read and correct them
+            here. Turn memory on for an assistant in its settings (Advanced).
           </>
         }
       />
@@ -48,8 +47,8 @@ export function Memory() {
         />
       </div>
       {groups.length === 0 && blocks.data && (
-        <Empty title="No memory blocks yet">
-          Give an agent memory: {'{'} blocks: [{'{'} label: notes {'}'}] {'}'} and run it, or create a block below.
+        <Empty title="No memories yet">
+          Assistants with memory turned on (like the “Remembers you” template) keep their notes here. You can also add one below.
         </Empty>
       )}
       {groups.map(([scope, list]) => (

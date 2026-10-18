@@ -19,7 +19,7 @@ function KeyBadge({ k }: { k: KeyState }) {
 
 const ctx = (n?: number) => (n ? (n >= 1_000_000 ? `${n / 1_000_000}M` : `${Math.round(n / 1000)}k`) : '—');
 
-export function Models() {
+export function Models({ embedded = false }: { embedded?: boolean } = {}) {
   const providers = useLoad(() => api.providers(), []);
   const models = useLoad(() => api.models(), []);
 
@@ -46,16 +46,12 @@ export function Models() {
   ];
 
   return (
-    <div className="page">
-      <PageHeader
-        title="Models"
-        subtitle={
-          <>
-            Any model a provider serves works as <span className="mono">provider/model</span>, listed here or not. Add providers in{' '}
-            <span className="mono">gai.toml</span>.
-          </>
-        }
-      />
+    <div className={embedded ? 'stack' : 'page'}>
+      {!embedded && <PageHeader title="Models" />}
+      <p className="muted small">
+        Any model a provider serves works as <span className="mono">provider/model</span>, listed here or not. More providers can be
+        added in <span className="mono">gai.toml</span>.
+      </p>
       <ErrorNote error={providers.error ?? models.error} />
       <section className="card">
         <h3>Providers</h3>

@@ -53,11 +53,11 @@ export function Keys() {
   return (
     <div className="page">
       <PageHeader
-        title="API keys"
+        title="Access keys"
         subtitle={
           <>
-            Keys authenticate the API, this dashboard and OpenAI-compatible clients (<span className="mono">/openai/v1</span>). While no key
-            exists, a local server stays open; the first key turns authentication on.
+            Keys let apps and scripts use gai (the API, and OpenAI-compatible clients at <span className="mono">/openai/v1</span>). This
+            browser has its own key, made when you first opened the dashboard.
           </>
         }
       />
@@ -116,7 +116,7 @@ export function Keys() {
 
         <section className="card">
           <h3>Active</h3>
-          {active.length === 0 && <Empty title="No keys yet">Authentication is open on a local server until you create one.</Empty>}
+          {active.length === 0 && <Empty title="No keys yet">Anyone who can reach this server can use it until a key exists.</Empty>}
           <div className="key-list">
             {active.map((k) => (
               <div key={k.id} className="key-row">

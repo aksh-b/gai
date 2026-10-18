@@ -2,6 +2,15 @@ import { useEffect, useState } from 'react';
 import { Button, toast } from '@flame';
 import { api, type PendingApproval } from '../api';
 import { Empty, ErrorNote, PageHeader } from '../components';
+import { toolSentence } from '../labels';
+
+function safeJson(t: string): unknown {
+  try {
+    return JSON.parse(t);
+  } catch {
+    return {};
+  }
+}
 import { IconCheck, IconX } from '../icons';
 import { useLoad } from '../util';
 
@@ -17,11 +26,11 @@ export function Approvals() {
   return (
     <div className="page">
       <PageHeader
-        title="Approvals"
-        subtitle="Tool calls waiting for a decision. They survive server restarts: an interrupted run asks again when the server comes back."
+        title="Needs your OK"
+        subtitle="Things your assistants want to do but asked about first. They wait here, even if the server restarts."
       />
       <ErrorNote error={error} />
-      {data && data.length === 0 && <Empty title="Nothing waiting">Calls that need approval appear here as they happen.</Empty>}
+      {data && data.length === 0 && <Empty title="Nothing waiting">When an assistant asks before acting, the question shows up here and in the chat.</Empty>}
       <div className="approval-list">
         {data?.map((p) => (
           <ApprovalCard key={`${p.run_id}/${p.call_id}`} p={p} onDone={reload} />
@@ -48,7 +57,7 @@ function ApprovalCard({ p, onDone }: { p: PendingApproval; onDone: () => void })
     try {
       if (edited) await api.decideWith(p.run_id, p.call_id, input);
       else await api.decide(p.run_id, p.call_id, true);
-      toast.success(`Approved ${p.tool}`);
+      toast.success('Allowed');
       onDone();
     } catch (e) {
       toast.error((e as Error).message);
@@ -73,22 +82,22 @@ function ApprovalCard({ p, onDone }: { p: PendingApproval; onDone: () => void })
     <section className="card approval-card">
       <div className="row between">
         <div>
-          <strong className="mono">{p.tool}</strong>
+          <strong title={p.tool}>{toolSentence(p.tool, safeJson(text))}</strong>
           <div className="muted small">
-            run <a href={`#/runs/${p.run_id}`} className="mono">{p.run_id}</a>
+            <a href={`#/activity/${p.run_id}`}>See what led to this</a>
           </div>
         </div>
         <div className="row gap">
           <Button tone="accent" leading={<IconCheck />} loading={busy === 'approve'} onClick={approve}>
-            {edited ? 'Approve edited' : 'Approve'}
+            {edited ? 'Allow with my changes' : 'Allow'}
           </Button>
           <Button variant="outline" leading={<IconX />} loading={busy === 'decline'} onClick={decline}>
-            Decline
+            Don't allow
           </Button>
         </div>
       </div>
       <label className="label" htmlFor={`in-${p.call_id}`}>
-        Input {edited && <span className="chip accent small">edited</span>}
+        Details (you can change them) {edited && <span className="chip accent small">changed</span>}
       </label>
       <textarea
         id={`in-${p.call_id}`}

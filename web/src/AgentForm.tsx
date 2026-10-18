@@ -4,6 +4,9 @@ import { api, type AgentSpec } from './api';
 import { Disclosure } from './components';
 import { IconPlus, IconTrash } from './icons';
 import { NumberInput, PickList, Section, TemplateVars, TextArea, getIn, insertAt, setIn, type PickItem } from './forms';
+import { modelLabel, toolLabel } from './labels';
+import { modelOptions as groupedModelOptions, useModelGroups } from './models';
+import { useDevMode } from './prefs';
 import { useLoad } from './util';
 
 type Spec = AgentSpec & Record<string, unknown>;
@@ -33,17 +36,19 @@ const PROMPT_VARS = [
 
 /** Tools the runtime builds per agent rather than keeping in the registry. */
 const AGENT_TOOLS: PickItem[] = [
-  { value: 'rag_search', description: 'Search all knowledge collections (picking collections below limits it to those).', group: 'Built for each agent' },
-  { value: 'image_gen', description: 'Generate images with the media image model.', group: 'Built for each agent' },
-  { value: 'speak', description: 'Turn text into speech with the media speech model.', group: 'Built for each agent' },
-  { value: 'transcribe', description: 'Turn speech into text with the media transcription model.', group: 'Built for each agent' },
+  { value: 'rag_search', description: 'Search your documents on the Knowledge page (picking folders below limits it to those).', group: 'Built in' },
+  { value: 'image_gen', description: 'Make images with the image model.', group: 'Voice & images' },
+  { value: 'speak', description: 'Turn text into speech.', group: 'Voice & images' },
+  { value: 'transcribe', description: 'Turn speech into text.', group: 'Voice & images' },
 ];
 
 const EFFORTS = ['off', 'low', 'medium', 'high', 'xhigh', 'max'];
 
 /** Every part of an agent spec as a form. */
 export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s: Spec) => void; isNew: boolean }) {
+  const [dev] = useDevMode();
   const models = useLoad(() => api.models(), []);
+  const groups = useModelGroups();
   const tools = useLoad(() => api.tools(), []);
   const agents = useLoad(() => api.agents(), []);
   const collections = useLoad(() => api.collections(), []);
@@ -58,15 +63,18 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
   const chatModels = (models.data ?? []).filter((m) => m.kind === 'chat');
   const modelIds = chatModels.map((m) => m.id);
   const model = spec.model ?? '';
+  const usable = groupedModelOptions(groups, dev);
   const modelOptions = [
-    { value: '', label: `Server default (${health.data?.default_model ?? 'none'})` },
-    ...chatModels.map((m) => ({
-      value: m.id,
-      label: m.id,
-      description: [m.key.status === 'missing' ? `needs ${m.key.env}` : '', m.capabilities.tools ? '' : 'no tools'].filter(Boolean).join(' · '),
-    })),
-    ...(model && !modelIds.includes(model) ? [{ value: model, label: model, description: 'not in the catalog' }] : []),
-    { value: '__other', label: 'Other address…', description: 'Any provider/model, an alias, or router/<name>' },
+    {
+      value: '',
+      label: `Same as new chats (${dev ? (health.data?.default_model ?? 'none') : modelLabel(health.data?.default_model)})`,
+      description: 'Follows the choice in Settings',
+    },
+    ...usable,
+    ...(model && !usable.some((o) => o.value === model)
+      ? [{ value: model, label: dev ? model : modelLabel(model), description: modelIds.includes(model) ? 'not connected yet' : 'not in the catalog' }]
+      : []),
+    ...(dev ? [{ value: '__other', label: 'Other address…', description: 'Any provider/model, an alias, or router/<name>' }] : []),
   ];
 
   const toolItems: PickItem[] = useMemo(() => {
@@ -74,15 +82,15 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
     const servers = new Set<string>();
     for (const t of tools.data ?? []) {
       const m = t.spec.name.match(/^mcp__(.+?)__/);
-      const group = m ? `MCP: ${m[1]}` : t.spec.name.startsWith('a2a__') ? 'Remote agents (A2A)' : 'Built in';
+      const group = m ? `Connected app: ${m[1]}` : t.spec.name.startsWith('a2a__') ? 'Remote assistants' : 'Built in';
       if (m) servers.add(m[1]);
-      out.push({ value: t.spec.name, description: t.spec.description, group });
+      out.push({ value: t.spec.name, label: dev ? t.spec.name : toolLabel(t.spec.name), description: t.spec.description, group });
     }
     for (const s of servers) {
-      out.unshift({ value: `mcp__${s}__*`, label: `all ${s} tools`, description: 'Every tool this MCP server has, now and later.', group: `MCP: ${s}` });
+      out.unshift({ value: `mcp__${s}__*`, label: `Everything from ${s}`, description: 'Every tool this app has, now and later.', group: `Connected app: ${s}` });
     }
-    return [...out, ...AGENT_TOOLS];
-  }, [tools.data]);
+    return [...out, ...AGENT_TOOLS.map((t) => ({ ...t, label: dev ? t.value : toolLabel(t.value) }))];
+  }, [tools.data, dev]);
   const defaultPolicy = (name: string) => tools.data?.find((t) => t.spec.name === name)?.policy ?? 'auto';
 
   const delegates = (spec.delegates as unknown[] | undefined) ?? [];
@@ -110,10 +118,10 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
           label="Name"
           value={spec.name ?? ''}
           disabled={!isNew}
-          description={isNew ? 'Letters, digits, - and _. Cannot be changed later.' : 'Saving makes a new version of this agent.'}
+          description={isNew ? 'Letters, digits, - and _. It cannot be changed later.' : 'Changes are kept as versions, so you can go back.'}
           onChange={(e) => set(['name'], e.target.value)}
         />
-        <TextField label="Description" value={spec.description ?? ''} description="Shown to people, and to agents that delegate to this one." onChange={(e) => set(['description'], e.target.value)} />
+        <TextField label="Description" value={spec.description ?? ''} description="One sentence about what it does. Other assistants read it too." onChange={(e) => set(['description'], e.target.value)} />
         <div>
           <Select
             label="Model"
@@ -136,9 +144,9 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
         )}
       </Section>
 
-      <Section title="Instructions" hint="The system prompt. It is a template: the variables below are filled in when a run starts.">
+      <Section title="Instructions" hint="What the assistant should do, and how. Words in {{ }} are filled in each time, like today's date.">
         <TextArea
-          label="System prompt"
+          label="Instructions"
           rows={9}
           value={spec.system ?? ''}
           placeholder="You are a careful researcher. Today is {{ date }}…"
@@ -148,7 +156,7 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
         <TemplateVars vars={PROMPT_VARS} onInsert={(t) => set(['system'], insertAt(prompt.current, spec.system ?? '', t))} />
       </Section>
 
-      <Section title="Tools" hint="What the agent may call. For each chosen tool, pick whether it runs on its own, needs a person's approval, or is refused.">
+      <Section title="Abilities" hint="What the assistant can do. For each one, choose whether it acts on its own or asks you first.">
         <PickList
           items={toolItems}
           selected={spec.tools ?? []}
@@ -171,27 +179,27 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
                   set(['tool_policy', name], v === defaultPolicy(name) ? undefined : v);
                 }}
               >
-                <option value="auto">runs on its own</option>
-                <option value="approve">needs approval</option>
-                <option value="deny">refused</option>
+                <option value="auto">acts on its own</option>
+                <option value="approve">asks you first</option>
+                <option value="deny">never</option>
               </select>
             )
           }
         />
       </Section>
 
-      <Section title="Delegates" hint="Other agents this one can hand tasks to. Each becomes a tool named ask_<name>.">
+      <Section title="Can ask other assistants" hint="Hand parts of a task to other assistants, as a team lead would.">
         <PickList
           items={(agents.data ?? [])
             .filter((a) => a.summary.name !== spec.name)
             .map((a) => ({ value: a.summary.name, description: a.spec?.description ?? a.spec?.model ?? '' }))}
           selected={localDelegates}
           onChange={(v) => setDelegates(v, remoteDelegates)}
-          empty="No other stored agents yet."
+          empty="No other assistants yet."
           maxHeight={200}
         />
-        {otherDelegates.length > 0 && <p className="muted small span-all">{otherDelegates.length} more delegate(s) with custom names; edit them in YAML.</p>}
-        <div className="span-all stack tight">
+        {otherDelegates.length > 0 && <p className="muted small span-all">{otherDelegates.length} more with custom names; edit them with developer details on.</p>}
+        {dev && <div className="span-all stack tight">
           <span className="label">Remote agents (A2A)</span>
           {remoteDelegates.map((r, i) => (
             <div key={i} className="row gap">
@@ -207,22 +215,22 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
               Add a remote agent
             </Button>
           </div>
-        </div>
+        </div>}
       </Section>
 
       <Section title="Knowledge and skills">
         <div className="span-all stack tight">
-          <span className="label">Knowledge collections (searched with rag_search)</span>
+          <span className="label">Document folders it can search</span>
           <PickList
             items={(collections.data ?? []).map((c) => ({ value: c.name, description: c.description ?? `${c.documents} documents` }))}
             selected={(spec.knowledge as string[] | undefined) ?? []}
             onChange={(v) => set(['knowledge'], v)}
-            empty="No collections yet: add some on the Knowledge page."
+            empty="No documents yet: add some on the Knowledge page."
             maxHeight={180}
           />
         </div>
         <div className="span-all stack tight">
-          <span className="label">Skills (loaded on demand)</span>
+          <span className="label">Skills (step-by-step know-how it reads when needed)</span>
           <PickList
             items={(skills.data ?? []).map((s) => ({ value: s.name, description: s.description }))}
             selected={(spec.skills as string[] | undefined) ?? []}
@@ -233,9 +241,10 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
         </div>
       </Section>
 
+      <Disclosure summary={<span className="muted">Advanced: memory, limits, reasoning and answer format</span>} open={dev}>
       <Section
         title="Memory"
-        hint="Blocks the agent always sees and can edit as it learns (memory_append, memory_replace, memory_rethink)."
+        hint="Notes the assistant always sees and updates as it learns, like what it knows about you."
         aside={
           <Button size="sm" variant="ghost" leading={<IconPlus />} onClick={() => set(['memory', 'blocks'], [...blocks, { label: blocks.length ? `notes${blocks.length + 1}` : 'notes', limit: 2000 }])}>
             Add block
@@ -247,9 +256,9 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
             <div className="row gap wrap">
               <input className="plain-input" aria-label="Block label" placeholder="label" value={b.label} onChange={(e) => setBlock(i, { ...b, label: e.target.value })} />
               <select className="plain-input" aria-label="Block scope" value={b.scope?.startsWith('shared:') ? 'shared' : (b.scope ?? 'agent')} onChange={(e) => setBlock(i, { ...b, scope: e.target.value === 'agent' ? undefined : e.target.value === 'shared' ? 'shared:team' : 'user' })}>
-                <option value="agent">this agent</option>
-                <option value="user">the user (shared by all agents)</option>
-                <option value="shared">shared group</option>
+                <option value="agent">this assistant only</option>
+                <option value="user">about you (shared by all assistants)</option>
+                <option value="shared">shared with a group</option>
               </select>
               {b.scope?.startsWith('shared:') && (
                 <input className="plain-input" aria-label="Shared group name" value={b.scope.slice(7)} onChange={(e) => setBlock(i, { ...b, scope: `shared:${e.target.value}` })} />
@@ -269,8 +278,8 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
         <div className="span-all">
           <Switch
             size="sm"
-            label="Archival memory"
-            description="Long-term facts the agent saves with remember and finds with memory_search."
+            label="Long-term memory"
+            description="Facts the assistant saves and looks up later, beyond its notes."
             checked={!!get<boolean>(['memory', 'archival'])}
             onChange={(e) => set(['memory', 'archival'], e.target.checked || undefined)}
           />
@@ -278,7 +287,7 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
       </Section>
 
       {usesMedia && (
-        <Section title="Media models" hint="For image_gen, speak and transcribe. Leave empty to use the server's [media] defaults.">
+        <Section title="Voice and image models" hint="Leave empty to use the ones in Settings → Voice & images.">
           <Select label="Image" options={[{ value: '', label: 'Server default' }, ...mediaModels('image'), { value: 'mock/image', label: 'mock/image' }]} value={get<string>(['media', 'image']) ?? ''} onValueChange={(v) => set(['media', 'image'], v)} />
           <Select label="Speech" options={[{ value: '', label: 'Server default' }, ...mediaModels('speech'), { value: 'mock/voice', label: 'mock/voice' }]} value={get<string>(['media', 'speech']) ?? ''} onValueChange={(v) => set(['media', 'speech'], v)} />
           <TextField label="Voice" placeholder="alloy, or a voice id" value={get<string>(['media', 'voice']) ?? ''} onChange={(e) => set(['media', 'voice'], e.target.value)} />
@@ -286,7 +295,7 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
         </Section>
       )}
 
-      <Section title="Limits and reasoning" hint="A run stops when it reaches any limit.">
+      <Section title="Limits and reasoning" hint="The assistant stops when it reaches any of these.">
         <NumberInput label="Max steps" description="Model calls per run" min={1} value={get<number>(['limits', 'max_steps'])} onChange={(v) => set(['limits', 'max_steps'], v)} />
         <NumberInput label="Max cost (USD)" step={0.1} min={0} value={get<number>(['limits', 'max_cost_usd'])} onChange={(v) => set(['limits', 'max_cost_usd'], v)} />
         <NumberInput label="Max tokens" description="Input plus output, whole run" min={1} value={get<number>(['limits', 'max_tokens'])} onChange={(v) => set(['limits', 'max_tokens'], v)} />
@@ -301,18 +310,31 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
         <NumberInput label="Max output tokens" description="Per model call" min={1} value={spec.max_tokens} onChange={(v) => set(['max_tokens'], v)} />
       </Section>
 
-      <Disclosure summary={<span className="muted">Advanced: structured output and context</span>}>
-        <Section title="Structured output" hint="A JSON Schema the final answer must follow. Leave empty for plain text.">
+        <Section title="Answer format" hint="A JSON Schema the final answer must follow. Leave empty for plain text.">
           <OutputSchema value={spec.output_schema} onChange={(v) => set(['output_schema'], v)} />
         </Section>
-        <Section title="Context window">
-          <NumberInput label="Compact at (0-1)" description="Summarize older turns at this share of the window" step={0.05} min={0} value={get<number>(['context', 'compact_at'])} onChange={(v) => set(['context', 'compact_at'], v)} />
-          <NumberInput label="Clear tool results at (0-1)" step={0.05} min={0} value={get<number>(['context', 'clear_tool_results_at'])} onChange={(v) => set(['context', 'clear_tool_results_at'], v)} />
+        <Section title="Long conversations" hint="How the assistant makes room when a chat gets too long for the model.">
+          <Percent label="Summarize older messages at" description="of the model's memory" value={get<number>(['context', 'compact_at'])} onChange={(v) => set(['context', 'compact_at'], v)} />
+          <Percent label="Drop old tool results at" description="of the model's memory" value={get<number>(['context', 'clear_tool_results_at'])} onChange={(v) => set(['context', 'clear_tool_results_at'], v)} />
           <NumberInput label="Context window override (tokens)" min={1} value={get<number>(['context', 'max_context_tokens'])} onChange={(v) => set(['context', 'max_context_tokens'], v)} />
           <TextField label="Summary model" placeholder="the agent's model" value={get<string>(['context', 'summary_model']) ?? ''} onChange={(e) => set(['context', 'summary_model'], e.target.value)} />
         </Section>
       </Disclosure>
     </>
+  );
+}
+
+/** A 0-1 share, edited as a percentage. */
+function Percent({ label, description, value, onChange }: { label: string; description?: string; value?: number; onChange: (v?: number) => void }) {
+  return (
+    <NumberInput
+      label={`${label} (%)`}
+      description={description}
+      min={0}
+      step={5}
+      value={value === undefined ? undefined : Math.round(value * 100)}
+      onChange={(v) => onChange(v === undefined ? undefined : Math.min(100, Math.max(0, v)) / 100)}
+    />
   );
 }
 

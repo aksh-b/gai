@@ -19,8 +19,8 @@ export function Triggers({ selected }: { selected?: string }) {
   return (
     <div className="page">
       <PageHeader
-        title="Triggers"
-        subtitle="Start agents and workflows on a schedule, from a webhook, or when files change. Runs go through the background queue."
+        title="Schedules & webhooks"
+        subtitle="Run an assistant or workflow by itself: every morning, when another app calls a link, or when files change."
         actions={
           <div className="row gap">
             {Object.keys(TRIGGER_TEMPLATES).map((k) => (
@@ -37,7 +37,7 @@ export function Triggers({ selected }: { selected?: string }) {
           {list.data?.map((t) => (
             <a
               key={t.id}
-              href={`#/triggers/${t.id}`}
+              href={`#/schedules/${t.id}`}
               className="agent-card"
               aria-current={current?.id === t.id && !creating ? 'page' : undefined}
               onClick={() => setCreating(null)}
@@ -53,7 +53,7 @@ export function Triggers({ selected }: { selected?: string }) {
             </a>
           ))}
           {list.data?.length === 0 && !creating && (
-            <Empty title="No triggers yet">Add a schedule, a webhook or a file watcher above.</Empty>
+            <Empty title="Nothing scheduled yet">Add a schedule, a webhook or a file watcher with the buttons above.</Empty>
           )}
         </div>
         {creating ? (
@@ -64,14 +64,14 @@ export function Triggers({ selected }: { selected?: string }) {
               setCreating(null);
               list.reload();
               if (secret) freshSecrets.set(t.id, secret);
-              navigate(`/triggers/${t.id}`);
+              navigate(`/schedules/${t.id}`);
             }}
           />
         ) : current ? (
           <Detail key={current.id} t={current} onChange={list.reload} />
         ) : (
           <section className="card">
-            <Empty title="Pick a trigger">Or add one with the buttons above.</Empty>
+            <Empty title="Pick one">Or add one with the buttons above.</Empty>
           </section>
         )}
       </div>
@@ -199,7 +199,7 @@ function Detail({ t, onChange }: { t: TriggerView; onChange: () => void }) {
               onClick={async () => {
                 if (!confirm(`Delete ${t.name}?`)) return;
                 await api.deleteTrigger(t.id).catch((e: Error) => toast.error(e.message));
-                navigate('/triggers');
+                navigate('/schedules');
                 onChange();
               }}
             >
@@ -249,7 +249,7 @@ function Detail({ t, onChange }: { t: TriggerView; onChange: () => void }) {
         </h3>
         {events.data?.length === 0 && <p className="muted pad">Nothing yet.</p>}
         {events.data?.map((e) => (
-          <a key={e.id} className="run-row" href={e.run_id ? `#/runs/${e.run_id}` : undefined}>
+          <a key={e.id} className="run-row" href={e.run_id ? `#/activity/${e.run_id}` : undefined}>
             <span className="pill" data-tone={e.status === 'started' ? 'ok' : e.status === 'skipped' ? 'warn' : 'bad'}>
               {e.status}
             </span>
@@ -278,7 +278,7 @@ function RunsOf({ trigger }: { trigger: string }) {
         Recent runs
       </h3>
       {runs.data.map((r) => (
-        <a key={r.id} className="run-row" href={`#/runs/${r.id}`}>
+        <a key={r.id} className="run-row" href={`#/activity/${r.id}`}>
           <StatusPill status={r.status} />
           <span>{r.agent}</span>
           <span className="muted small">{r.steps} steps</span>

@@ -129,7 +129,7 @@ export function ForkDialog({ run, steps, from, onClose }: { run: Run; steps: Ste
       const r = await api.replay(run.id, fromStep, o);
       toast.success(`Forked into ${r.run_id}`);
       onClose();
-      navigate(`/runs/${run.id}/compare/${r.run_id}`);
+      navigate(`/activity/${run.id}/compare/${r.run_id}`);
     } catch (e) {
       setError((e as Error).message);
     } finally {

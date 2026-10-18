@@ -1,12 +1,13 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import type { RunStatus } from './api';
 import { statusTone } from './util';
+import { statusLabel } from './labels';
 import { IconChevron } from './icons';
 
 export function StatusPill({ status }: { status: RunStatus }) {
   return (
     <span className="pill" data-tone={statusTone[status]}>
-      {status.replace('_', ' ')}
+      {statusLabel[status] ?? status.replace('_', ' ')}
     </span>
   );
 }

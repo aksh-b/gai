@@ -4,16 +4,19 @@ import { api, type Run } from '../api';
 import { ErrorNote, PageHeader, StatusPill } from '../components';
 import { navigate } from '../router';
 import { ago, blocksText, money, tokens, totalIn, useLoad } from '../util';
+import { modelLabel } from '../labels';
+import { useDevMode } from '../prefs';
 
 const FILTERS = [
   { id: 'all', label: 'All' },
-  { id: 'running', label: 'Running' },
-  { id: 'awaiting_approval', label: 'Needs approval' },
-  { id: 'completed', label: 'Completed' },
+  { id: 'running', label: 'Working' },
+  { id: 'awaiting_approval', label: 'Needs your OK' },
+  { id: 'completed', label: 'Done' },
   { id: 'failed', label: 'Failed' },
 ];
 
 export function Runs() {
+  const [dev] = useDevMode();
   const [filter, setFilter] = useState('all');
   const { data, error, reload } = useLoad(
     () => api.runs({ status: filter === 'all' ? undefined : filter, limit: 500 }),
@@ -29,18 +32,28 @@ export function Runs() {
 
   const columns: Column<Run>[] = [
     { key: 'status', header: 'Status', value: (r) => r.status, cell: (r) => <StatusPill status={r.status} />, width: 150 },
-    { key: 'agent', header: 'Agent', value: (r) => r.agent, width: 140 },
-    { key: 'input', header: 'Input', value: (r) => blocksText(r.input), minWidth: 260 },
-    { key: 'model', header: 'Model', value: (r) => r.metadata.model ?? '', cell: (r) => <span className="mono small">{r.metadata.model}</span>, width: 220 },
-    { key: 'steps', header: 'Steps', value: (r) => r.steps, align: 'end', width: 70 },
-    { key: 'tokens', header: 'Tokens', value: (r) => totalIn(r.usage) + r.usage.output_tokens, cell: (r) => tokens(totalIn(r.usage) + r.usage.output_tokens), align: 'end', width: 90 },
+    { key: 'agent', header: 'Who', value: (r) => r.agent.replace(/^workflow:/, ''), width: 140 },
+    { key: 'input', header: 'Asked', value: (r) => blocksText(r.input), minWidth: 260 },
+    {
+      key: 'model',
+      header: 'Model',
+      value: (r) => r.metadata.model ?? '',
+      cell: (r) => (dev ? <span className="mono small">{r.metadata.model}</span> : <span className="small">{r.metadata.model ? modelLabel(r.metadata.model) : ''}</span>),
+      width: 220,
+    },
+    ...(dev
+      ? ([
+          { key: 'steps', header: 'Steps', value: (r) => r.steps, align: 'end', width: 70 },
+          { key: 'tokens', header: 'Tokens', value: (r) => totalIn(r.usage) + r.usage.output_tokens, cell: (r) => tokens(totalIn(r.usage) + r.usage.output_tokens), align: 'end', width: 90 },
+        ] as Column<Run>[])
+      : []),
     { key: 'cost', header: 'Cost', value: (r) => r.cost, cell: (r) => money(r.cost), align: 'end', width: 80 },
     { key: 'created', header: 'Started', value: (r) => new Date(r.created_at), cell: (r) => ago(r.created_at), align: 'end', width: 100 },
   ];
 
   return (
     <div className="page">
-      <PageHeader title="Runs" subtitle="Every agent run, with its steps, tool calls and cost." />
+      <PageHeader title="History" subtitle="Everything your assistants and workflows did: open one to see each step." />
       <div className="row between">
         <Tabs items={FILTERS} value={filter} onValueChange={setFilter} variant="pill" aria-label="Filter runs" />
       </div>
@@ -51,7 +64,7 @@ export function Runs() {
           columns={columns}
           getRowId={(r) => r.id}
           height={Math.max(320, window.innerHeight - 260)}
-          onRowAction={(r) => navigate(`/runs/${r.id}`)}
+          onRowAction={(r) => navigate(`/activity/${r.id}`)}
           defaultSort={[{ key: 'created', dir: 'desc' }]}
           empty="No runs yet. Start one from the Playground."
           aria-label="Runs"

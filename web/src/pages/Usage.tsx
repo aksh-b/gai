@@ -13,7 +13,7 @@ export function UsagePage() {
 
   return (
     <div className="page">
-      <PageHeader title="Usage" subtitle="Tokens and cost across all runs, by model." />
+      <PageHeader title="Spending" subtitle="What your assistants have cost, by model. Local models are free." />
       <ErrorNote error={error} />
       <div className="stats">
         <Stat label="Model calls" value={totals.calls.toLocaleString()} />
@@ -23,7 +23,7 @@ export function UsagePage() {
       </div>
       <section className="card">
         <h3>By model</h3>
-        {rows.length === 0 && <Empty title="No usage yet" />}
+        {rows.length === 0 && <Empty title="Nothing spent yet" />}
         <div className="usage-bars">
           {rows.map((r) => {
             const inW = (totalIn(r.usage) / maxTokens) * 100;

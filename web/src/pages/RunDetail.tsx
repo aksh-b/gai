@@ -6,9 +6,12 @@ import { Disclosure, ErrorNote, Json, Markdown, Stat, StatusPill } from '../comp
 import { IconBack, IconChat, IconStop } from '../icons';
 import { navigate } from '../router';
 import { blocksText, compactJson, duration, money, tokens, totalIn, useLoad } from '../util';
+import { modelLabel } from '../labels';
+import { useDevMode } from '../prefs';
 import { ForkDialog, forkOf } from './Fork';
 
 export function RunDetail({ id }: { id: string }) {
+  const [dev] = useDevMode();
   const run = useLoad(() => api.run(id), [id]);
   const steps = useLoad(() => api.steps(id), [id]);
   const [events, setEvents] = useState<EventEnvelope[]>([]);
@@ -40,8 +43,8 @@ export function RunDetail({ id }: { id: string }) {
   return (
     <div className="page">
       <div className="row gap">
-        <Button variant="ghost" size="sm" leading={<IconBack />} onClick={() => navigate('/runs')}>
-          Runs
+        <Button variant="ghost" size="sm" leading={<IconBack />} onClick={() => navigate('/activity')}>
+          History
         </Button>
       </div>
       <ErrorNote error={run.error} />
@@ -51,16 +54,16 @@ export function RunDetail({ id }: { id: string }) {
             <div>
               <h1 className="row gap">
                 {r.agent}
-                {r.agent_version && <span className="muted small">v{r.agent_version}</span>}
+                {dev && r.agent_version && <span className="muted small">v{r.agent_version}</span>}
                 <StatusPill status={r.status} />
               </h1>
-              <p className="muted mono small">{r.id}</p>
+              {dev && <p className="muted mono small">{r.id}</p>}
             </div>
             <div className="row gap">
-              <Button variant="outline" leading={<IconChat />} onClick={() => navigate(`/playground?session=${r.session_id}`)}>
+              <Button variant="outline" leading={<IconChat />} onClick={() => navigate(`/chat?session=${r.session_id}`)}>
                 Open conversation
               </Button>
-              {canFork && (
+              {canFork && dev && (
                 <Button variant="outline" onClick={() => setForkFrom(Math.max(1, r.steps))}>
                   Fork…
                 </Button>
@@ -86,7 +89,7 @@ export function RunDetail({ id }: { id: string }) {
                   leading={<IconStop />}
                   onClick={() => api.cancel(r.id).then(run.reload).catch((e: Error) => toast.error(e.message))}
                 >
-                  Cancel
+                  Stop
                 </Button>
               )}
             </div>
@@ -95,33 +98,36 @@ export function RunDetail({ id }: { id: string }) {
           {fork && (
             <p className="note fork-note">
               Forked from{' '}
-              <a href={`#/runs/${fork.run_id}`} className="mono">
+              <a href={`#/activity/${fork.run_id}`} className="mono">
                 {fork.run_id}
               </a>{' '}
               at step {fork.from_step}: earlier steps were replayed from it.{' '}
-              <a href={`#/runs/${fork.run_id}/compare/${r.id}`}>Compare side by side</a>
+              <a href={`#/activity/${fork.run_id}/compare/${r.id}`}>Compare side by side</a>
             </p>
           )}
 
           <div className="stats">
-            <Stat label={isWorkflow ? 'Kind' : 'Model'} value={<span className="mono">{isWorkflow ? 'workflow' : r.metadata.model}</span>} />
+            <Stat
+              label={isWorkflow ? 'Kind' : 'Model'}
+              value={isWorkflow ? 'workflow' : dev ? <span className="mono">{r.metadata.model}</span> : modelLabel(r.metadata.model)}
+            />
             <Stat label="Steps" value={r.steps} />
-            <Stat label="Input tokens" value={tokens(totalIn(r.usage))} />
-            <Stat label="Output tokens" value={tokens(r.usage.output_tokens)} />
+            {dev && <Stat label="Input tokens" value={tokens(totalIn(r.usage))} />}
+            {dev && <Stat label="Output tokens" value={tokens(r.usage.output_tokens)} />}
             <Stat label="Cost" value={money(r.cost)} />
             <Stat label="Duration" value={duration(r.created_at, r.finished_at)} />
           </div>
 
           <div className="grid-2">
             <section className="card">
-              <h3>Input</h3>
+              <h3>Asked</h3>
               {Array.isArray(r.input) ? <Markdown text={blocksText(r.input)} /> : <Json value={r.input} />}
-              <h3>Output</h3>
+              <h3>Answer</h3>
               {r.error && <div className="error-note">{r.error}</div>}
               {typeof r.output === 'string' ? <Markdown text={r.output} /> : r.output ? <Json value={r.output} /> : <p className="muted">—</p>}
             </section>
             <section className="card">
-              <h3>Steps</h3>
+              <h3>What happened</h3>
               <Waterfall
                 steps={steps.data ?? []}
                 start={r.created_at}
@@ -136,14 +142,16 @@ export function RunDetail({ id }: { id: string }) {
           {!isWorkflow && <Forks id={r.id} refresh={r.status} />}
           {r && <ForkDialog run={r} steps={steps.data ?? []} from={forkFrom} onClose={() => setForkFrom(null)} />}
 
-          <section className="card">
-            <h3>Events</h3>
-            <ol className="events">
-              {events.map((e) => (
-                <EventRow key={e.seq} e={e} />
-              ))}
-            </ol>
-          </section>
+          {dev && (
+            <section className="card">
+              <h3>Events</h3>
+              <ol className="events">
+                {events.map((e) => (
+                  <EventRow key={e.seq} e={e} />
+                ))}
+              </ol>
+            </section>
+          )}
         </>
       )}
     </div>
@@ -252,10 +260,10 @@ function Forks({ id, refresh }: { id: string; refresh: string }) {
           <a
             key={f.id}
             className="run-row"
-            href={`#/runs/${id}/compare/${f.id}`}
+            href={`#/activity/${id}/compare/${f.id}`}
             onClick={(e) => {
               e.preventDefault();
-              navigate(`/runs/${id}/compare/${f.id}`);
+              navigate(`/activity/${id}/compare/${f.id}`);
             }}
           >
             <StatusPill status={f.status} />
@@ -380,10 +388,10 @@ function ChildRuns({ id, refresh }: { id: string; refresh: number }) {
         <a
           key={c.run.id}
           className="run-row"
-          href={`#/runs/${c.run.id}`}
+          href={`#/activity/${c.run.id}`}
           onClick={(e) => {
             e.preventDefault();
-            navigate(`/runs/${c.run.id}`);
+            navigate(`/activity/${c.run.id}`);
           }}
         >
           <StatusPill status={c.run.status} />

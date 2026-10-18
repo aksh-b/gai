@@ -22,9 +22,8 @@ export function Skills() {
         title="Skills"
         subtitle={
           <>
-            Packaged instructions (and scripts or templates) in the Agent Skills format. An agent with{' '}
-            <span className="mono">skills: [name]</span> sees only each skill's description, and calls{' '}
-            <span className="mono">load_skill</span> for the full instructions when a task needs them.
+            Step-by-step know-how an assistant reads only when a task needs it, like "how we write release notes". Upload one
+            below, then pick it in an assistant's settings.
           </>
         }
       />
@@ -35,7 +34,7 @@ export function Skills() {
         ))}
       </div>
       {list.data?.length === 0 && (
-        <Empty title="No skills yet">Put skill folders (each with a SKILL.md) in ./skills, or upload one below.</Empty>
+        <Empty title="No skills yet">Upload one below.</Empty>
       )}
       <section className="card">
         <Disclosure summary={<strong>Upload a skill</strong>} open={list.data?.length === 0}>

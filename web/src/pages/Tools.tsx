@@ -4,8 +4,11 @@ import { api, type McpServerConfig, type McpServerInfo, type ToolPolicy } from '
 import { Disclosure, Empty, ErrorNote, Json, PageHeader } from '../components';
 import { IconPlus, IconTrash } from '../icons';
 import { useLoad } from '../util';
+import { toolLabel } from '../labels';
+import { useDevMode } from '../prefs';
 
 export function Tools() {
+  const [dev] = useDevMode();
   const tools = useLoad(() => api.tools(), []);
   const mcp = useLoad(() => api.mcp(), []);
   const hooks = useLoad(() => api.hooks(), []);
@@ -19,14 +22,14 @@ export function Tools() {
   return (
     <div className="page">
       <PageHeader
-        title="Tools"
-        subtitle="What agents can call. Policies: auto runs freely, approve waits for a human, deny refuses. Agents can override them."
+        title="Tools & connections"
+        subtitle="What assistants can do, and the apps they can work with. Choose whether each tool acts on its own or asks you first."
       />
       <ErrorNote error={tools.error ?? mcp.error} />
 
       <section className="card">
         <div className="row between">
-          <h3>MCP servers</h3>
+          <h3>Connected apps</h3>
           {hooks.data && hooks.data.length > 0 && (
             <span className="muted small">
               Guardrail hooks:{' '}
@@ -39,32 +42,34 @@ export function Tools() {
           )}
         </div>
         <p className="muted small">
-          Tools from Model Context Protocol servers appear as <span className="mono">mcp__server__tool</span>; give an agent{' '}
-          <span className="mono">mcp__server__*</span> to use them all.
+          Apps that speak MCP (the Model Context Protocol) add their own tools. Pick “Everything from …” in an assistant's abilities to use
+          them all.
         </p>
         <div className="mcp-list">
           {mcp.data?.map((s) => (
             <McpCard key={s.name} s={s} onChange={reload} />
           ))}
-          {mcp.data?.length === 0 && <Empty title="No MCP servers">Add one below, or declare it under [mcp_servers] in gai.toml.</Empty>}
+          {mcp.data?.length === 0 && <Empty title="No apps connected">Connect one below (any MCP server: Jira, GitHub, a database, …).</Empty>}
         </div>
-        <Disclosure summary={<strong>Add a server</strong>}>
+        <Disclosure summary={<strong>Connect an app</strong>}>
           <AddMcp onAdded={reload} />
         </Disclosure>
       </section>
 
-      <h3>Built-in tools</h3>
+      <h3>Built-in abilities</h3>
       <div className="tool-list">
         {builtin.map((t) => (
           <section key={t.spec.name} className="card">
             <div className="row between">
-              <strong className="mono">{t.spec.name}</strong>
+              <strong title={t.spec.name}>{dev ? <span className="mono">{t.spec.name}</span> : toolLabel(t.spec.name)}</strong>
               <PolicyPill policy={t.policy} />
             </div>
             <p className="muted">{t.spec.description}</p>
-            <Disclosure summary={<span className="muted small">Input schema</span>}>
-              <Json value={t.spec.input_schema} />
-            </Disclosure>
+            {dev && (
+              <Disclosure summary={<span className="muted small">Input schema</span>}>
+                <Json value={t.spec.input_schema} />
+              </Disclosure>
+            )}
           </section>
         ))}
       </div>
@@ -75,7 +80,7 @@ export function Tools() {
 function PolicyPill({ policy }: { policy: ToolPolicy }) {
   return (
     <span className="pill" data-tone={policy === 'auto' ? 'ok' : policy === 'approve' ? 'warn' : 'bad'}>
-      {policy}
+      {policy === 'auto' ? 'acts on its own' : policy === 'approve' ? 'asks first' : 'never'}
     </span>
   );
 }
@@ -271,10 +276,10 @@ function AddMcp({ onAdded }: { onAdded: () => void }) {
         value={policy}
         onValueChange={setPolicy}
         options={[
-          { value: '', label: 'Default', description: 'auto, except tools the server marks destructive' },
-          { value: 'auto', label: 'auto' },
-          { value: 'approve', label: 'approve' },
-          { value: 'deny', label: 'deny' },
+          { value: '', label: 'Usual', description: 'Acts on its own, but asks first for anything the app marks as risky' },
+          { value: 'auto', label: 'Always acts on its own' },
+          { value: 'approve', label: 'Always asks first' },
+          { value: 'deny', label: 'Never' },
         ]}
       />
       <div className="row end full">

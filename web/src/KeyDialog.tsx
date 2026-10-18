@@ -29,12 +29,20 @@ export function KeyDialog() {
           location.reload();
         }}
       >
-        <h2 id="key-title">{hadKey ? 'That key was not accepted' : 'Sign in with an API key'}</h2>
+        <h2 id="key-title">{hadKey ? 'That key was not accepted' : 'Sign in'}</h2>
         <p className="muted">
-          This server requires an API key. Create one with <span className="mono">gai keys create --name me --scope admin</span> (in this repo:{' '}
-          <span className="mono">scripts/gai.sh keys create --name me --scope admin</span>) and paste it here. It is kept in this browser only.
+          This gai server is shared, so it needs an access key. Ask whoever runs it for one, and paste it here. It is kept in this browser
+          only.
         </p>
-        <TextField label="API key" placeholder="gai_…" value={value} onChange={(e) => setValue(e.target.value)} autoFocus />
+        <details className="small muted">
+          <summary>I run this server</summary>
+          <p>
+            Make a key on the server with <span className="mono">gai keys create --name me --scope admin</span> (in the repo:{' '}
+            <span className="mono">scripts/gai.sh keys create --name me --scope admin</span>). Opening the dashboard on the server's own
+            computer, at <span className="mono">http://localhost</span>, signs you in automatically.
+          </p>
+        </details>
+        <TextField label="Access key" placeholder="gai_…" value={value} onChange={(e) => setValue(e.target.value)} autoFocus />
         <div className="row gap end">
           {hadKey && (
             <Button

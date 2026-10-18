@@ -239,6 +239,59 @@ export interface ForkInfo {
 }
 
 
+export interface CloudProvider {
+  name: string;
+  title: string;
+  description: string;
+  key_url: string;
+  connected: boolean;
+  saved_key: string | null;
+  suggested_model: string | null;
+}
+
+export interface OllamaStatus {
+  reachable: boolean;
+  base_url: string | null;
+  models: string[];
+}
+
+export interface SetupStatus {
+  needs_key: boolean;
+  can_claim: boolean;
+  has_chat_model: boolean;
+  default_model: string | null;
+  default_model_source: 'settings' | 'config' | 'detected' | null;
+  ollama: OllamaStatus;
+  providers: CloudProvider[];
+}
+
+export interface LibraryModel {
+  name: string;
+  description: string;
+  size: string;
+  tools: boolean;
+  installed: boolean;
+}
+
+export interface PullProgress {
+  model: string;
+  state: 'pulling' | 'done' | 'failed';
+  status: string;
+  completed: number;
+  total: number;
+  error: string | null;
+}
+
+export interface Template {
+  id: string;
+  kind: 'agent' | 'workflow';
+  title: string;
+  description: string;
+  needs: string[];
+  yaml: string;
+  installed: boolean;
+}
+
 export type Scope = 'admin' | 'run' | 'read';
 
 
@@ -316,6 +369,25 @@ function versionPair(from?: number, to?: number) {
 }
 
 export const api = {
+  setupStatus: () => get<SetupStatus>('/v1/setup/status'),
+  claim: () => request<{ key: ApiKey; secret: string }>('POST', '/v1/setup/claim'),
+  settings: () => get<{ default_model: string | null; default_model_source: SetupStatus['default_model_source'] }>('/v1/settings'),
+  setDefaultModel: (default_model: string | null) =>
+    request<{ default_model: string | null; default_model_source: SetupStatus['default_model_source'] }>('PUT', '/v1/settings', {
+      default_model,
+    }),
+  setProviderKey: (name: string, key: string) =>
+    request<{ provider: string; connected: boolean; saved_key: string | null }>('PUT', `/v1/providers/${encodeURIComponent(name)}/key`, { key }),
+  forgetProviderKey: (name: string) =>
+    request<{ provider: string; connected: boolean; saved_key: string | null }>('DELETE', `/v1/providers/${encodeURIComponent(name)}/key`),
+  testProvider: (name: string, model?: string) =>
+    request<{ ok: boolean; model: string; message: string }>('POST', `/v1/providers/${encodeURIComponent(name)}/test`, { model }),
+  ollamaLibrary: () => get<{ status: OllamaStatus; models: LibraryModel[] }>('/v1/providers/ollama/library'),
+  ollamaPull: (model: string) => request<PullProgress>('POST', '/v1/providers/ollama/pull', { model }),
+  ollamaPulls: () => get<PullProgress[]>('/v1/providers/ollama/pulls'),
+  templates: () => get<Template[]>('/v1/templates'),
+  installTemplate: (id: string) =>
+    request<{ kind: string; name: string; also: string[] }>('POST', `/v1/templates/${encodeURIComponent(id)}/install`),
   health: () => get<{ status: string; version: string; default_model: string | null; auth: 'open' | 'keys' }>('/v1/health'),
   me: () => get<{ principal: { id: string; name: string; scopes: Scope[] }; auth: string; budget_usd: number | null; spent_usd: number | null }>('/v1/me'),
   keys: () => get<ApiKey[]>('/v1/keys'),
@@ -480,7 +552,7 @@ export function fileToBase64(file: File): Promise<string> {
 
 export interface StartRun {
   agent?: string | AgentSpec;
-  input: string;
+  input: string | ContentBlock[];
   session_id?: string;
   model?: string;
   auto_approve?: boolean;

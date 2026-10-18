@@ -5,20 +5,97 @@ import { Disclosure, Empty, ErrorNote, PageHeader } from '../components';
 import { IconPlus, IconSearch, IconTrash } from '../icons';
 import { navigate } from '../router';
 import { ago, useLoad } from '../util';
+import { useDevMode } from '../prefs';
+
+/** Where dropped files go when no folder is open. */
+const DEFAULT_FOLDER = 'my-documents';
 
 export function Knowledge({ selected }: { selected?: string }) {
+  const [dev] = useDevMode();
   const list = useLoad(() => api.collections(), []);
   const current = list.data?.find((c) => c.name === selected) ?? (selected ? undefined : list.data?.[0]);
+  const [dragging, setDragging] = useState(false);
+  const [adding, setAdding] = useState(0);
+  const picker = useRef<HTMLInputElement>(null);
+
+  // Files dropped anywhere go to the open folder, or to "my-documents".
+  async function addFiles(files: FileList | File[]) {
+    const list_ = Array.from(files);
+    if (!list_.length) return;
+    let folder = current?.name;
+    try {
+      if (!folder) {
+        const all = await api.collections();
+        if (!all.some((c) => c.name === DEFAULT_FOLDER)) {
+          await api.createCollection({ name: DEFAULT_FOLDER, description: 'Documents you added.' });
+        }
+        folder = DEFAULT_FOLDER;
+      }
+    } catch (e) {
+      toast.error((e as Error).message);
+      return;
+    }
+    setAdding((n) => n + list_.length);
+    for (const f of list_) {
+      try {
+        const r = await api.addDocument(folder, {
+          filename: f.name,
+          content_type: f.type || undefined,
+          content_base64: await fileToBase64(f),
+        });
+        toast.success(r.unchanged ? `${f.name} was already there` : `Added ${f.name}`);
+      } catch (e) {
+        toast.error(`${f.name}: ${(e as Error).message}`);
+      } finally {
+        setAdding((n) => n - 1);
+      }
+    }
+    list.reload();
+    if (!current) navigate(`/knowledge/${encodeURIComponent(folder)}`);
+  }
 
   return (
-    <div className="page">
+    <div
+      className="page drop-page"
+      data-dragging={dragging || undefined}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes('Files')) {
+          e.preventDefault();
+          setDragging(true);
+        }
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragging(false);
+        addFiles(e.dataTransfer.files);
+      }}
+    >
+      {dragging && <div className="drop-overlay">Drop to add to {current?.name ?? 'your documents'}</div>}
+      <input
+        ref={picker}
+        type="file"
+        multiple
+        hidden
+        onChange={(e) => {
+          if (e.target.files) addFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
       <PageHeader
         title="Knowledge"
         subtitle={
           <>
-            Collections of documents agents search with <span className="mono">rag_search</span>. Give an agent{' '}
-            <span className="mono">knowledge: [name]</span> to use one. Search combines meaning (embeddings) and keywords.
+            Documents your assistants can search and quote. Drop files anywhere on this page, then pick the folder in an assistant's
+            settings (or just ask in Chat).
           </>
+        }
+        actions={
+          <Button tone="accent" leading={<IconPlus />} loading={adding > 0} onClick={() => picker.current?.click()}>
+            Add files
+          </Button>
         }
       />
       <ErrorNote error={list.error} />
@@ -38,15 +115,21 @@ export function Knowledge({ selected }: { selected?: string }) {
               >
                 <strong>{c.name}</strong>
                 <span className="muted small">
-                  {c.documents} document{c.documents === 1 ? '' : 's'} · {c.chunks} chunks
+                  {c.documents} document{c.documents === 1 ? '' : 's'}
+                  {dev && ` · ${c.chunks} chunks`}
                 </span>
-                <span className="muted small mono">{c.embedding_model}</span>
+                {dev && <span className="muted small mono">{c.embedding_model}</span>}
               </a>
             ))}
-            {list.data?.length === 0 && <Empty title="No collections yet">Create one below, or run gai ingest ./docs -c handbook.</Empty>}
+            {list.data?.length === 0 && (
+              <div className="drop-zone" onClick={() => picker.current?.click()} role="button" tabIndex={0}>
+                <strong>Drop files here</strong>
+                <span className="muted small">PDF, text, Markdown or HTML. Or click to choose files.</span>
+              </div>
+            )}
           </div>
           <section className="card">
-            <Disclosure summary={<strong>New collection</strong>} open={list.data?.length === 0}>
+            <Disclosure summary={<strong>New folder</strong>}>
               <NewCollection
                 onCreated={(name) => {
                   list.reload();
@@ -59,7 +142,7 @@ export function Knowledge({ selected }: { selected?: string }) {
         {current ? (
           <CollectionView key={current.name} c={current} onChange={list.reload} />
         ) : (
-          list.data && list.data.length > 0 && <Empty title="Pick a collection" />
+          list.data && list.data.length > 0 && <Empty title="Pick a folder" />
         )}
       </div>
     </div>
@@ -67,6 +150,7 @@ export function Knowledge({ selected }: { selected?: string }) {
 }
 
 function NewCollection({ onCreated }: { onCreated: (name: string) => void }) {
+  const [dev] = useDevMode();
   const [name, setName] = useState('');
   const [model, setModel] = useState('');
   const [description, setDescription] = useState('');
@@ -93,13 +177,15 @@ function NewCollection({ onCreated }: { onCreated: (name: string) => void }) {
     <div className="stack" style={{ paddingTop: 8 }}>
       <TextField label="Name" placeholder="handbook" value={name} onChange={(e) => setName(e.target.value)} />
       <TextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
-      <TextField
-        label="Embedding model"
-        description="Leave empty for the configured default. Fixed for the collection's life."
-        placeholder="openai/text-embedding-3-small"
-        value={model}
-        onChange={(e) => setModel(e.target.value)}
-      />
+      {dev && (
+        <TextField
+          label="Embedding model"
+          description="Leave empty for the configured default. Fixed for the collection's life."
+          placeholder="openai/text-embedding-3-small"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+        />
+      )}
       <Button tone="accent" leading={<IconPlus />} loading={busy} disabled={!name.trim()} onClick={create}>
         Create
       </Button>
