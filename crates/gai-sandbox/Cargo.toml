@@ -1,0 +1,31 @@
+[package]
+name = "gai-sandbox"
+description = "Run agent-written code in isolation: a container backend (Docker or Podman) and the code_exec tool."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = ["container"]
+# The Docker/Podman backend. Without it only the local-process backend exists.
+container = ["dep:bollard", "dep:tar"]
+
+[dependencies]
+gai-core.workspace = true
+gai-tools.workspace = true
+async-trait.workspace = true
+bollard = { workspace = true, optional = true }
+futures.workspace = true
+mime_guess.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tar = { workspace = true, optional = true }
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
