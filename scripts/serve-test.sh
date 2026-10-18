@@ -6,6 +6,7 @@ set -euo pipefail
 here="$(dirname "${BASH_SOURCE[0]}")"
 podman rm -f gai-shake >/dev/null 2>&1 || true
 GAI_PODMAN_ARGS="-p 127.0.0.1:8485:8484 -v gai-shake:/data -e GAI_DATA_DIR=/data --network gai-net \
+  -v /run/podman/podman.sock:/var/run/docker.sock \
   -e GAI_PROVIDERS__OLLAMA__BASE_URL=http://gai-ollama:11434/v1 \
   -e GAI_MEDIA__IMAGE=mock/image -e GAI_MEDIA__SPEECH=mock/voice -e GAI_MEDIA__TRANSCRIPTION=mock/ears \
   --name gai-shake" \

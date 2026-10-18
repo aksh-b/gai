@@ -50,3 +50,13 @@ models = [
 # speech = "openai/gpt-4o-mini-tts"
 # voice = "alloy"
 # transcription = "openai/gpt-4o-mini-transcribe"
+
+# code_exec runs code in a fresh container per call (no network, 512 MB,
+# 60 s by default). scripts/serve.sh passes the podman socket through;
+# scripts/sandbox-image.sh builds the Python image with pandas/matplotlib.
+[sandbox]
+backend = "container"
+
+[sandbox.images]
+python = "localhost/gai-sandbox-python:latest"
+bash = "localhost/gai-sandbox-python:latest"
