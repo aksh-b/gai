@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button, toast } from '@flame';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { api, followRun, type EventEnvelope, type GraphNode, type Step } from '../api';
 import { Dag, type NodeStatus } from '../Dag';
 import { Disclosure, ErrorNote, Json, Markdown, Stat, StatusPill } from '../components';
@@ -43,7 +44,8 @@ export function RunDetail({ id }: { id: string }) {
   return (
     <div className="page">
       <div className="row gap">
-        <Button variant="ghost" size="sm" leading={<IconBack />} onClick={() => navigate('/activity')}>
+        <Button variant="ghost" size="sm" onClick={() => navigate('/activity')}>
+          <IconBack data-icon="inline-start" />
           History
         </Button>
       </div>
@@ -60,7 +62,8 @@ export function RunDetail({ id }: { id: string }) {
               {dev && <p className="muted mono small">{r.id}</p>}
             </div>
             <div className="row gap">
-              <Button variant="outline" leading={<IconChat />} onClick={() => navigate(`/chat?session=${r.session_id}`)}>
+              <Button variant="outline" onClick={() => navigate(`/chat?session=${r.session_id}`)}>
+                <IconChat data-icon="inline-start" />
                 Open conversation
               </Button>
               {canFork && dev && (
@@ -70,8 +73,7 @@ export function RunDetail({ id }: { id: string }) {
               )}
               {!r.active && ['running', 'queued', 'awaiting_approval'].includes(r.status) && (
                 <Button
-                  tone="accent"
-                  variant="soft"
+                  variant="secondary"
                   onClick={() =>
                     api
                       .resume(r.id)
@@ -84,11 +86,10 @@ export function RunDetail({ id }: { id: string }) {
               )}
               {r.active && (
                 <Button
-                  tone="danger"
-                  variant="soft"
-                  leading={<IconStop />}
+                  variant="destructive"
                   onClick={() => api.cancel(r.id).then(run.reload).catch((e: Error) => toast.error(e.message))}
                 >
+                  <IconStop data-icon="inline-start" />
                   Stop
                 </Button>
               )}
@@ -208,7 +209,7 @@ function Waterfall({
           >
             {onFork && modelStep(s) !== undefined && (
               <div className="row gap">
-                <Button size="sm" variant="soft" onClick={() => onFork(modelStep(s)!)}>
+                <Button variant="secondary" size="sm" onClick={() => onFork(modelStep(s)!)}>
                   Fork from step {modelStep(s)}
                 </Button>
                 <span className="muted small">Replays the steps before it and runs this one live again.</span>

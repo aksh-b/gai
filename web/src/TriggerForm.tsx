@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Select, Switch, TextField } from '@flame';
+import { SelectField, SwitchField, TextField } from '@/components/fields';
 import { api } from './api';
 import { NumberInput, Section, TemplateVars, TextArea, insertAt, setIn } from './forms';
 import { useLoad } from './util';
@@ -144,7 +144,7 @@ export function TriggerForm({ draft, onChange, isNew }: { draft: TriggerDraft; o
         </div>
         {kind === 'cron' && (
           <>
-            <Select
+            <SelectField
               label="Repeat"
               options={[...PRESETS, { value: 'custom', label: 'Custom (cron)' }]}
               value={preset}
@@ -157,19 +157,19 @@ export function TriggerForm({ draft, onChange, isNew }: { draft: TriggerDraft; o
               className="mono"
               onChange={(e) => set(['schedule'], e.target.value)}
             />
-            <Select
+            <SelectField
               label="Time zone"
               options={[...new Set(['UTC', browserZone(), ...tzList])].map((z) => ({ value: z, label: z }))}
               value={draft.timezone ?? 'UTC'}
               onValueChange={(v) => set(['timezone'], v === 'UTC' ? undefined : v)}
             />
             <div className="span-all">
-              <Switch
+              <SwitchField
                 size="sm"
                 label="Catch up once after downtime"
                 description="If gai was not running at a scheduled time, run once when it starts again."
                 checked={(draft.catch_up ?? 'once') === 'once'}
-                onChange={(e) => set(['catch_up'], e.target.checked ? undefined : 'skip')}
+                onCheckedChange={(checked) => set(['catch_up'], checked ? undefined : 'skip')}
               />
             </div>
           </>
@@ -201,7 +201,7 @@ export function TriggerForm({ draft, onChange, isNew }: { draft: TriggerDraft; o
             ))}
           </div>
         </div>
-        <Select
+        <SelectField
           label={targetKind === 'agent' ? 'Agent' : 'Workflow'}
           placeholder="Choose…"
           options={(targetKind === 'agent'
@@ -240,19 +240,19 @@ export function TriggerForm({ draft, onChange, isNew }: { draft: TriggerDraft; o
       </Section>
 
       <Section title="Options">
-        <Switch size="sm" label="Turned on" checked={draft.enabled !== false} onChange={(e) => set(['enabled'], e.target.checked ? undefined : false)} />
-        <Switch
+        <SwitchField size="sm" label="Turned on" checked={draft.enabled !== false} onCheckedChange={(checked) => set(['enabled'], checked ? undefined : false)} />
+        <SwitchField
           size="sm"
           label="Skip while the last run is going"
           checked={draft.skip_if_running !== false}
-          onChange={(e) => set(['skip_if_running'], e.target.checked ? undefined : false)}
+          onCheckedChange={(checked) => set(['skip_if_running'], checked ? undefined : false)}
         />
-        <Switch
+        <SwitchField
           size="sm"
           label="Approve tool calls automatically"
           description="Otherwise calls that need approval wait in the Approvals inbox."
           checked={!!draft.auto_approve}
-          onChange={(e) => set(['auto_approve'], e.target.checked || undefined)}
+          onCheckedChange={(checked) => set(['auto_approve'], checked || undefined)}
         />
       </Section>
 

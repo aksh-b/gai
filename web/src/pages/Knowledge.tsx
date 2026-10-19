@@ -1,5 +1,8 @@
 import { useRef, useState } from 'react';
-import { Button, Tabs, TextField, toast } from '@flame';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { TabBar, TextField } from '@/components/fields';
+import { toast } from 'sonner';
 import { api, fileToBase64, type Collection, type KnowledgeDocument, type SearchHit, type SearchMode } from '../api';
 import { Disclosure, Empty, ErrorNote, PageHeader } from '../components';
 import { IconPlus, IconSearch, IconTrash } from '../icons';
@@ -93,7 +96,8 @@ export function Knowledge({ selected }: { selected?: string }) {
           </>
         }
         actions={
-          <Button tone="accent" leading={<IconPlus />} loading={adding > 0} onClick={() => picker.current?.click()}>
+          <Button onClick={() => picker.current?.click()} disabled={adding > 0}>
+            {adding > 0 ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
             Add files
           </Button>
         }
@@ -186,7 +190,8 @@ function NewCollection({ onCreated }: { onCreated: (name: string) => void }) {
           onChange={(e) => setModel(e.target.value)}
         />
       )}
-      <Button tone="accent" leading={<IconPlus />} loading={busy} disabled={!name.trim()} onClick={create}>
+      <Button onClick={create} disabled={busy || !name.trim()}>
+        {busy ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
         Create
       </Button>
     </div>
@@ -220,7 +225,8 @@ function CollectionView({ c, onChange }: { c: Collection; onChange: () => void }
             <h2 style={{ margin: 0 }}>{c.name}</h2>
             {c.description && <p className="muted" style={{ margin: '4px 0 0' }}>{c.description}</p>}
           </div>
-          <Button size="sm" variant="ghost" leading={<IconTrash />} onClick={remove}>
+          <Button variant="ghost" size="sm" onClick={remove}>
+            <IconTrash data-icon="inline-start" />
             Delete
           </Button>
         </div>
@@ -233,7 +239,7 @@ function CollectionView({ c, onChange }: { c: Collection; onChange: () => void }
           <span>updated {ago(c.updated_at)}</span>
         </div>
       </div>
-      <Tabs
+      <TabBar
         items={[
           { id: 'documents', label: 'Documents', badge: c.documents },
           { id: 'search', label: 'Search' },
@@ -314,7 +320,7 @@ function AddDocument({ collection, onAdded }: { collection: string; onAdded: () 
     <section className="card stack">
       <div className="row between">
         <h3 style={{ margin: 0 }}>Add documents</h3>
-        <Tabs
+        <TabBar
           items={[
             { id: 'file', label: 'Files' },
             { id: 'text', label: 'Text' },
@@ -340,7 +346,8 @@ function AddDocument({ collection, onAdded }: { collection: string; onAdded: () 
             <TextField label="Source" description="Re-adding the same source replaces it." placeholder="faq/refunds" value={source} onChange={(e) => setSource(e.target.value)} />
           </div>
           <textarea className="code-editor small-editor" aria-label="Text" placeholder="Paste text or Markdown…" value={text} onChange={(e) => setText(e.target.value)} />
-          <Button tone="accent" leading={<IconPlus />} loading={busy} disabled={!text.trim()} onClick={submit}>
+          <Button onClick={submit} disabled={busy || !text.trim()}>
+            {busy ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
             Add text
           </Button>
         </>
@@ -348,7 +355,8 @@ function AddDocument({ collection, onAdded }: { collection: string; onAdded: () 
       {kind === 'url' && (
         <div className="row gap">
           <input className="plain-input" aria-label="URL" placeholder="https://example.com/guide" value={url} onChange={(e) => setUrl(e.target.value)} />
-          <Button tone="accent" leading={<IconPlus />} loading={busy} disabled={!/^https?:\/\//.test(url.trim())} onClick={submit}>
+          <Button onClick={submit} disabled={busy || !/^https?:\/\//.test(url.trim())}>
+            {busy ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
             Fetch and add
           </Button>
         </div>
@@ -434,7 +442,7 @@ function SearchPanel({ collection }: { collection: string }) {
         }}
       >
         <input className="plain-input" aria-label="Search query" placeholder="What does an agent need to find?" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <Tabs
+        <TabBar
           items={MODES}
           value={mode}
           onValueChange={(m) => {
@@ -444,7 +452,8 @@ function SearchPanel({ collection }: { collection: string }) {
           variant="pill"
           aria-label="Search mode"
         />
-        <Button type="submit" tone="accent" leading={<IconSearch />} loading={busy} disabled={!query.trim()}>
+        <Button type="submit" disabled={busy || !query.trim()}>
+          {busy ? <Spinner data-icon="inline-start" /> : <IconSearch data-icon="inline-start" />}
           Search
         </Button>
       </form>

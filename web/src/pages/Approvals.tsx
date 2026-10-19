@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Button, toast } from '@flame';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { toast } from 'sonner';
 import { api, type PendingApproval } from '../api';
 import { Empty, ErrorNote, PageHeader } from '../components';
 import { toolSentence } from '../labels';
@@ -88,10 +90,12 @@ function ApprovalCard({ p, onDone }: { p: PendingApproval; onDone: () => void })
           </div>
         </div>
         <div className="row gap">
-          <Button tone="accent" leading={<IconCheck />} loading={busy === 'approve'} onClick={approve}>
+          <Button onClick={approve} disabled={busy === 'approve'}>
+            {busy === 'approve' ? <Spinner data-icon="inline-start" /> : <IconCheck data-icon="inline-start" />}
             {edited ? 'Allow with my changes' : 'Allow'}
           </Button>
-          <Button variant="outline" leading={<IconX />} loading={busy === 'decline'} onClick={decline}>
+          <Button variant="outline" onClick={decline} disabled={busy === 'decline'}>
+            {busy === 'decline' ? <Spinner data-icon="inline-start" /> : <IconX data-icon="inline-start" />}
             Don't allow
           </Button>
         </div>

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type ComponentType, type SVGProps } from 'react';
-import { CommandPalette, Tabs, Toaster, type CommandItem } from '@flame';
+import { CommandMenu, type CommandEntry } from '@/components/command-menu';
+import { TabBar } from '@/components/fields';
+import { Toaster } from '@/components/ui/sonner';
 import { api, getApiKey, setApiKey } from './api';
 import { KeyDialog } from './KeyDialog';
 import { modelLabel } from './labels';
@@ -171,9 +173,9 @@ export function App() {
   const tab = TAB_ALIAS[raw] ?? raw;
   const nav = NAV.find((n) => n.id === section);
 
-  const commands = useMemo<CommandItem[]>(() => {
+  const commands = useMemo<CommandEntry[]>(() => {
     const go = (to: string) => () => navigate(to);
-    const pages: CommandItem[] = NAV.flatMap((n) =>
+    const pages: CommandEntry[] = NAV.flatMap((n) =>
       (n.tabs ?? [{ id: n.id, label: n.label }]).map((t) => ({
         id: `go-${t.id}`,
         group: 'Go to',
@@ -277,7 +279,7 @@ export function App() {
   // Sub-pages (a run, an agent) keep their section's tabs but no tab is lit.
   const tabs = nav?.tabs && boot === 'ready' && (
     <div className="hub-tabs">
-      <Tabs
+      <TabBar
         variant="underline"
         aria-label={nav.label}
         items={nav.tabs.map((t) => ({
@@ -382,8 +384,8 @@ export function App() {
         {tabs}
         {page}
       </main>
-      <CommandPalette open={palette} onOpenChange={setPalette} items={commands} placeholder="Search pages, assistants and actions…" />
-      <Toaster position="bottom-right" />
+      <CommandMenu open={palette} onOpenChange={setPalette} items={commands} placeholder="Search pages, assistants and actions…" />
+      <Toaster position="bottom-right" theme={theme} />
       <KeyDialog />
     </div>
   );

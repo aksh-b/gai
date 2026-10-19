@@ -3,7 +3,8 @@
 // else is kept as written and edited in YAML.
 
 import { useRef } from 'react';
-import { Button, Select, TextField } from '@flame';
+import { Button } from '@/components/ui/button';
+import { SelectField, TextField } from '@/components/fields';
 import { api } from './api';
 import { Disclosure } from './components';
 import { IconPlus, IconTrash } from './icons';
@@ -119,15 +120,15 @@ export function WorkflowForm({ spec, onChange, isNew }: { spec: Spec; onChange: 
         hint="Optional. Steps can use these, e.g. a topic or a web address."
         aside={
           <Button
-            size="sm"
             variant="ghost"
-            leading={<IconPlus />}
+            size="sm"
             onClick={() => {
               let n = inputs.length ? `input${inputs.length + 1}` : 'topic';
               while (spec.inputs?.[n]) n += '_';
               setInput(n, { description: '' });
             }}
           >
+            <IconPlus data-icon="inline-start" />
             Add
           </Button>
         }
@@ -180,7 +181,8 @@ export function WorkflowForm({ spec, onChange, isNew }: { spec: Spec; onChange: 
         <div className="row gap wrap add-step">
           <span className="muted small">Add a step:</span>
           {KINDS.map((k) => (
-            <Button key={k.value} size="sm" variant="outline" leading={<IconPlus />} onClick={() => addStep(k.value)}>
+            <Button variant="outline" size="sm" key={k.value} onClick={() => addStep(k.value)}>
+              <IconPlus data-icon="inline-start" />
               {k.label}
             </Button>
           ))}
@@ -188,7 +190,7 @@ export function WorkflowForm({ spec, onChange, isNew }: { spec: Spec; onChange: 
       </fieldset>
 
       <Section title="Result">
-        <Select
+        <SelectField
           label="The workflow's result is"
           options={[
             { value: '', label: 'The last step that ran' },
@@ -256,7 +258,7 @@ function Step({
           onChange={(e) => set({ id: e.target.value.replace(/[^A-Za-z0-9_]/g, '_') })}
         />
         <div className="step-kind">
-          <Select aria-label="Kind of step" options={KINDS} value={kind} onValueChange={switchKind} />
+          <SelectField aria-label="Kind of step" options={KINDS} value={kind} onValueChange={switchKind} />
         </div>
         <div className="spacer" />
         <button type="button" className="icon-btn" aria-label="Move up" disabled={index === 0} onClick={() => onMove(-1)}>
@@ -273,7 +275,7 @@ function Step({
       <div className="form-grid">
         {kind === 'agent' && (
           <>
-            <Select
+            <SelectField
               label="Assistant"
               options={[
                 ...agents.map((a) => ({ value: a.name, label: a.name, description: a.description })),
@@ -301,7 +303,7 @@ function Step({
 
         {kind === 'tool' && (
           <>
-            <Select
+            <SelectField
               label="Tool"
               options={tools.map((t) => ({ value: t.name, label: dev ? t.name : toolLabel(t.name), description: t.description }))}
               value={node.tool}

@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Tabs, TextField, toast } from '@flame';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { TabBar, TextField } from '@/components/fields';
+import { toast } from 'sonner';
 import { parse, stringify } from 'yaml';
 import { api, followRun, type GraphNode, type Template, type WorkflowSpec, type WorkflowView } from '../api';
 import { Empty, ErrorNote, Json, PageHeader, StatusPill } from '../components';
@@ -45,7 +48,8 @@ export function Workflows({ selected }: { selected?: string }) {
           </>
         }
         actions={
-          <Button tone="accent" leading={<IconPlus />} onClick={() => setCreating('pick')}>
+          <Button onClick={() => setCreating('pick')}>
+            <IconPlus data-icon="inline-start" />
             New workflow
           </Button>
         }
@@ -179,9 +183,8 @@ function WorkflowPanel({ name, labels, onChange }: { name: string; labels: Recor
           </div>
           {w.version != null && (
             <Button
-              size="sm"
               variant="ghost"
-              leading={<IconTrash />}
+              size="sm"
               onClick={async () => {
                 if (!confirm(`Delete ${w.name} and all its versions?`)) return;
                 await api.deleteWorkflow(w.name).catch((e: Error) => toast.error(e.message));
@@ -189,12 +192,13 @@ function WorkflowPanel({ name, labels, onChange }: { name: string; labels: Recor
                 onChange();
               }}
             >
+              <IconTrash data-icon="inline-start" />
               Delete
             </Button>
           )}
         </div>
       </div>
-      <Tabs
+      <TabBar
         items={[
           { id: 'run', label: 'Run' },
           { id: 'runs', label: 'History' },
@@ -312,7 +316,7 @@ function RunPanel({ w }: { w: WorkflowView }) {
           </div>
         )}
         <div className="row gap">
-          <Button tone="accent" onClick={start}>
+          <Button onClick={start}>
             Run workflow
           </Button>
           {runId && (
@@ -364,7 +368,6 @@ function Waiting({ runId, p }: { runId: string; p: { id: string; name: string; i
           <input className="plain-input" placeholder="Optional reply" aria-label="Reply" value={reply} onChange={(e) => setReply(e.target.value)} />
         )}
         <Button
-          tone="accent"
           size="sm"
           onClick={() =>
             (reply.trim() ? api.decideWith(runId, p.id, { reply: reply.trim() }) : api.decide(runId, p.id, true)).catch((e: Error) =>
@@ -374,7 +377,7 @@ function Waiting({ runId, p }: { runId: string; p: { id: string; name: string; i
         >
           Continue
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => api.decide(runId, p.id, false, 'declined in the dashboard').catch((e: Error) => toast.error(e.message))}>
+        <Button variant="ghost" size="sm" onClick={() => api.decide(runId, p.id, false, 'declined in the dashboard').catch((e: Error) => toast.error(e.message))}>
           Stop here
         </Button>
       </div>
@@ -470,7 +473,7 @@ function Editor({ initial, isNew, onSaved }: { initial: string; isNew: boolean; 
   return (
     <section className="stack">
       {showTabs && (
-        <Tabs
+        <TabBar
           items={[
             { id: 'form', label: 'Steps', disabled: !formOk },
             { id: 'yaml', label: 'YAML' },
@@ -501,7 +504,8 @@ function Editor({ initial, isNew, onSaved }: { initial: string; isNew: boolean; 
           <input className="plain-input" placeholder="Version note (optional)" aria-label="Version note" value={note} onChange={(e) => setNote(e.target.value)} />
         )}
         <div className="spacer" />
-        <Button tone="accent" loading={busy} disabled={!!error && !error.startsWith('Give')} onClick={save}>
+        <Button onClick={save} disabled={busy || !!error && !error.startsWith('Give')}>
+          {busy && <Spinner data-icon="inline-start" />}
           {isNew ? 'Create workflow' : 'Save changes'}
         </Button>
       </div>

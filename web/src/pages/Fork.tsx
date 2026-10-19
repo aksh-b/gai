@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Select, toast } from '@flame';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { SelectField } from '@/components/fields';
+import { toast } from 'sonner';
 import {
   api,
   type AgentVersion,
@@ -170,9 +173,9 @@ export function ForkDialog({ run, steps, from, onClose }: { run: Run; steps: Ste
           Steps before the one you pick are copied from this run without calling the model or any tool. From there on the fork runs live,
           with your changes, in a copy of the conversation.
         </p>
-        <Select label="Run live from step" options={stepOptions} value={String(fromStep)} onValueChange={(v) => setFromStep(Number(v))} />
-        <Select label="Model" options={modelOptions} value={model} onValueChange={setModel} />
-        {versions.length > 0 && <Select label="Agent version" options={versionOptions} value={version} onValueChange={setVersion} />}
+        <SelectField label="Run live from step" options={stepOptions} value={String(fromStep)} onValueChange={(v) => setFromStep(Number(v))} />
+        <SelectField label="Model" options={modelOptions} value={model} onValueChange={setModel} />
+        {versions.length > 0 && <SelectField label="Agent version" options={versionOptions} value={version} onValueChange={setVersion} />}
         <label className="stack tight">
           <span className="label">Tools (comma-separated; none for no tools)</span>
           <input className="plain-input" value={tools} onChange={(e) => setTools(e.target.value)} />
@@ -183,7 +186,7 @@ export function ForkDialog({ run, steps, from, onClose }: { run: Run; steps: Ste
         </label>
         {replayedTurns.length > 0 && (
           <div className="stack tight">
-            <Select
+            <SelectField
               label="Change what the model said at a replayed step (optional)"
               options={[{ value: '', label: 'No change' }, ...replayedTurns.map((t) => ({ value: String(t.step), label: `Step ${t.step}` }))]}
               value={editStep}
@@ -202,10 +205,11 @@ export function ForkDialog({ run, steps, from, onClose }: { run: Run; steps: Ste
         )}
         <ErrorNote error={error} />
         <div className="row gap end">
-          <Button type="button" variant="ghost" onClick={onClose}>
+          <Button variant="ghost" type="button" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" tone="accent" loading={busy}>
+          <Button type="submit" disabled={busy}>
+            {busy && <Spinner data-icon="inline-start" />}
             Fork and run
           </Button>
         </div>

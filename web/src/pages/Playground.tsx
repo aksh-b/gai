@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Select, Switch, Tooltip, toast } from '@flame';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { SelectField, SwitchField } from '@/components/fields';
+import { toast } from 'sonner';
+import { Kbd } from '@/components/ui/kbd';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   api,
   fileToBase64,
@@ -431,16 +436,15 @@ export function Playground({ route }: { route: Route }) {
     <div className="playground">
       <aside className="sessions">
         <Button
-          variant="soft"
-          tone="accent"
-          fullWidth
-          leading={<IconPlus />}
+          variant="secondary"
+          className="w-full"
           onClick={() => {
             sessionRef.current = null;
             setItems([]);
             navigate(`/chat${agent ? `?agent=${encodeURIComponent(agent)}` : ''}`);
           }}
         >
+          <IconPlus data-icon="inline-start" />
           New chat
         </Button>
         <div className="session-list">
@@ -481,17 +485,22 @@ export function Playground({ route }: { route: Route }) {
       >
         <div className="toolbar">
           <div className="toolbar-field">
-            <Select aria-label="Assistant" options={agentOptions} value={agent} onValueChange={setAgent} />
+            <SelectField aria-label="Assistant" options={agentOptions} value={agent} onValueChange={setAgent} />
           </div>
           <div className="toolbar-field wide">
-            <Select aria-label="Model" options={options} value={model} onValueChange={setModel} />
+            <SelectField aria-label="Model" options={options} value={model} onValueChange={setModel} />
           </div>
           <a className="small link-quiet" href="#/settings">
             + Connect models
           </a>
           <div className="spacer" />
-          <Tooltip content="When off, it asks before doing anything that needs your OK">
-            <Switch size="sm" label="Act without asking" checked={autoApprove} onChange={(e) => setAutoApprove(e.target.checked)} />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div>
+                <SwitchField size="sm" label="Act without asking" checked={autoApprove} onCheckedChange={(checked) => setAutoApprove(checked)} />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>When off, it asks before doing anything that needs your OK</TooltipContent>
           </Tooltip>
           {dev ? (
             <span className="chip mono" title="Tokens this conversation (since opened)">
@@ -537,7 +546,7 @@ export function Playground({ route }: { route: Route }) {
                       ? 'You are using the demo model: it repeats what you say.'
                       : 'Connect an AI model to get real answers.'}
                   </span>
-                  <Button size="sm" tone="accent" onClick={() => navigate('/welcome')}>
+                  <Button size="sm" onClick={() => navigate('/welcome')}>
                     Connect a model
                   </Button>
                 </div>
@@ -602,8 +611,13 @@ export function Playground({ route }: { route: Route }) {
               e.target.value = '';
             }}
           />
-          <Tooltip content="Attach files (or drop them here)">
-            <Button type="button" variant="ghost" leading={<IconClip />} aria-label="Attach files" onClick={() => filePicker.current?.click()} />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" type="button" aria-label="Attach files" onClick={() => filePicker.current?.click()}>
+                <IconClip />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Attach files (or drop them here)</TooltipContent>
           </Tooltip>
           <textarea
             value={input}
@@ -625,28 +639,38 @@ export function Playground({ route }: { route: Route }) {
             autoFocus
           />
           {media?.transcription && recorder.supported && (
-            <Tooltip content={recorder.recording ? 'Stop and turn into text' : 'Speak your message'}>
-              <Button
-                type="button"
-                variant={recorder.recording ? 'soft' : 'ghost'}
-                tone={recorder.recording ? 'danger' : undefined}
-                loading={transcribing}
-                onClick={toggleMic}
-                leading={<IconMic />}
-                aria-label={recorder.recording ? 'Stop recording' : 'Record a message'}
-              >
-                {recorder.recording ? `${recorder.seconds}s` : undefined}
-              </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant={recorder.recording ? 'destructive' : 'ghost'}
+                  size={recorder.recording ? 'default' : 'icon'}
+                  onClick={toggleMic}
+                  aria-label={recorder.recording ? 'Stop recording' : 'Record a message'}
+                  disabled={transcribing}
+                >
+                  {transcribing ? <Spinner data-icon="inline-start" /> : <IconMic data-icon="inline-start" />}
+                  {recorder.recording ? `${recorder.seconds}s` : undefined}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{recorder.recording ? 'Stop and turn into text' : 'Speak your message'}</TooltipContent>
             </Tooltip>
           )}
           {running ? (
-            <Tooltip content="Stop" shortcut="Esc">
-              <Button type="button" tone="danger" variant="soft" onClick={stop} leading={<IconStop />}>
-                Stop
-              </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="destructive" type="button" onClick={stop}>
+                  <IconStop data-icon="inline-start" />
+                  Stop
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                Stop <Kbd>Esc</Kbd>
+              </TooltipContent>
             </Tooltip>
           ) : (
-            <Button type="submit" tone="accent" disabled={!input.trim() && !files.length} leading={<IconSend />}>
+            <Button type="submit" disabled={!input.trim() && !files.length}>
+              <IconSend data-icon="inline-start" />
               Send
             </Button>
           )}
@@ -794,13 +818,15 @@ function TranscriptItem({
                 OK to <strong>{sentence.charAt(0).toLowerCase() + sentence.slice(1)}</strong>?
               </span>
               <div className="row gap wrap">
-                <Button size="sm" tone="accent" leading={<IconCheck />} onClick={() => onDecide(item.runId, item.id, true)}>
+                <Button size="sm" onClick={() => onDecide(item.runId, item.id, true)}>
+                  <IconCheck data-icon="inline-start" />
                   Allow once
                 </Button>
-                <Button size="sm" variant="soft" onClick={() => onDecide(item.runId, item.id, true, item.name, true)}>
+                <Button variant="secondary" size="sm" onClick={() => onDecide(item.runId, item.id, true, item.name, true)}>
                   Always allow “{toolLabel(item.name)}” in this chat
                 </Button>
-                <Button size="sm" variant="outline" leading={<IconX />} onClick={() => onDecide(item.runId, item.id, false)}>
+                <Button variant="outline" size="sm" onClick={() => onDecide(item.runId, item.id, false)}>
+                  <IconX data-icon="inline-start" />
                   Don't allow
                 </Button>
               </div>

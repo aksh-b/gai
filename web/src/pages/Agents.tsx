@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Button, toast } from '@flame';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { toast } from 'sonner';
 import YAML from 'yaml';
 import { AgentForm } from '../AgentForm';
 import { api, streamRun, type AgentSpec, type AgentVersion, type Template } from '../api';
@@ -116,7 +118,8 @@ export function Agents({ selected, creating = false }: { selected?: string; crea
         title="Assistants"
         subtitle="Each assistant has its own instructions, tools and knowledge. Every change is kept, so you can always go back."
         actions={
-          <Button tone="accent" leading={<IconPlus />} onClick={startNew}>
+          <Button onClick={startNew}>
+            <IconPlus data-icon="inline-start" />
             New assistant
           </Button>
         }
@@ -155,7 +158,7 @@ export function Agents({ selected, creating = false }: { selected?: string; crea
             <div className="empty">
               <strong>No assistants yet</strong>
               <p className="muted">Start from a ready-made one and change it as you like.</p>
-              <Button tone="accent" onClick={startNew}>
+              <Button onClick={startNew}>
                 Browse templates
               </Button>
             </div>
@@ -186,12 +189,13 @@ export function Agents({ selected, creating = false }: { selected?: string; crea
                     <Button
                       variant="outline"
                       size="sm"
-                      leading={<IconChat />}
                       onClick={() => navigate(`/chat?agent=${encodeURIComponent(current.summary.name)}`)}
                     >
+                      <IconChat data-icon="inline-start" />
                       Chat
                     </Button>
-                    <Button variant="ghost" tone="danger" size="sm" leading={<IconTrash />} onClick={() => remove(current.summary.name)}>
+                    <Button variant="destructive" size="sm" onClick={() => remove(current.summary.name)}>
+                      <IconTrash data-icon="inline-start" />
                       Delete
                     </Button>
                   </>
@@ -208,7 +212,8 @@ export function Agents({ selected, creating = false }: { selected?: string; crea
                 {dev && (
                   <input className="plain-input" placeholder="Version note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
                 )}
-                <Button tone="accent" loading={saving} disabled={!dirty && selected !== 'new'} onClick={save}>
+                <Button onClick={save} disabled={saving || !dirty && selected !== 'new'}>
+                  {saving && <Spinner data-icon="inline-start" />}
                   {selected === 'new' ? 'Create assistant' : 'Save changes'}
                 </Button>
               </div>
@@ -331,7 +336,8 @@ function TemplatePicker({
           value={describe}
           onChange={(e) => setDescribe(e.target.value)}
         />
-        <Button type="submit" tone="accent" leading={<IconSpark />} loading={drafting} disabled={!describe.trim()}>
+        <Button type="submit" disabled={drafting || !describe.trim()}>
+          {drafting ? <Spinner data-icon="inline-start" /> : <IconSpark data-icon="inline-start" />}
           Draft it for me
         </Button>
       </form>

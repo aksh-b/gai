@@ -60,7 +60,7 @@ export function useModelGroups(version = 0): ModelGroups {
   return groups;
 }
 
-/** Options for flame's Select, best groups first. Unusable models are left out. */
+/** Options for SelectField, best groups first. Unusable models are left out. */
 export function modelOptions(g: ModelGroups, dev: boolean) {
   const opt = (m: ModelChoice, where: string) => ({
     value: m.id,

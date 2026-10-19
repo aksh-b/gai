@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Button } from '@flame';
+import { Button } from '@/components/ui/button';
 import { api, type Run } from '../api';
 import { Empty, ErrorNote, Json, StatusPill } from '../components';
 import { IconBack } from '../icons';
@@ -42,7 +42,8 @@ export function Compare({ a, b }: { a: string; b: string }) {
   return (
     <div className="page">
       <div className="row gap">
-        <Button variant="ghost" size="sm" leading={<IconBack />} onClick={() => navigate(`/activity/${a}`)}>
+        <Button variant="ghost" size="sm" onClick={() => navigate(`/activity/${a}`)}>
+          <IconBack data-icon="inline-start" />
           Original run
         </Button>
         <Button variant="ghost" size="sm" onClick={() => navigate(`/activity/${b}`)}>

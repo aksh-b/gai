@@ -1,5 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Field, Tabs } from '@flame';
+import { TabBar } from '@/components/fields';
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import YAML from 'yaml';
 import { ErrorNote } from './components';
 import { useDevMode } from './prefs';
@@ -72,7 +75,7 @@ export function SpecEditor<T extends object>({
 
   return (
     <div className="spec-editor">
-      <Tabs
+      <TabBar
         items={[
           { id: 'form', label: 'Form' },
           { id: 'yaml', label: 'YAML' },
@@ -154,16 +157,20 @@ export function TextArea({
   const id = useId();
   return (
     <div className={wide ? 'span-all' : undefined}>
-      <Field id={id} label={label} description={description} error={error}>
-        <textarea
+      <Field data-invalid={error ? true : undefined}>
+        {label && <FieldLabel htmlFor={id}>{label}</FieldLabel>}
+        <Textarea
           id={id}
           ref={textareaRef}
-          className={`form-textarea${mono ? ' mono' : ''}`}
+          className={mono ? 'font-mono' : undefined}
           rows={rows}
           value={value}
           placeholder={placeholder}
+          aria-invalid={error ? true : undefined}
           onChange={(e) => onChange(e.target.value)}
         />
+        {description && <FieldDescription>{description}</FieldDescription>}
+        {error && <FieldError>{error}</FieldError>}
       </Field>
     </div>
   );
@@ -189,10 +196,10 @@ export function NumberInput({
 }) {
   const id = useId();
   return (
-    <Field id={id} label={label} description={description}>
-      <input
+    <Field>
+      {label && <FieldLabel htmlFor={id}>{label}</FieldLabel>}
+      <Input
         id={id}
-        className="plain-input full"
         type="number"
         step={step}
         min={min}
@@ -200,6 +207,7 @@ export function NumberInput({
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
       />
+      {description && <FieldDescription>{description}</FieldDescription>}
     </Field>
   );
 }

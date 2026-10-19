@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Button, Select, toast } from '@flame';
+import { Button } from '@/components/ui/button';
+import { SelectField } from '@/components/fields';
+import { toast } from 'sonner';
 import { api, type VersionDiff } from './api';
 import { ErrorNote } from './components';
 import { ago } from './util';
@@ -146,7 +148,7 @@ export function VersionHistory({
                   onChange={(e) => setLabelName(e.target.value)}
                   autoFocus
                 />
-                <Button size="sm" type="submit" tone="accent" disabled={!/^[A-Za-z0-9_.-]+$/.test(labelName.trim())}>
+                <Button size="sm" type="submit" disabled={!/^[A-Za-z0-9_.-]+$/.test(labelName.trim())}>
                   Point at v{v.version}
                 </Button>
               </form>
@@ -159,10 +161,10 @@ export function VersionHistory({
         <div className="stack">
           <div className="row gap wrap compare-row">
             <span className="label">Compare</span>
-            <Select aria-label="Older version" options={options} value={String(from)} onValueChange={(v) => setFrom(Number(v))} />
+            <SelectField aria-label="Older version" options={options} value={String(from)} onValueChange={(v) => setFrom(Number(v))} />
             <span className="muted">→</span>
-            <Select aria-label="Newer version" options={options} value={String(to)} onValueChange={(v) => setTo(Number(v))} />
-            <Button size="sm" variant="outline" onClick={() => compare(from, to)}>
+            <SelectField aria-label="Newer version" options={options} value={String(to)} onValueChange={(v) => setTo(Number(v))} />
+            <Button variant="outline" size="sm" onClick={() => compare(from, to)}>
               Diff
             </Button>
           </div>

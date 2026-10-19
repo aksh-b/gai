@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
-import { Button, Select, Switch, TextField } from '@flame';
+import { Button } from '@/components/ui/button';
+import { SelectField, SwitchField, TextField } from '@/components/fields';
 import { api, type AgentSpec } from './api';
 import { Disclosure } from './components';
 import { IconPlus, IconTrash } from './icons';
@@ -123,7 +124,7 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
         />
         <TextField label="Description" value={spec.description ?? ''} description="One sentence about what it does. Other assistants read it too." onChange={(e) => set(['description'], e.target.value)} />
         <div>
-          <Select
+          <SelectField
             label="Model"
             options={modelOptions}
             value={typing ? '__other' : model}
@@ -211,7 +212,8 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
             </div>
           ))}
           <div>
-            <Button size="sm" variant="ghost" leading={<IconPlus />} onClick={() => setDelegates(localDelegates, [...remoteDelegates, { a2a: '', name: '' }])}>
+            <Button variant="ghost" size="sm" onClick={() => setDelegates(localDelegates, [...remoteDelegates, { a2a: '', name: '' }])}>
+              <IconPlus data-icon="inline-start" />
               Add a remote agent
             </Button>
           </div>
@@ -246,7 +248,8 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
         title="Memory"
         hint="Notes the assistant always sees and updates as it learns, like what it knows about you."
         aside={
-          <Button size="sm" variant="ghost" leading={<IconPlus />} onClick={() => set(['memory', 'blocks'], [...blocks, { label: blocks.length ? `notes${blocks.length + 1}` : 'notes', limit: 2000 }])}>
+          <Button variant="ghost" size="sm" onClick={() => set(['memory', 'blocks'], [...blocks, { label: blocks.length ? `notes${blocks.length + 1}` : 'notes', limit: 2000 }])}>
+            <IconPlus data-icon="inline-start" />
             Add block
           </Button>
         }
@@ -276,22 +279,22 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
           </div>
         ))}
         <div className="span-all">
-          <Switch
+          <SwitchField
             size="sm"
             label="Long-term memory"
             description="Facts the assistant saves and looks up later, beyond its notes."
             checked={!!get<boolean>(['memory', 'archival'])}
-            onChange={(e) => set(['memory', 'archival'], e.target.checked || undefined)}
+            onCheckedChange={(checked) => set(['memory', 'archival'], checked || undefined)}
           />
         </div>
       </Section>
 
       {usesMedia && (
         <Section title="Voice and image models" hint="Leave empty to use the ones in Settings → Voice & images.">
-          <Select label="Image" options={[{ value: '', label: 'Server default' }, ...mediaModels('image'), { value: 'mock/image', label: 'mock/image' }]} value={get<string>(['media', 'image']) ?? ''} onValueChange={(v) => set(['media', 'image'], v)} />
-          <Select label="Speech" options={[{ value: '', label: 'Server default' }, ...mediaModels('speech'), { value: 'mock/voice', label: 'mock/voice' }]} value={get<string>(['media', 'speech']) ?? ''} onValueChange={(v) => set(['media', 'speech'], v)} />
+          <SelectField label="Image" options={[{ value: '', label: 'Server default' }, ...mediaModels('image'), { value: 'mock/image', label: 'mock/image' }]} value={get<string>(['media', 'image']) ?? ''} onValueChange={(v) => set(['media', 'image'], v)} />
+          <SelectField label="Speech" options={[{ value: '', label: 'Server default' }, ...mediaModels('speech'), { value: 'mock/voice', label: 'mock/voice' }]} value={get<string>(['media', 'speech']) ?? ''} onValueChange={(v) => set(['media', 'speech'], v)} />
           <TextField label="Voice" placeholder="alloy, or a voice id" value={get<string>(['media', 'voice']) ?? ''} onChange={(e) => set(['media', 'voice'], e.target.value)} />
-          <Select label="Transcription" options={[{ value: '', label: 'Server default' }, ...mediaModels('transcription'), { value: 'mock/ears', label: 'mock/ears' }]} value={get<string>(['media', 'transcription']) ?? ''} onValueChange={(v) => set(['media', 'transcription'], v)} />
+          <SelectField label="Transcription" options={[{ value: '', label: 'Server default' }, ...mediaModels('transcription'), { value: 'mock/ears', label: 'mock/ears' }]} value={get<string>(['media', 'transcription']) ?? ''} onValueChange={(v) => set(['media', 'transcription'], v)} />
         </Section>
       )}
 
@@ -300,7 +303,7 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
         <NumberInput label="Max cost (USD)" step={0.1} min={0} value={get<number>(['limits', 'max_cost_usd'])} onChange={(v) => set(['limits', 'max_cost_usd'], v)} />
         <NumberInput label="Max tokens" description="Input plus output, whole run" min={1} value={get<number>(['limits', 'max_tokens'])} onChange={(v) => set(['limits', 'max_tokens'], v)} />
         <NumberInput label="Time limit (seconds)" min={1} value={get<number>(['limits', 'timeout_secs'])} onChange={(v) => set(['limits', 'timeout_secs'], v)} />
-        <Select
+        <SelectField
           label="Reasoning effort"
           options={[{ value: '', label: "Model's default" }, ...EFFORTS.map((e) => ({ value: e, label: e }))]}
           value={effort}

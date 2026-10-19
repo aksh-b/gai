@@ -60,12 +60,22 @@ const getTheme = (): Theme => {
   return t === 'light' || t === 'dark' ? t : 'system';
 };
 
-/** Apply the saved theme to the page (flame reads `data-theme`). */
+const systemDark = () => matchMedia('(prefers-color-scheme: dark)').matches;
+
+/** Whether `theme` shows dark right now (`system` follows the OS). */
+export const isDark = (theme: Theme) => theme === 'dark' || (theme === 'system' && systemDark());
+
+/** Apply the saved theme to the page: shadcn's tokens switch on `.dark`. */
 export function applyTheme(theme: Theme = getTheme()) {
   const root = document.documentElement;
-  if (theme === 'system') root.removeAttribute('data-theme');
-  else root.setAttribute('data-theme', theme);
+  root.classList.toggle('dark', isDark(theme));
+  root.style.colorScheme = isDark(theme) ? 'dark' : 'light';
 }
+
+// Follow the OS when the theme is `system`.
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  if (getTheme() === 'system') applyTheme('system');
+});
 
 export function useTheme(): [Theme, (t: Theme) => void] {
   return [

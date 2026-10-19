@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { Button, Select, Tabs, toast } from '@flame';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { SelectField, TabBar } from '@/components/fields';
+import { toast } from 'sonner';
 import { api, type StoredBlob } from '../api';
 import { Empty, ErrorNote, PageHeader } from '../components';
 import { IconMic, IconTrash } from '../icons';
@@ -23,7 +26,7 @@ export function MediaStudio() {
         subtitle="Make images, turn text into speech and speech into text. Assistants can do the same when you give them these abilities."
       />
       <ErrorNote error={defaults.error} />
-      <Tabs
+      <TabBar
         items={[
           { id: 'image', label: 'Images' },
           { id: 'speech', label: 'Speech' },
@@ -52,7 +55,7 @@ function ModelPick({ fallback, models, value, onChange }: { fallback: string | n
     { value: '', label: fallback ? `Default (${fallback})` : 'Default (none set)' },
     ...models.filter((m) => m !== fallback).map((m) => ({ value: m, label: m })),
   ];
-  return <Select aria-label="Model" options={options} value={value} onValueChange={onChange} />;
+  return <SelectField aria-label="Model" options={options} value={value} onValueChange={onChange} />;
 }
 
 function ImagePanel({ fallback, models, onMade }: { fallback: string | null; models: string[]; onMade: () => void }) {
@@ -81,14 +84,15 @@ function ImagePanel({ fallback, models, onMade }: { fallback: string | null; mod
       <textarea className="code-editor short" placeholder="A lighthouse at dusk, watercolor, wide shot" aria-label="Prompt" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
       <div className="row gap wrap">
         <ModelPick fallback={fallback} models={models} value={model} onChange={setModel} />
-        <Select
+        <SelectField
           aria-label="Size"
           options={['1024x1024', '1536x1024', '1024x1536', '512x512'].map((s) => ({ value: s, label: s }))}
           value={size}
           onValueChange={setSize}
         />
-        <Select aria-label="How many" options={['1', '2', '3', '4'].map((x) => ({ value: x, label: `${x} image${x === '1' ? '' : 's'}` }))} value={n} onValueChange={setN} />
-        <Button tone="accent" loading={busy} disabled={!prompt.trim() || (!fallback && !model)} onClick={go}>
+        <SelectField aria-label="How many" options={['1', '2', '3', '4'].map((x) => ({ value: x, label: `${x} image${x === '1' ? '' : 's'}` }))} value={n} onValueChange={setN} />
+        <Button onClick={go} disabled={busy || !prompt.trim() || (!fallback && !model)}>
+          {busy && <Spinner data-icon="inline-start" />}
           Generate
         </Button>
       </div>
@@ -132,7 +136,8 @@ function SpeechPanel({ fallback, models, onMade }: { fallback: string | null; mo
       <div className="row gap wrap">
         <ModelPick fallback={fallback} models={models} value={model} onChange={setModel} />
         <input className="plain-input narrow" placeholder="Voice (optional)" aria-label="Voice" value={voice} onChange={(e) => setVoice(e.target.value)} />
-        <Button tone="accent" loading={busy} disabled={!text.trim() || (!fallback && !model)} onClick={go}>
+        <Button onClick={go} disabled={busy || !text.trim() || (!fallback && !model)}>
+          {busy && <Spinner data-icon="inline-start" />}
           Speak
         </Button>
       </div>
@@ -173,15 +178,14 @@ function TranscribePanel({ fallback, models }: { fallback: string | null; models
         <ModelPick fallback={fallback} models={models} value={model} onChange={setModel} />
         {recorder.supported && (
           <Button
-            variant={recorder.recording ? 'soft' : 'outline'}
-            tone={recorder.recording ? 'danger' : undefined}
-            leading={<IconMic />}
-            disabled={!fallback && !model}
+            variant={recorder.recording ? 'destructive' : 'outline'}
             onClick={async () => {
               if (recorder.recording) transcribe(await recorder.stop());
               else recorder.start().catch((e: Error) => toast.error(`Microphone: ${e.message}`));
             }}
+            disabled={!fallback && !model}
           >
+            <IconMic data-icon="inline-start" />
             {recorder.recording ? `Stop (${recorder.seconds}s)` : 'Record'}
           </Button>
         )}

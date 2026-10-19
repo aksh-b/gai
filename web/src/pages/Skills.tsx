@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Button, toast } from '@flame';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { toast } from 'sonner';
 import { api, type SkillView } from '../api';
 import { Disclosure, Empty, ErrorNote, Markdown, PageHeader } from '../components';
 import { IconPlus, IconTrash } from '../icons';
@@ -144,7 +146,8 @@ function Upload({ onSaved }: { onSaved: () => void }) {
         ))}
       </div>
       <div>
-        <Button tone="accent" leading={<IconPlus />} loading={busy} onClick={save}>
+        <Button onClick={save} disabled={busy}>
+          {busy ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
           Save skill
         </Button>
       </div>

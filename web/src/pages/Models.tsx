@@ -1,4 +1,4 @@
-import { DataTable, type Column } from '@flame';
+import { DataTable, type Column } from '@/components/data-table';
 import { api, type CatalogEntry, type KeyState } from '../api';
 import { ErrorNote, PageHeader } from '../components';
 import { useLoad } from '../util';

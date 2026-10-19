@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Button, Switch, Tabs, TextField, toast } from '@flame';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { SwitchField, TabBar, TextField } from '@/components/fields';
+import { toast } from 'sonner';
 import { api, type MemoryBlock } from '../api';
 import { Disclosure, Empty, ErrorNote, PageHeader } from '../components';
 import { IconPlus, IconTrash } from '../icons';
@@ -35,7 +38,7 @@ export function Memory() {
       />
       <ErrorNote error={blocks.error} />
       <div className="row between">
-        <Tabs
+        <TabBar
           items={[
             { id: 'all', label: 'All', badge: blocks.data?.length },
             ...['agent', 'user', 'shared'].map((k) => ({ id: k, label: KIND_LABEL[k], badge: counts(k) })),
@@ -127,13 +130,14 @@ function BlockCard({ b, onChange }: { b: MemoryBlock; onChange: () => void }) {
           {used} / {b.limit} characters
         </span>
         <div className="row gap">
-          <Switch label="Read-only" size="sm" checked={b.read_only} onChange={(e) => save({ read_only: e.target.checked })} />
+          <SwitchField label="Read-only" size="sm" checked={b.read_only} onCheckedChange={(checked) => save({ read_only: checked })} />
           {dirty && (
-            <Button size="sm" variant="ghost" onClick={() => setValue(b.value)}>
+            <Button variant="ghost" size="sm" onClick={() => setValue(b.value)}>
               Reset
             </Button>
           )}
-          <Button size="sm" tone="accent" loading={saving} disabled={!dirty || over} onClick={() => save({ value })}>
+          <Button size="sm" onClick={() => save({ value })} disabled={saving || !dirty || over}>
+            {saving && <Spinner data-icon="inline-start" />}
             Save
           </Button>
         </div>
@@ -192,7 +196,8 @@ function NewBlock({ onCreated }: { onCreated: () => void }) {
       <TextField label="Limit (characters)" inputMode="numeric" value={limit} onChange={(e) => setLimit(e.target.value.replace(/\D/g, ''))} />
       <TextField label="Description" placeholder="What the agent should keep here" value={description} onChange={(e) => setDescription(e.target.value)} />
       <div>
-        <Button tone="accent" leading={<IconPlus />} loading={busy} disabled={!label.trim() || !scope.includes(':')} onClick={create}>
+        <Button onClick={create} disabled={busy || !label.trim() || !scope.includes(':')}>
+          {busy ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
           Create block
         </Button>
       </div>

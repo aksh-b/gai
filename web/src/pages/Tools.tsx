@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { Button, Select, TextField, toast } from '@flame';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { SelectField, TextField } from '@/components/fields';
+import { toast } from 'sonner';
 import { api, type McpServerConfig, type McpServerInfo, type ToolPolicy } from '../api';
 import { Disclosure, Empty, ErrorNote, Json, PageHeader } from '../components';
 import { IconPlus, IconTrash } from '../icons';
@@ -152,27 +155,28 @@ function McpCard({ s, onChange }: { s: McpServerInfo; onChange: () => void }) {
         </div>
         <div className="row gap">
           {state === 'needs_auth' ? (
-            <Button size="sm" tone="accent" loading={busy} onClick={signIn}>
+            <Button size="sm" onClick={signIn} disabled={busy}>
+              {busy && <Spinner data-icon="inline-start" />}
               Sign in
             </Button>
           ) : (
-            <Button size="sm" variant="outline" loading={busy} onClick={() => act(() => api.reconnectMcp(s.name))}>
+            <Button variant="outline" size="sm" onClick={() => act(() => api.reconnectMcp(s.name))} disabled={busy}>
+              {busy && <Spinner data-icon="inline-start" />}
               Reconnect
             </Button>
           )}
           {isHttp && state === 'ready' && (
-            <Button size="sm" variant="ghost" onClick={() => confirm(`Sign out of ${s.name}?`) && act(() => api.mcpSignOut(s.name))}>
+            <Button variant="ghost" size="sm" onClick={() => confirm(`Sign out of ${s.name}?`) && act(() => api.mcpSignOut(s.name))}>
               Sign out
             </Button>
           )}
           {s.source !== 'config' && (
             <Button
+              variant="destructive"
               size="sm"
-              variant="ghost"
-              tone="danger"
-              leading={<IconTrash />}
               onClick={() => confirm(`Remove ${s.name}?`) && act(() => api.removeMcp(s.name))}
             >
+              <IconTrash data-icon="inline-start" />
               Remove
             </Button>
           )}
@@ -246,7 +250,7 @@ function AddMcp({ onAdded }: { onAdded: () => void }) {
   return (
     <div className="mcp-form">
       <TextField label="Name" placeholder="e.g. github" value={name} onChange={(e) => setName(e.target.value)} />
-      <Select
+      <SelectField
         label="Transport"
         value={kind}
         onValueChange={setKind}
@@ -271,7 +275,7 @@ function AddMcp({ onAdded }: { onAdded: () => void }) {
         </label>
         <textarea id="mcp-pairs" className="code-editor small-editor" value={pairs} onChange={(e) => setPairs(e.target.value)} />
       </div>
-      <Select
+      <SelectField
         label="Policy"
         value={policy}
         onValueChange={setPolicy}
@@ -283,7 +287,8 @@ function AddMcp({ onAdded }: { onAdded: () => void }) {
         ]}
       />
       <div className="row end full">
-        <Button tone="accent" leading={<IconPlus />} loading={busy} disabled={!name.trim() || (kind === 'stdio' ? !command.trim() : !url.trim())} onClick={add}>
+        <Button onClick={add} disabled={busy || !name.trim() || (kind === 'stdio' ? !command.trim() : !url.trim())}>
+          {busy ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
           Add and connect
         </Button>
       </div>

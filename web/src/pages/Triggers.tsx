@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Button, Switch, toast } from '@flame';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { SwitchField } from '@/components/fields';
+import { toast } from 'sonner';
 import { api, type TriggerView } from '../api';
 import { Empty, ErrorNote, PageHeader, StatusPill } from '../components';
 import { IconPlus, IconTrash } from '../icons';
@@ -24,7 +27,8 @@ export function Triggers({ selected }: { selected?: string }) {
         actions={
           <div className="row gap">
             {Object.keys(TRIGGER_TEMPLATES).map((k) => (
-              <Button key={k} variant="outline" size="sm" leading={<IconPlus />} onClick={() => setCreating(k)}>
+              <Button variant="outline" size="sm" key={k} onClick={() => setCreating(k)}>
+                <IconPlus data-icon="inline-start" />
                 {k === 'cron' ? 'Schedule' : k === 'webhook' ? 'Webhook' : 'File watcher'}
               </Button>
             ))}
@@ -118,7 +122,8 @@ function Editor({ initial, existing, onSaved }: { initial: TriggerDraft; existin
       <div className="save-bar">
         <ErrorNote error={error} />
         <div className="row gap end">
-          <Button tone="accent" loading={busy} onClick={save}>
+          <Button onClick={save} disabled={busy}>
+            {busy && <Spinner data-icon="inline-start" />}
             {existing ? 'Save' : 'Create trigger'}
           </Button>
         </div>
@@ -176,26 +181,25 @@ function Detail({ t, onChange }: { t: TriggerView; onChange: () => void }) {
         <div className="row between wrap">
           <h2 style={{ margin: 0, whiteSpace: 'nowrap' }}>{t.name}</h2>
           <div className="row gap wrap">
-            <Switch
+            <SwitchField
               size="sm"
               label={t.enabled ? 'On' : 'Off'}
               checked={t.enabled}
-              onChange={async (e) => {
-                await (e.target.checked ? api.enableTrigger(t.id) : api.disableTrigger(t.id)).catch((x: Error) => toast.error(x.message));
+              onCheckedChange={async (checked) => {
+                await (checked ? api.enableTrigger(t.id) : api.disableTrigger(t.id)).catch((x: Error) => toast.error(x.message));
                 onChange();
               }}
             />
-            <Button size="sm" variant="outline" loading={firing} onClick={fire}>
+            <Button variant="outline" size="sm" onClick={fire} disabled={firing}>
+              {firing && <Spinner data-icon="inline-start" />}
               Fire now
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
               Edit
             </Button>
             <Button
+              variant="destructive"
               size="sm"
-              variant="ghost"
-              tone="danger"
-              leading={<IconTrash />}
               onClick={async () => {
                 if (!confirm(`Delete ${t.name}?`)) return;
                 await api.deleteTrigger(t.id).catch((e: Error) => toast.error(e.message));
@@ -203,6 +207,7 @@ function Detail({ t, onChange }: { t: TriggerView; onChange: () => void }) {
                 onChange();
               }}
             >
+              <IconTrash data-icon="inline-start" />
               Delete
             </Button>
           </div>
@@ -234,7 +239,7 @@ function Detail({ t, onChange }: { t: TriggerView; onChange: () => void }) {
   -d '{"hello": "world"}'`}</pre>
             <div className="row gap">
               {!secret && (
-                <Button size="sm" variant="outline" onClick={() => api.triggerSecret(t.id).then((r) => setSecret(r.secret)).catch((e: Error) => toast.error(e.message))}>
+                <Button variant="outline" size="sm" onClick={() => api.triggerSecret(t.id).then((r) => setSecret(r.secret)).catch((e: Error) => toast.error(e.message))}>
                   Show secret
                 </Button>
               )}

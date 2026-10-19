@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { Button, Checkbox, TextField, toast } from '@flame';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { CheckboxField, TextField } from '@/components/fields';
+import { toast } from 'sonner';
 import { api, getApiKey, setApiKey, type Scope } from '../api';
 import { Empty, ErrorNote, PageHeader } from '../components';
 import { IconPlus, IconTrash } from '../icons';
@@ -75,7 +78,7 @@ export function Keys() {
             >
               Copy
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setSecret(null)}>
+            <Button variant="ghost" size="sm" onClick={() => setSecret(null)}>
               Done
             </Button>
           </div>
@@ -91,12 +94,12 @@ export function Keys() {
               <div className="label">Scopes</div>
               <div className="stack tight">
                 {SCOPES.map((s) => (
-                  <Checkbox
+                  <CheckboxField
                     key={s.id}
                     label={s.label}
                     description={s.description}
                     checked={scopes.includes(s.id)}
-                    onChange={(e) => setScopes((cur) => (e.target.checked ? [...cur, s.id] : cur.filter((x) => x !== s.id)))}
+                    onCheckedChange={(checked) => setScopes((cur) => (checked ? [...cur, s.id] : cur.filter((x) => x !== s.id)))}
                   />
                 ))}
               </div>
@@ -108,7 +111,8 @@ export function Keys() {
               value={budget}
               onChange={(e) => setBudget(e.target.value.replace(/[^0-9.]/g, ''))}
             />
-            <Button tone="accent" leading={<IconPlus />} loading={creating} disabled={!name.trim() || !scopes.length} onClick={create}>
+            <Button onClick={create} disabled={creating || !name.trim() || !scopes.length}>
+              {creating ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
               Create key
             </Button>
           </div>

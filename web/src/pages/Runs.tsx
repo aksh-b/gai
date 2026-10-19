@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { DataTable, Tabs, type Column } from '@flame';
+import { TabBar } from '@/components/fields';
+import { DataTable, type Column } from '@/components/data-table';
 import { api, type Run } from '../api';
 import { ErrorNote, PageHeader, StatusPill } from '../components';
 import { navigate } from '../router';
@@ -55,7 +56,7 @@ export function Runs() {
     <div className="page">
       <PageHeader title="History" subtitle="Everything your assistants and workflows did: open one to see each step." />
       <div className="row between">
-        <Tabs items={FILTERS} value={filter} onValueChange={setFilter} variant="pill" aria-label="Filter runs" />
+        <TabBar items={FILTERS} value={filter} onValueChange={setFilter} variant="pill" aria-label="Filter runs" />
       </div>
       <ErrorNote error={error} />
       <div className="card flush">
@@ -70,7 +71,7 @@ export function Runs() {
           aria-label="Runs"
         />
       </div>
-      <p className="muted small">Double-click or press Enter on a row to open it.</p>
+      <p className="muted small">Click a row (or press Enter) to open it.</p>
     </div>
   );
 }

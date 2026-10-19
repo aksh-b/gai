@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Button, RadioGroup, Select, Switch, toast } from '@flame';
+import { Button } from '@/components/ui/button';
+import { RadioField, SelectField, SwitchField } from '@/components/fields';
+import { toast } from 'sonner';
 import { api, type SetupStatus } from '../api';
 import { Disclosure, PageHeader } from '../components';
 import { modelLabel } from '../labels';
@@ -52,7 +54,7 @@ export function ModelsSettings() {
         </div>
         <div className="row gap wrap">
           <div className="grow">
-            <Select aria-label="Default model" options={options} value={current} onValueChange={(m) => setDefault(m)} placeholder="Choose a model" />
+            <SelectField aria-label="Default model" options={options} value={current} onValueChange={(m) => setDefault(m)} placeholder="Choose a model" />
           </div>
           {status?.default_model_source === 'settings' && (
             <Button variant="ghost" size="sm" onClick={() => setDefault(null)}>
@@ -104,7 +106,7 @@ export function Preferences() {
       <PageHeader title="Preferences" subtitle="These apply to this browser only." />
       <section className="card stack">
         <h3>Appearance</h3>
-        <RadioGroup
+        <RadioField
           label="Theme"
           value={theme}
           onValueChange={(v) => setTheme(v as Theme)}
@@ -117,11 +119,11 @@ export function Preferences() {
       </section>
       <section className="card stack">
         <h3>Developer details</h3>
-        <Switch
+        <SwitchField
           label="Show developer details"
           description="Run and session IDs, raw JSON and YAML editors, event logs, token counts, model IDs and command-line hints."
           checked={dev}
-          onChange={(e) => setDev(e.target.checked)}
+          onCheckedChange={(checked) => setDev(checked)}
         />
         {dev && (
           <p className="muted small">

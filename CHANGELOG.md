@@ -39,6 +39,11 @@ initial development and will ship as 0.1.0.
 
 ### Changed
 
+- The dashboard uses [shadcn/ui](https://ui.shadcn.com) components (on
+  Radix and Tailwind CSS) instead of the flame library, so it builds from a
+  plain clone with `npm install` and no sibling folder. Controls look a
+  little different (neutral colours, Lucide icons), and a row in History
+  opens with a single click.
 - The dashboard is reorganised into six sections (Chat, Assistants,
   Automations, Knowledge, Activity, Settings) and uses plain wording.
   Technical details (IDs, YAML, raw events) are behind **Developer details**

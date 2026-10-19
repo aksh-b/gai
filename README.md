@@ -49,7 +49,7 @@ cargo run -p gai-cli -- chat -m anthropic/claude-sonnet-5-5
 
 ### Server and dashboard
 
-The dashboard imports components from the flame UI library, which it expects in a sibling folder (`../flame`).
+The dashboard (`web/`) is React with [shadcn/ui](https://ui.shadcn.com) components on Tailwind CSS; everything it needs installs with `npm install`.
 
 ```bash
 cd web && npm install && npm run build && cd ..
@@ -140,6 +140,8 @@ cargo clippy --workspace -- -D warnings
 ```
 
 On machines without a native Rust toolchain, `scripts/` runs everything in a podman container: `scripts/cargo.sh`, `scripts/check.sh` (fmt, clippy and tests), `scripts/serve.sh` and `scripts/ollama.sh`.
+
+The dashboard's components come from shadcn/ui: add one with `cd web && npx shadcn@latest add <component>` (see `web/components.json`). Claude Code users get the shadcn skill from `.claude/skills/`.
 
 Changes on their way to the next release are listed under **Unreleased** in [CHANGELOG.md](CHANGELOG.md). When you change something users will notice, add a line there in the same pull request.
 

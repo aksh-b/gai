@@ -3,7 +3,9 @@
 // Settings → AI models.
 
 import { useEffect, useRef, useState } from 'react';
-import { Button, toast } from '@flame';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { toast } from 'sonner';
 import { api, type CloudProvider, type LibraryModel, type OllamaStatus, type PullProgress } from './api';
 import { IconCheck } from './icons';
 import { useDevMode } from './prefs';
@@ -87,7 +89,8 @@ export function CloudConnect({
               value={key}
               onChange={(e) => setKey(e.target.value)}
             />
-            <Button type="submit" tone="accent" loading={busy} disabled={!key.trim() && !provider.connected}>
+            <Button type="submit" disabled={busy || !key.trim() && !provider.connected}>
+              {busy && <Spinner data-icon="inline-start" />}
               {key.trim() || !provider.connected ? 'Connect' : 'Test again'}
             </Button>
           </div>
@@ -196,7 +199,8 @@ export function LocalModels({ onUse }: { onUse: (model: string) => void }) {
           <li>Come back here and press “Check again”.</li>
         </ol>
         <div>
-          <Button variant="outline" loading={checking} onClick={load}>
+          <Button variant="outline" onClick={load} disabled={checking}>
+            {checking && <Spinner data-icon="inline-start" />}
             Check again
           </Button>
         </div>
@@ -242,12 +246,13 @@ export function LocalModels({ onUse }: { onUse: (model: string) => void }) {
                     <IconCheck width={12} height={12} /> installed
                   </span>
                 ) : (
-                  <Button size="sm" tone="accent" onClick={() => onUse(`ollama/${m.name}`)}>
+                  <Button size="sm" onClick={() => onUse(`ollama/${m.name}`)}>
                     Use this
                   </Button>
                 )
               ) : (
-                <Button size="sm" variant="outline" loading={pulling} onClick={() => download(m.name)}>
+                <Button variant="outline" size="sm" onClick={() => download(m.name)} disabled={pulling}>
+                  {pulling && <Spinner data-icon="inline-start" />}
                   Download
                 </Button>
               )}
@@ -262,7 +267,7 @@ export function LocalModels({ onUse }: { onUse: (model: string) => void }) {
             {status.models
               .filter((n) => !library.some((m) => m.name === n || `${m.name}:latest` === n))
               .map((n) => (
-                <Button key={n} size="sm" variant="soft" onClick={() => onUse(`ollama/${n}`)}>
+                <Button variant="secondary" size="sm" key={n} onClick={() => onUse(`ollama/${n}`)}>
                   Use {n}
                 </Button>
               ))}

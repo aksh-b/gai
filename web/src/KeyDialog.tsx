@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, TextField } from '@flame';
+import { Button } from '@/components/ui/button';
+import { TextField } from '@/components/fields';
 import { getApiKey, setApiKey } from './api';
 
 /** Asks for an API key whenever the server answers 401. */
@@ -46,8 +47,8 @@ export function KeyDialog() {
         <div className="row gap end">
           {hadKey && (
             <Button
-              type="button"
               variant="ghost"
+              type="button"
               onClick={() => {
                 setApiKey(null);
                 location.reload();
@@ -56,7 +57,7 @@ export function KeyDialog() {
               Forget saved key
             </Button>
           )}
-          <Button type="submit" tone="accent" disabled={!value.trim().startsWith('gai_')}>
+          <Button type="submit" disabled={!value.trim().startsWith('gai_')}>
             Continue
           </Button>
         </div>

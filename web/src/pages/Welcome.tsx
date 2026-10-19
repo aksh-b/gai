@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button, toast } from '@flame';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { api, type SetupStatus } from '../api';
 import { IconCheck, IconChat, IconModel, IconSpark } from '../icons';
 import { modelLabel } from '../labels';
@@ -68,7 +69,8 @@ export function Welcome() {
           <p className="muted">
             Chats will use <strong>{modelLabel(ready)}</strong>. You can change this any time in Settings.
           </p>
-          <Button tone="accent" size="lg" leading={<IconChat />} onClick={finish} autoFocus>
+          <Button size="lg" onClick={finish} autoFocus>
+            <IconChat data-icon="inline-start" />
             Start chatting
           </Button>
         </div>
@@ -120,7 +122,6 @@ export function Welcome() {
               </p>
               <div>
                 <Button
-                  tone="accent"
                   onClick={async () => {
                     await use('mock/echo');
                   }}
