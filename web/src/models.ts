@@ -24,10 +24,29 @@ export interface ModelGroups {
   loaded: boolean;
 }
 
-const EMPTY: ModelGroups = { local: [], cloud: [], automatic: [], unavailable: [], demo: [], defaultModel: null, status: null, loaded: false };
+const EMPTY: ModelGroups = {
+  local: [],
+  cloud: [],
+  automatic: [],
+  unavailable: [],
+  demo: [],
+  defaultModel: null,
+  status: null,
+  loaded: false,
+};
 
 export function groupModels(catalog: CatalogEntry[], status: SetupStatus | null): ModelGroups {
-  const g: ModelGroups = { ...EMPTY, local: [], cloud: [], automatic: [], unavailable: [], demo: [], status, loaded: true, defaultModel: status?.default_model ?? null };
+  const g: ModelGroups = {
+    ...EMPTY,
+    local: [],
+    cloud: [],
+    automatic: [],
+    unavailable: [],
+    demo: [],
+    status,
+    loaded: true,
+    defaultModel: status?.default_model ?? null,
+  };
   const installed = new Set(status?.ollama.models ?? []);
   for (const m of catalog) {
     if (m.kind !== 'chat') continue;
@@ -66,6 +85,7 @@ export function modelOptions(g: ModelGroups, dev: boolean) {
     value: m.id,
     label: dev ? m.id : m.label,
     description: `${where}${m.tools ? '' : ' · chat only, no tools'}`,
+    group: where,
   });
   return [
     ...g.automatic.map((m) => opt(m, 'Automatic')),

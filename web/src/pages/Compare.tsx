@@ -1,11 +1,17 @@
 import { useEffect } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CodeBlock, CodeBlockContent, CodeBlockLine } from '@/components/ui/code-block';
+import { Item, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item';
+import { Separator } from '@/components/ui/separator';
 import { api, type Run } from '../api';
-import { Empty, ErrorNote, Json, StatusPill } from '../components';
+import { Details, EmptyState, ErrorNote, Json, Page, PageHeader, StatusPill } from '@/components/shared';
 import { IconBack } from '../icons';
 import { navigate } from '../router';
 import { blocksText, compactJson, duration, money, tokens, totalIn, useLoad } from '../util';
 import { lineDiff } from '../Versions';
+import { cn } from '@/lib/utils';
 import { forkOf, turns, type Turn } from './Fork';
 
 const terminal = ['completed', 'failed', 'cancelled', 'budget_exceeded'];
@@ -40,8 +46,8 @@ export function Compare({ a, b }: { a: string; b: string }) {
   const outB = outputText(right);
 
   return (
-    <div className="page">
-      <div className="row gap">
+    <Page wide>
+      <div className="flex gap-2">
         <Button variant="ghost" size="sm" onClick={() => navigate(`/activity/${a}`)}>
           <IconBack data-icon="inline-start" />
           Original run
@@ -51,86 +57,96 @@ export function Compare({ a, b }: { a: string; b: string }) {
         </Button>
       </div>
       <ErrorNote error={ra.error ?? rb.error} />
-      <header className="page-head">
-        <div>
-          <h1>Compare runs</h1>
-          {fork && fork.run_id === a && (
-            <p className="muted">
-              Forked at step {fork.from_step}: steps before it were replayed from the original, later steps ran live.
-            </p>
-          )}
-        </div>
-      </header>
+      <PageHeader
+        title="Compare runs"
+        subtitle={
+          fork && fork.run_id === a
+            ? `Forked at step ${fork.from_step}: steps before it were replayed from the original, later steps ran live.`
+            : undefined
+        }
+      />
       {fork && Object.keys(fork.overrides ?? {}).length > 0 && (
-        <section className="card">
-          <h3>Changes in the fork</h3>
-          <ul className="overrides">
-            {fork.overrides.model && (
-              <li>
-                Model <span className="mono">{fork.overrides.model}</span>
-              </li>
-            )}
-            {fork.overrides.agent_version && <li>Agent version v{fork.overrides.agent_version}</li>}
-            {fork.overrides.tools && <li>Tools: {fork.overrides.tools.length ? fork.overrides.tools.join(', ') : 'none'}</li>}
-            {fork.overrides.system_prompt !== undefined && <li>New system prompt</li>}
-            {(fork.overrides.step_edits ?? []).map((e) => (
-              <li key={e.step}>Edited the reply at step {e.step}</li>
-            ))}
-          </ul>
-        </section>
+        <Card>
+          <CardHeader>
+            <CardTitle>Changes in the fork</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex list-disc flex-col gap-1 pl-5">
+              {fork.overrides.model && (
+                <li>
+                  Model <code>{fork.overrides.model}</code>
+                </li>
+              )}
+              {fork.overrides.agent_version && <li>Agent version v{fork.overrides.agent_version}</li>}
+              {fork.overrides.tools && <li>Tools: {fork.overrides.tools.length ? fork.overrides.tools.join(', ') : 'none'}</li>}
+              {fork.overrides.system_prompt !== undefined && <li>New system prompt</li>}
+              {(fork.overrides.step_edits ?? []).map((e) => (
+                <li key={e.step}>Edited the reply at step {e.step}</li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="compare">
+      <div className="grid gap-4 md:grid-cols-2">
         <RunSummary run={left} title="Original" />
         <RunSummary run={right} title="Fork" />
       </div>
 
-      <section className="card flush">
-        <h3 className="pad" style={{ margin: 0 }}>
-          Steps
-        </h3>
-        {n === 0 && <Empty title="No model steps yet" />}
-        {Array.from({ length: n }, (_, i) => i + 1).map((step) => {
-          const x = ta.find((t) => t.step === step);
-          const y = tb.find((t) => t.step === step);
-          const same = x && y && turnKey(x) === turnKey(y);
-          return (
-            <div key={step} className="compare-step">
-              <div className="compare-step-head">
-                <span className="mono small">step {step}</span>
-                {y?.replayed ? (
-                  <span className="chip small">replayed</span>
-                ) : same ? (
-                  <span className="chip small">same</span>
-                ) : x && y ? (
-                  <span className="chip accent small">different</span>
-                ) : null}
+      <Card>
+        <CardHeader>
+          <CardTitle>Steps</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {n === 0 && <EmptyState title="No model steps yet" />}
+          {Array.from({ length: n }, (_, i) => i + 1).map((step) => {
+            const x = ta.find((t) => t.step === step);
+            const y = tb.find((t) => t.step === step);
+            const same = x && y && turnKey(x) === turnKey(y);
+            return (
+              <div key={step} className="flex flex-col gap-3">
+                {step > 1 && <Separator />}
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm">Step {step}</span>
+                  {y?.replayed ? (
+                    <Badge variant="outline">Replayed</Badge>
+                  ) : same ? (
+                    <Badge variant="outline">Same</Badge>
+                  ) : x && y ? (
+                    <Badge>Different</Badge>
+                  ) : null}
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <TurnView turn={x} />
+                  <TurnView turn={y} />
+                </div>
               </div>
-              <div className="compare">
-                <TurnView turn={x} />
-                <TurnView turn={y} />
-              </div>
-            </div>
-          );
-        })}
-      </section>
+            );
+          })}
+        </CardContent>
+      </Card>
 
-      <section className="card">
-        <h3>Final output</h3>
-        {outA === outB ? (
-          <p className="muted">{outA ? 'The same in both runs.' : 'Neither run has an output yet.'}</p>
-        ) : (
-          <div className="diff">
-            {lineDiff(outA, outB).map((l, i) => (
-              <div key={i} className="diff-line" data-kind={l.op}>
-                {l.op === 'add' ? '+ ' : l.op === 'del' ? '- ' : '  '}
-                {l.text}
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-    </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Final output</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {outA === outB ? (
+            <p className="text-muted-foreground">{outA ? 'The same in both runs.' : 'Neither run has an output yet.'}</p>
+          ) : (
+            <CodeBlock size="sm">
+              <CodeBlockContent wrap className="max-h-[32rem]">
+                {lineDiff(outA, outB).map((l, i) => (
+                  <CodeBlockLine key={i} variant={l.op === 'add' ? 'added' : l.op === 'del' ? 'removed' : 'default'}>
+                    {l.text || ' '}
+                  </CodeBlockLine>
+                ))}
+              </CodeBlockContent>
+            </CodeBlock>
+          )}
+        </CardContent>
+      </Card>
+    </Page>
   );
 }
 
@@ -147,66 +163,63 @@ function turnKey(t: Turn): string {
 }
 
 function RunSummary({ run, title }: { run: Run | undefined; title: string }) {
-  if (!run) return <section className="card" />;
+  if (!run) return <Card />;
   return (
-    <section className="card stack tight">
-      <div className="row between">
-        <h3 style={{ margin: 0 }}>{title}</h3>
-        <StatusPill status={run.status} />
-      </div>
-      <a
-        className="mono small"
-        href={`#/activity/${run.id}`}
-        onClick={(e) => {
-          e.preventDefault();
-          navigate(`/activity/${run.id}`);
-        }}
-      >
-        {run.id}
-      </a>
-      <div className="kv">
-        <span className="muted">Agent</span>
-        <span>
-          {run.agent}
-          {run.agent_version ? ` v${run.agent_version}` : ''}
-        </span>
-        <span className="muted">Model</span>
-        <span className="mono">{run.metadata.model}</span>
-        <span className="muted">Steps</span>
-        <span>{run.steps}</span>
-        <span className="muted">Tokens</span>
-        <span>
-          {tokens(totalIn(run.usage))} in / {tokens(run.usage.output_tokens)} out
-        </span>
-        <span className="muted">Cost</span>
-        <span>{money(run.cost)}</span>
-        <span className="muted">Duration</span>
-        <span>{duration(run.created_at, run.finished_at)}</span>
-      </div>
-    </section>
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>
+          <a
+            className="font-mono underline-offset-4 hover:underline"
+            href={`#/activity/${run.id}`}
+            onClick={(e) => {
+              e.preventDefault();
+              navigate(`/activity/${run.id}`);
+            }}
+          >
+            {run.id}
+          </a>
+        </CardDescription>
+        <CardAction>
+          <StatusPill status={run.status} />
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        <Details
+          items={[
+            ['Agent', `${run.agent}${run.agent_version ? ` v${run.agent_version}` : ''}`],
+            ['Model', <span className="font-mono">{run.metadata.model}</span>],
+            ['Steps', run.steps],
+            ['Tokens', `${tokens(totalIn(run.usage))} in / ${tokens(run.usage.output_tokens)} out`],
+            ['Cost', money(run.cost)],
+            ['Duration', duration(run.created_at, run.finished_at)],
+          ]}
+        />
+      </CardContent>
+    </Card>
   );
 }
 
 function TurnView({ turn }: { turn: Turn | undefined }) {
-  if (!turn) return <div className="turn muted small">—</div>;
+  if (!turn) return <div className="text-sm text-muted-foreground">—</div>;
   const text = blocksText(turn.content);
   return (
-    <div className="turn" data-failed={turn.failed || undefined}>
-      {turn.model && <div className="muted small mono">{turn.model}</div>}
-      {text && <div className="turn-text">{text}</div>}
+    <div className={cn('flex min-w-0 flex-col gap-2', turn.failed && 'text-muted-foreground')}>
+      {turn.model && <div className="font-mono text-xs text-muted-foreground">{turn.model}</div>}
+      {text && <p className="break-words whitespace-pre-wrap">{text}</p>}
       {turn.tools.map((c) => (
-        <div key={c.id} className="turn-tool">
-          <span className="mono small">
-            ⚙ {c.name} {compactJson(c.input, 80)}
-          </span>
-          {c.output !== undefined && (
-            <span className="small" data-error={c.error || undefined}>
-              → {compactJson(c.output, 160)}
-            </span>
-          )}
-        </div>
+        <Item key={c.id} variant="muted" size="xs">
+          <ItemContent className="min-w-0">
+            <ItemTitle className="font-mono break-all">
+              {c.name} {compactJson(c.input, 80)}
+            </ItemTitle>
+            {c.output !== undefined && (
+              <ItemDescription className={cn('break-all', c.error && 'text-destructive')}>→ {compactJson(c.output, 160)}</ItemDescription>
+            )}
+          </ItemContent>
+        </Item>
       ))}
-      {!text && !turn.tools.length && (turn.failed ? <span className="small">failed</span> : <Json value={turn.content} />)}
+      {!text && !turn.tools.length && (turn.failed ? <span className="text-sm">Failed</span> : <Json value={turn.content} />)}
     </div>
   );
 }

@@ -1,9 +1,27 @@
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { BrainIcon, GitForkIcon, HandIcon, LayersIcon, WorkflowIcon, WrenchIcon } from 'lucide-react';
+import { Bar, BarChart, XAxis, YAxis } from 'recharts';
 import { toast } from 'sonner';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart';
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Trace,
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceDescription,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
+} from '@/components/ui/trace';
 import { api, followRun, type EventEnvelope, type GraphNode, type Step } from '../api';
 import { Dag, type NodeStatus } from '../Dag';
-import { Disclosure, ErrorNote, Json, Markdown, Stat, StatusPill } from '../components';
+import { ErrorNote, Json, Markdown, Page, PageHeader, Stat, StatusPill } from '@/components/shared';
 import { IconBack, IconChat, IconStop } from '../icons';
 import { navigate } from '../router';
 import { blocksText, compactJson, duration, money, tokens, totalIn, useLoad } from '../util';
@@ -42,75 +60,86 @@ export function RunDetail({ id }: { id: string }) {
   const fork = r ? forkOf(r) : undefined;
   const canFork = !!r && !isWorkflow && !r.active && !!r.metadata.spec;
   return (
-    <div className="page">
-      <div className="row gap">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/activity')}>
-          <IconBack data-icon="inline-start" />
-          History
-        </Button>
-      </div>
+    <Page wide>
+      <Button variant="ghost" size="sm" className="w-fit" onClick={() => navigate('/activity')}>
+        <IconBack data-icon="inline-start" />
+        History
+      </Button>
       <ErrorNote error={run.error} />
       {r && (
         <>
-          <header className="page-head">
-            <div>
-              <h1 className="row gap">
+          <PageHeader
+            title={
+              <>
                 {r.agent}
-                {dev && r.agent_version && <span className="muted small">v{r.agent_version}</span>}
+                {dev && r.agent_version && <Badge variant="outline">v{r.agent_version}</Badge>}
                 <StatusPill status={r.status} />
-              </h1>
-              {dev && <p className="muted mono small">{r.id}</p>}
-            </div>
-            <div className="row gap">
-              <Button variant="outline" onClick={() => navigate(`/chat?session=${r.session_id}`)}>
-                <IconChat data-icon="inline-start" />
-                Open conversation
-              </Button>
-              {canFork && dev && (
-                <Button variant="outline" onClick={() => setForkFrom(Math.max(1, r.steps))}>
-                  Fork…
+              </>
+            }
+            subtitle={dev ? <span className="font-mono text-xs">{r.id}</span> : undefined}
+            actions={
+              <>
+                <Button variant="outline" onClick={() => navigate(`/chat?session=${r.session_id}`)}>
+                  <IconChat data-icon="inline-start" />
+                  Open conversation
                 </Button>
-              )}
-              {!r.active && ['running', 'queued', 'awaiting_approval'].includes(r.status) && (
-                <Button
-                  variant="secondary"
-                  onClick={() =>
-                    api
-                      .resume(r.id)
-                      .then(() => location.reload())
-                      .catch((e: Error) => toast.error(e.message))
-                  }
-                >
-                  Resume
-                </Button>
-              )}
-              {r.active && (
-                <Button
-                  variant="destructive"
-                  onClick={() => api.cancel(r.id).then(run.reload).catch((e: Error) => toast.error(e.message))}
-                >
-                  <IconStop data-icon="inline-start" />
-                  Stop
-                </Button>
-              )}
-            </div>
-          </header>
+                {canFork && dev && (
+                  <Button variant="outline" onClick={() => setForkFrom(Math.max(1, r.steps))}>
+                    <GitForkIcon data-icon="inline-start" />
+                    Fork…
+                  </Button>
+                )}
+                {!r.active && ['running', 'queued', 'awaiting_approval'].includes(r.status) && (
+                  <Button
+                    variant="secondary"
+                    onClick={() =>
+                      api
+                        .resume(r.id)
+                        .then(() => location.reload())
+                        .catch((e: Error) => toast.error(e.message))
+                    }
+                  >
+                    Resume
+                  </Button>
+                )}
+                {r.active && (
+                  <Button
+                    variant="destructive"
+                    onClick={() =>
+                      api
+                        .cancel(r.id)
+                        .then(run.reload)
+                        .catch((e: Error) => toast.error(e.message))
+                    }
+                  >
+                    <IconStop data-icon="inline-start" />
+                    Stop
+                  </Button>
+                )}
+              </>
+            }
+          />
 
           {fork && (
-            <p className="note fork-note">
-              Forked from{' '}
-              <a href={`#/activity/${fork.run_id}`} className="mono">
-                {fork.run_id}
-              </a>{' '}
-              at step {fork.from_step}: earlier steps were replayed from it.{' '}
-              <a href={`#/activity/${fork.run_id}/compare/${r.id}`}>Compare side by side</a>
-            </p>
+            <Alert>
+              <GitForkIcon />
+              <AlertDescription>
+                <p>
+                  Forked from{' '}
+                  <a href={`#/activity/${fork.run_id}`} className="font-mono">
+                    {fork.run_id}
+                  </a>{' '}
+                  at step {fork.from_step}: earlier steps were replayed from it.{' '}
+                  <a href={`#/activity/${fork.run_id}/compare/${r.id}`}>Compare side by side</a>
+                </p>
+              </AlertDescription>
+            </Alert>
           )}
 
-          <div className="stats">
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
             <Stat
               label={isWorkflow ? 'Kind' : 'Model'}
-              value={isWorkflow ? 'workflow' : dev ? <span className="mono">{r.metadata.model}</span> : modelLabel(r.metadata.model)}
+              value={isWorkflow ? 'workflow' : dev ? <span className="font-mono">{r.metadata.model}</span> : modelLabel(r.metadata.model)}
             />
             <Stat label="Steps" value={r.steps} />
             {dev && <Stat label="Input tokens" value={tokens(totalIn(r.usage))} />}
@@ -119,23 +148,39 @@ export function RunDetail({ id }: { id: string }) {
             <Stat label="Duration" value={duration(r.created_at, r.finished_at)} />
           </div>
 
-          <div className="grid-2">
-            <section className="card">
-              <h3>Asked</h3>
-              {Array.isArray(r.input) ? <Markdown text={blocksText(r.input)} /> : <Json value={r.input} />}
-              <h3>Answer</h3>
-              {r.error && <div className="error-note">{r.error}</div>}
-              {typeof r.output === 'string' ? <Markdown text={r.output} /> : r.output ? <Json value={r.output} /> : <p className="muted">—</p>}
-            </section>
-            <section className="card">
-              <h3>What happened</h3>
-              <Waterfall
-                steps={steps.data ?? []}
-                start={r.created_at}
-                end={r.finished_at}
-                onFork={canFork ? (n) => setForkFrom(n) : undefined}
-              />
-            </section>
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+            <Card>
+              <CardHeader>
+                <CardTitle>Asked</CardTitle>
+              </CardHeader>
+              <CardContent>{Array.isArray(r.input) ? <Markdown text={blocksText(r.input)} /> : <Json value={r.input} />}</CardContent>
+              <CardHeader>
+                <CardTitle>Answer</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                <ErrorNote error={r.error ?? undefined} />
+                {typeof r.output === 'string' ? (
+                  <Markdown text={r.output} />
+                ) : r.output ? (
+                  <Json value={r.output} />
+                ) : (
+                  <p className="text-muted-foreground">—</p>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>What happened</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Waterfall
+                  steps={steps.data ?? []}
+                  start={r.created_at}
+                  end={r.finished_at}
+                  onFork={canFork ? (n) => setForkFrom(n) : undefined}
+                />
+              </CardContent>
+            </Card>
           </div>
 
           {isWorkflow && <WorkflowGraph spec={r.metadata.workflow} steps={steps.data ?? []} events={events} />}
@@ -144,94 +189,130 @@ export function RunDetail({ id }: { id: string }) {
           {r && <ForkDialog run={r} steps={steps.data ?? []} from={forkFrom} onClose={() => setForkFrom(null)} />}
 
           {dev && (
-            <section className="card">
-              <h3>Events</h3>
-              <ol className="events">
-                {events.map((e) => (
-                  <EventRow key={e.seq} e={e} />
-                ))}
-              </ol>
-            </section>
+            <Card>
+              <CardHeader>
+                <CardTitle>Events</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-24">Time</TableHead>
+                      <TableHead className="w-44">Event</TableHead>
+                      <TableHead>Detail</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {events.map((e) => (
+                      <EventRow key={e.seq} e={e} />
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           )}
         </>
       )}
-    </div>
+    </Page>
   );
 }
 
-function Waterfall({
-  steps,
-  start,
-  end,
-  onFork,
-}: {
-  steps: Step[];
-  start: string;
-  end: string | null;
-  onFork?: (step: number) => void;
-}) {
-  if (!steps.length) return <p className="muted">No steps yet.</p>;
+const KIND_ICON: Record<string, typeof BrainIcon> = {
+  model: BrainIcon,
+  tool: WrenchIcon,
+  approval: HandIcon,
+  node: WorkflowIcon,
+  compaction: LayersIcon,
+};
+
+const TIMELINE = { time: { label: 'Time', color: 'var(--chart-2)' } } satisfies ChartConfig;
+
+/** Each step as a trace line, with a timeline of when each ran. */
+function Waterfall({ steps, start, end, onFork }: { steps: Step[]; start: string; end: string | null; onFork?: (step: number) => void }) {
+  if (!steps.length) return <p className="text-muted-foreground">No steps yet.</p>;
   const t0 = new Date(start).getTime();
-  const t1 = Math.max(
-    end ? new Date(end).getTime() : Date.now(),
-    ...steps.map((s) => (s.finished_at ? new Date(s.finished_at).getTime() : Date.now())),
-  );
-  const span = Math.max(1, t1 - t0);
+  const at = (t?: string | null) => (t ? new Date(t).getTime() : Date.now());
+  const timeline = steps.map((s) => ({
+    label: `${s.kind} ${s.name ?? ''}`.trim(),
+    // [start, end] in seconds from the start of the run: a floating bar.
+    time: [(at(s.started_at) - t0) / 1000, (at(s.finished_at) - t0) / 1000],
+  }));
+  const span = Math.max(0.001, (Math.max(at(end), ...steps.map((s) => at(s.finished_at))) - t0) / 1000);
   return (
-    <div className="waterfall">
-      {steps.map((s) => {
-        const a = new Date(s.started_at).getTime() - t0;
-        const b = (s.finished_at ? new Date(s.finished_at).getTime() : Date.now()) - t0;
-        return (
-          <Disclosure
-            key={s.seq}
-            summary={
-              <span className="wf-row">
-                <span className="wf-label">
-                  <span className="wf-kind" data-kind={s.kind}>
+    <div className="flex flex-col gap-4">
+      <ChartContainer config={TIMELINE} className="w-full" style={{ height: Math.max(80, steps.length * 22 + 30) }}>
+        <BarChart data={timeline} layout="vertical" margin={{ left: 0, right: 8 }} barCategoryGap={3}>
+          <XAxis
+            type="number"
+            domain={[0, span]}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={(v: number) => `${v.toFixed(v < 10 ? 1 : 0)}s`}
+          />
+          <YAxis type="category" dataKey="label" hide />
+          <ChartTooltip
+            cursor={false}
+            content={({ active, payload }) => {
+              const p = payload?.[0]?.payload as { label: string; time: [number, number] } | undefined;
+              if (!active || !p) return null;
+              return (
+                <div className="rounded-lg border bg-background px-2.5 py-1.5 text-xs shadow-xl">
+                  {p.label}: {(p.time[1] - p.time[0]).toFixed(2)}s
+                </div>
+              );
+            }}
+          />
+          <Bar dataKey="time" fill="var(--color-time)" radius={3} minPointSize={3} />
+        </BarChart>
+      </ChartContainer>
+      <Trace>
+        {steps.map((s) => {
+          const Icon = KIND_ICON[s.kind] ?? BrainIcon;
+          const n = modelStep(s);
+          return (
+            <TraceCollapsible key={s.seq}>
+              <TraceCollapsibleTrigger>
+                <TraceLine status={s.status === 'started' ? 'running' : s.status === 'failed' ? 'error' : undefined}>
+                  <TraceIcon>
+                    <Icon />
+                  </TraceIcon>
+                  <TraceTitle className="font-mono">
                     {s.kind}
-                  </span>
-                  {modelStep(s) !== undefined && <span className="muted small">#{modelStep(s)}</span>}
-                  {isReplayed(s) && <span className="chip small">replayed</span>}
-                  <span className="mono small">{s.name}</span>
-                </span>
-                <span className="wf-track">
-                  <span
-                    className="wf-bar"
-                    data-kind={s.kind}
-                    data-status={s.status}
-                    style={{ left: `${(a / span) * 100}%`, width: `max(3px, ${((b - a) / span) * 100}%)` }}
-                  />
-                </span>
-                <span className="muted small wf-time">{duration(s.started_at, s.finished_at)}</span>
-              </span>
-            }
-          >
-            {onFork && modelStep(s) !== undefined && (
-              <div className="row gap">
-                <Button variant="secondary" size="sm" onClick={() => onFork(modelStep(s)!)}>
-                  Fork from step {modelStep(s)}
-                </Button>
-                <span className="muted small">Replays the steps before it and runs this one live again.</span>
-              </div>
-            )}
-            <div className="tool-io">
-              {s.input !== null && (
-                <div>
-                  <div className="label">Input</div>
-                  <Json value={s.input} />
-                </div>
-              )}
-              {s.output !== null && (
-                <div>
-                  <div className="label">Output{s.usage ? ` · ${tokens(totalIn(s.usage))} in / ${tokens(s.usage.output_tokens)} out` : ''}</div>
-                  <Json value={s.output} />
-                </div>
-              )}
-            </div>
-          </Disclosure>
-        );
-      })}
+                    {n !== undefined ? ` #${n}` : ''} {s.name}
+                  </TraceTitle>
+                  {isReplayed(s) && <TraceDescription>replayed</TraceDescription>}
+                  <TraceDescription>{duration(s.started_at, s.finished_at)}</TraceDescription>
+                </TraceLine>
+              </TraceCollapsibleTrigger>
+              <TraceCollapsibleContent className="flex flex-col gap-3">
+                {onFork && n !== undefined && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button variant="secondary" size="sm" onClick={() => onFork(n)}>
+                      <GitForkIcon data-icon="inline-start" />
+                      Fork from step {n}
+                    </Button>
+                    <span className="text-sm text-muted-foreground">Replays the steps before it and runs this one live again.</span>
+                  </div>
+                )}
+                {s.input !== null && (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-muted-foreground">Input</span>
+                    <Json value={s.input} />
+                  </div>
+                )}
+                {s.output !== null && (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Output{s.usage ? ` · ${tokens(totalIn(s.usage))} in / ${tokens(s.usage.output_tokens)} out` : ''}
+                    </span>
+                    <Json value={s.output} />
+                  </div>
+                )}
+              </TraceCollapsibleContent>
+            </TraceCollapsible>
+          );
+        })}
+      </Trace>
     </div>
   );
 }
@@ -251,35 +332,38 @@ function Forks({ id, refresh }: { id: string; refresh: string }) {
   const list = forks.data ?? [];
   if (!list.length) return null;
   return (
-    <section className="card flush">
-      <h3 className="pad" style={{ margin: 0 }}>
-        Forks
-      </h3>
-      {list.map((f) => {
-        const info = forkOf(f);
-        return (
-          <a
-            key={f.id}
-            className="run-row"
-            href={`#/activity/${id}/compare/${f.id}`}
-            onClick={(e) => {
-              e.preventDefault();
-              navigate(`/activity/${id}/compare/${f.id}`);
-            }}
-          >
-            <StatusPill status={f.status} />
-            <span>
-              from step {info?.from_step}
-              {info?.overrides.model && <span className="muted small mono"> · {info.overrides.model}</span>}
-              {info?.overrides.agent_version && <span className="muted small"> · v{info.overrides.agent_version}</span>}
-            </span>
-            <span className="muted small">{f.steps} steps</span>
-            <span className="muted small num">{money(f.cost)}</span>
-            <span className="muted small">compare →</span>
-          </a>
-        );
-      })}
-    </section>
+    <Card>
+      <CardHeader>
+        <CardTitle>Forks</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ItemGroup className="gap-1">
+          {list.map((f) => {
+            const info = forkOf(f);
+            return (
+              <Item key={f.id} asChild size="xs">
+                <a href={`#/activity/${id}/compare/${f.id}`}>
+                  <StatusPill status={f.status} />
+                  <ItemContent>
+                    <ItemTitle>From step {info?.from_step}</ItemTitle>
+                    {(info?.overrides.model || info?.overrides.agent_version) && (
+                      <ItemDescription className="font-mono">
+                        {[info?.overrides.model, info?.overrides.agent_version && `v${info.overrides.agent_version}`]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </ItemDescription>
+                    )}
+                  </ItemContent>
+                  <span className="text-sm text-muted-foreground">
+                    {f.steps} steps · {money(f.cost)} · compare →
+                  </span>
+                </a>
+              </Item>
+            );
+          })}
+        </ItemGroup>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -333,11 +417,11 @@ function EventRow({ e }: { e: EventEnvelope }) {
       break;
   }
   return (
-    <li className="event" data-type={e.type}>
-      <span className="mono small muted">{new Date(e.ts).toLocaleTimeString()}</span>
-      <span className="event-type">{e.type.replaceAll('_', ' ')}</span>
-      <span className="event-detail">{detail}</span>
-    </li>
+    <TableRow>
+      <TableCell className="font-mono text-xs text-muted-foreground">{new Date(e.ts).toLocaleTimeString()}</TableCell>
+      <TableCell className="font-medium capitalize">{e.type.replaceAll('_', ' ')}</TableCell>
+      <TableCell className="font-mono text-xs break-all whitespace-normal text-muted-foreground">{detail}</TableCell>
+    </TableRow>
   );
 }
 
@@ -368,10 +452,14 @@ function WorkflowGraph({ spec, steps, events }: { spec: unknown; steps: Step[]; 
     if (status[node] === 'running') status = { ...status, [node]: 'waiting' };
   }
   return (
-    <section className="card">
-      <h3>Graph</h3>
-      <Dag nodes={graph} status={status} />
-    </section>
+    <Card>
+      <CardHeader>
+        <CardTitle>Graph</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Dag nodes={graph} status={status} />
+      </CardContent>
+    </Card>
   );
 }
 
@@ -381,30 +469,30 @@ function ChildRuns({ id, refresh }: { id: string; refresh: number }) {
   const kids = trace.data?.children ?? [];
   if (!kids.length) return null;
   return (
-    <section className="card flush">
-      <h3 className="pad" style={{ margin: 0 }}>
-        Child runs
-      </h3>
-      {kids.map((c) => (
-        <a
-          key={c.run.id}
-          className="run-row"
-          href={`#/activity/${c.run.id}`}
-          onClick={(e) => {
-            e.preventDefault();
-            navigate(`/activity/${c.run.id}`);
-          }}
-        >
-          <StatusPill status={c.run.status} />
-          <span>
-            <strong>{c.run.agent}</strong>{' '}
-            <span className="muted small mono">{String((c.run.metadata as { child_key?: string } | null)?.child_key ?? '')}</span>
-          </span>
-          <span className="muted small">{c.run.steps} steps</span>
-          <span className="muted small num">{money(c.run.cost)}</span>
-          <span className="muted small">{duration(c.run.created_at, c.run.finished_at)}</span>
-        </a>
-      ))}
-    </section>
+    <Card>
+      <CardHeader>
+        <CardTitle>Child runs</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ItemGroup className="gap-1">
+          {kids.map((c) => (
+            <Item key={c.run.id} asChild size="xs">
+              <a href={`#/activity/${c.run.id}`}>
+                <StatusPill status={c.run.status} />
+                <ItemContent>
+                  <ItemTitle>{c.run.agent}</ItemTitle>
+                  <ItemDescription className="font-mono">
+                    {String((c.run.metadata as { child_key?: string } | null)?.child_key ?? '')}
+                  </ItemDescription>
+                </ItemContent>
+                <span className="text-sm text-muted-foreground">
+                  {c.run.steps} steps · {money(c.run.cost)} · {duration(c.run.created_at, c.run.finished_at)}
+                </span>
+              </a>
+            </Item>
+          ))}
+        </ItemGroup>
+      </CardContent>
+    </Card>
   );
 }

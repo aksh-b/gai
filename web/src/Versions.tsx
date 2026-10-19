@@ -1,9 +1,25 @@
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { SelectField } from '@/components/fields';
+import { XIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { SelectField } from '@/components/fields';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { CodeBlock, CodeBlockContent, CodeBlockHeader, CodeBlockLine, CodeBlockTitle } from '@/components/ui/code-block';
+import { Input } from '@/components/ui/input';
+import { Item, ItemActions, ItemContent, ItemDescription, ItemFooter, ItemGroup, ItemTitle } from '@/components/ui/item';
+import { Label } from '@/components/ui/label';
 import { api, type VersionDiff } from './api';
-import { ErrorNote } from './components';
+import { ErrorNote } from '@/components/shared';
 import { ago } from './util';
 
 interface VersionRow {
@@ -46,6 +62,7 @@ export function VersionHistory({
   const [error, setError] = useState<string>();
   const [labelling, setLabelling] = useState<number | null>(null);
   const [labelName, setLabelName] = useState('');
+  const [confirming, setConfirming] = useState<number | null>(null);
 
   useEffect(() => {
     setFrom(Math.max(1, latest - 1));
@@ -65,7 +82,7 @@ export function VersionHistory({
   }
 
   async function rollback(v: number) {
-    if (!confirm(`Save v${v} of ${name} again as the newest version?`)) return;
+    setConfirming(null);
     try {
       const r = await ep.rollback(name, v);
       toast.success(r.version === latest ? `v${v} is already the latest` : `Rolled back: v${r.version} = v${v}`);
@@ -91,107 +108,160 @@ export function VersionHistory({
   for (const [l, v] of Object.entries(labels)) byVersion.set(v, [...(byVersion.get(v) ?? []), l]);
   const options = versions.map((v) => ({ value: String(v.version), label: `v${v.version}` }));
 
-  if (!versions.length) return <p className="muted">No stored versions.</p>;
+  if (!versions.length) return <p className="text-muted-foreground">No stored versions.</p>;
   return (
-    <div className="stack">
-      <ol className="versions">
+    <div className="flex flex-col gap-4">
+      <ItemGroup className="gap-2">
         {versions.map((v) => (
-          <li key={v.version} className="version-row">
-            <div className="row gap wrap">
-              {onView ? (
-                <button type="button" className="link" onClick={() => onView(v.version)}>
-                  v{v.version}
-                </button>
-              ) : (
-                <strong>v{v.version}</strong>
-              )}
-              {v.version === latest && <span className="chip small">latest</span>}
-              {(byVersion.get(v.version) ?? []).map((l) => (
-                <span key={l} className="chip accent small label-chip">
-                  {l}
-                  <button type="button" aria-label={`Remove label ${l}`} onClick={() => label(l, null)}>
-                    ×
-                  </button>
-                </span>
-              ))}
-              <span className="muted small">{ago(v.created_at)}</span>
-              <span className="small">{v.note}</span>
-            </div>
-            <div className="row gap version-actions">
+          <Item key={v.version} variant="outline" size="sm">
+            <ItemContent>
+              <ItemTitle className="flex-wrap">
+                {onView ? (
+                  <Button variant="link" size="sm" className="h-auto px-0" onClick={() => onView(v.version)}>
+                    v{v.version}
+                  </Button>
+                ) : (
+                  `v${v.version}`
+                )}
+                {v.version === latest && <Badge variant="outline">Latest</Badge>}
+                {(byVersion.get(v.version) ?? []).map((l) => (
+                  <Badge key={l} variant="secondary">
+                    {l}
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="-mr-1.5 size-4"
+                      aria-label={`Remove label ${l}`}
+                      onClick={() => label(l, null)}
+                    >
+                      <XIcon />
+                    </Button>
+                  </Badge>
+                ))}
+              </ItemTitle>
+              <ItemDescription>
+                {ago(v.created_at)}
+                {v.note && ` · ${v.note}`}
+              </ItemDescription>
+            </ItemContent>
+            <ItemActions>
               {v.version > 1 && (
-                <button type="button" className="link small" onClick={() => compare(v.version - 1, v.version)}>
+                <Button variant="ghost" size="xs" onClick={() => compare(v.version - 1, v.version)}>
                   Changes
-                </button>
-              )}
-              <button type="button" className="link small" onClick={() => setLabelling(labelling === v.version ? null : v.version)}>
-                Label
-              </button>
-              {v.version !== latest && (
-                <button type="button" className="link small" onClick={() => rollback(v.version)}>
-                  Roll back
-                </button>
-              )}
-            </div>
-            {labelling === v.version && (
-              <form
-                className="row gap"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (labelName.trim()) label(labelName.trim(), v.version);
-                }}
-              >
-                <input
-                  className="plain-input"
-                  placeholder="prod, staging…"
-                  aria-label="Label name"
-                  value={labelName}
-                  onChange={(e) => setLabelName(e.target.value)}
-                  autoFocus
-                />
-                <Button size="sm" type="submit" disabled={!/^[A-Za-z0-9_.-]+$/.test(labelName.trim())}>
-                  Point at v{v.version}
                 </Button>
-              </form>
+              )}
+              <Button variant="ghost" size="xs" onClick={() => setLabelling(labelling === v.version ? null : v.version)}>
+                Label
+              </Button>
+              {v.version !== latest && (
+                <Button variant="ghost" size="xs" onClick={() => setConfirming(v.version)}>
+                  Roll back
+                </Button>
+              )}
+            </ItemActions>
+            {labelling === v.version && (
+              <ItemFooter>
+                <form
+                  className="flex w-full gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (labelName.trim()) label(labelName.trim(), v.version);
+                  }}
+                >
+                  <Input
+                    placeholder="prod, staging…"
+                    aria-label="Label name"
+                    value={labelName}
+                    onChange={(e) => setLabelName(e.target.value)}
+                    autoFocus
+                  />
+                  <Button size="sm" type="submit" disabled={!/^[A-Za-z0-9_.-]+$/.test(labelName.trim())}>
+                    Point at v{v.version}
+                  </Button>
+                </form>
+              </ItemFooter>
             )}
-          </li>
+          </Item>
         ))}
-      </ol>
+      </ItemGroup>
 
       {versions.length > 1 && (
-        <div className="stack">
-          <div className="row gap wrap compare-row">
-            <span className="label">Compare</span>
-            <SelectField aria-label="Older version" options={options} value={String(from)} onValueChange={(v) => setFrom(Number(v))} />
-            <span className="muted">→</span>
-            <SelectField aria-label="Newer version" options={options} value={String(to)} onValueChange={(v) => setTo(Number(v))} />
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Label>Compare</Label>
+            <SelectField
+              aria-label="Older version"
+              className="w-24"
+              options={options}
+              value={String(from)}
+              onValueChange={(v) => setFrom(Number(v))}
+            />
+            <span className="text-muted-foreground">→</span>
+            <SelectField
+              aria-label="Newer version"
+              className="w-24"
+              options={options}
+              value={String(to)}
+              onValueChange={(v) => setTo(Number(v))}
+            />
             <Button variant="outline" size="sm" onClick={() => compare(from, to)}>
-              Diff
+              Show changes
             </Button>
           </div>
           <ErrorNote error={error} />
           {diff && <DiffView diff={diff.diff} title={`v${diff.from} → v${diff.to}`} />}
         </div>
       )}
+
+      <AlertDialog open={confirming !== null} onOpenChange={(o) => !o && setConfirming(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Roll back to v{confirming}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              v{confirming} of {name} is saved again as the newest version. Nothing is deleted: the current version stays in the history.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => confirming !== null && rollback(confirming)}>Roll back</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
 
 /** A unified diff, coloured by line. */
 export function DiffView({ diff, title }: { diff: string; title?: string }) {
-  if (!diff) return <p className="muted">{title ? `${title}: ` : ''}no differences.</p>;
+  if (!diff) return <p className="text-muted-foreground">{title ? `${title}: ` : ''}no differences.</p>;
   const lines = diff.split('\n').filter((l, i, all) => !(i === all.length - 1 && l === ''));
   return (
-    <div className="diff" role="region" aria-label={title ?? 'Diff'}>
-      {title && <div className="diff-title">{title}</div>}
-      {lines.map((l, i) => {
-        const kind = l.startsWith('+++') || l.startsWith('---') ? 'file' : l.startsWith('@@') ? 'hunk' : l[0] === '+' ? 'add' : l[0] === '-' ? 'del' : 'same';
-        return (
-          <div key={i} className="diff-line" data-kind={kind}>
-            {l || ' '}
-          </div>
-        );
-      })}
-    </div>
+    <CodeBlock size="sm" aria-label={title ?? 'Changes'}>
+      {title && (
+        <CodeBlockHeader>
+          <CodeBlockTitle>{title}</CodeBlockTitle>
+        </CodeBlockHeader>
+      )}
+      <CodeBlockContent wrap className="max-h-[32rem]">
+        {lines.map((l, i) => {
+          const file = l.startsWith('+++') || l.startsWith('---');
+          const variant = file
+            ? 'default'
+            : l.startsWith('@@')
+              ? 'highlighted'
+              : l[0] === '+'
+                ? 'added'
+                : l[0] === '-'
+                  ? 'removed'
+                  : 'default';
+          return (
+            <CodeBlockLine key={i} variant={variant}>
+              {(file || variant === 'added' || variant === 'removed' ? l.slice(1) : l) || ' '}
+            </CodeBlockLine>
+          );
+        })}
+      </CodeBlockContent>
+    </CodeBlock>
   );
 }
 

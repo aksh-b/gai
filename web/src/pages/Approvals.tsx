@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
+import { CircleCheckIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { EmptyState, ErrorNote, Page, PageHeader } from '@/components/shared';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field, FieldLabel } from '@/components/ui/field';
+import { Spinner } from '@/components/ui/spinner';
+import { Textarea } from '@/components/ui/textarea';
 import { api, type PendingApproval } from '../api';
-import { Empty, ErrorNote, PageHeader } from '../components';
+import { IconCheck, IconX } from '../icons';
 import { toolSentence } from '../labels';
+import { useLoad } from '../util';
 
 function safeJson(t: string): unknown {
   try {
@@ -13,8 +20,6 @@ function safeJson(t: string): unknown {
     return {};
   }
 }
-import { IconCheck, IconX } from '../icons';
-import { useLoad } from '../util';
 
 /** Every tool call waiting for a human, across all runs. */
 export function Approvals() {
@@ -26,19 +31,23 @@ export function Approvals() {
   }, [reload]);
 
   return (
-    <div className="page">
+    <Page>
       <PageHeader
         title="Needs your OK"
         subtitle="Things your assistants want to do but asked about first. They wait here, even if the server restarts."
       />
       <ErrorNote error={error} />
-      {data && data.length === 0 && <Empty title="Nothing waiting">When an assistant asks before acting, the question shows up here and in the chat.</Empty>}
-      <div className="approval-list">
+      {data && data.length === 0 && (
+        <EmptyState title="Nothing waiting" icon={<CircleCheckIcon />}>
+          When an assistant asks before acting, the question shows up here and in the chat.
+        </EmptyState>
+      )}
+      <div className="flex flex-col gap-3">
         {data?.map((p) => (
           <ApprovalCard key={`${p.run_id}/${p.call_id}`} p={p} onDone={reload} />
         ))}
       </div>
-    </div>
+    </Page>
   );
 }
 
@@ -81,15 +90,15 @@ function ApprovalCard({ p, onDone }: { p: PendingApproval; onDone: () => void })
   }
 
   return (
-    <section className="card approval-card">
-      <div className="row between">
-        <div>
-          <strong title={p.tool}>{toolSentence(p.tool, safeJson(text))}</strong>
-          <div className="muted small">
-            <a href={`#/activity/${p.run_id}`}>See what led to this</a>
-          </div>
-        </div>
-        <div className="row gap">
+    <Card>
+      <CardHeader>
+        <CardTitle title={p.tool}>{toolSentence(p.tool, safeJson(text))}</CardTitle>
+        <CardDescription>
+          <a href={`#/activity/${p.run_id}`} className="underline underline-offset-4">
+            See what led to this
+          </a>
+        </CardDescription>
+        <CardAction className="flex gap-2">
           <Button onClick={approve} disabled={busy === 'approve'}>
             {busy === 'approve' ? <Spinner data-icon="inline-start" /> : <IconCheck data-icon="inline-start" />}
             {edited ? 'Allow with my changes' : 'Allow'}
@@ -98,18 +107,23 @@ function ApprovalCard({ p, onDone }: { p: PendingApproval; onDone: () => void })
             {busy === 'decline' ? <Spinner data-icon="inline-start" /> : <IconX data-icon="inline-start" />}
             Don't allow
           </Button>
-        </div>
-      </div>
-      <label className="label" htmlFor={`in-${p.call_id}`}>
-        Details (you can change them) {edited && <span className="chip accent small">changed</span>}
-      </label>
-      <textarea
-        id={`in-${p.call_id}`}
-        className="code-editor small-editor"
-        spellCheck={false}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-      />
-    </section>
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        <Field>
+          <FieldLabel htmlFor={`in-${p.call_id}`}>
+            Details (you can change them)
+            {edited && <Badge variant="secondary">Changed</Badge>}
+          </FieldLabel>
+          <Textarea
+            id={`in-${p.call_id}`}
+            className="max-h-64 min-h-24 font-mono"
+            spellCheck={false}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        </Field>
+      </CardContent>
+    </Card>
   );
 }

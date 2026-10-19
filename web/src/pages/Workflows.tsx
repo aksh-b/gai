@@ -1,11 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
-import { TabBar, TextField } from '@/components/fields';
+import { HandIcon, HistoryIcon, InfoIcon, WorkflowIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { TabBar, TextField } from '@/components/fields';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { FieldGroup } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Item, ItemContent, ItemDescription, ItemFooter, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item';
+import { Spinner } from '@/components/ui/spinner';
+import { Textarea } from '@/components/ui/textarea';
 import { parse, stringify } from 'yaml';
 import { api, followRun, type GraphNode, type Template, type WorkflowSpec, type WorkflowView } from '../api';
-import { Empty, ErrorNote, Json, PageHeader, StatusPill } from '../components';
+import { ConfirmAction, EmptyState, ErrorNote, Json, LinkItem, Page, PageHeader, StatusPill } from '@/components/shared';
 import { Dag, statusFromEvent, type NodeStatus } from '../Dag';
 import { IconPlus, IconTrash } from '../icons';
 import { navigate } from '../router';
@@ -38,13 +46,13 @@ export function Workflows({ selected }: { selected?: string }) {
   }, [list.data]);
 
   return (
-    <div className="page">
+    <Page wide>
       <PageHeader
         title="Workflows"
         subtitle={
           <>
-            Several steps in a row: assistants, tools and your OK. Steps run as soon as what they need is ready, and a workflow
-            picks up where it stopped if the server restarts.
+            Several steps in a row: assistants, tools and your OK. Steps run as soon as what they need is ready, and a workflow picks up
+            where it stopped if the server restarts.
           </>
         }
         actions={
@@ -55,40 +63,43 @@ export function Workflows({ selected }: { selected?: string }) {
         }
       />
       <ErrorNote error={list.error} />
-      <div className="agents-layout">
-        <div className="agent-list">
+      <div className="grid items-start gap-4 lg:grid-cols-[19rem_minmax(0,1fr)]">
+        <ItemGroup className="gap-2">
           {list.data?.map((w) => (
-            <a
+            <LinkItem
               key={w.name}
               href={`#/automations/${encodeURIComponent(w.name)}`}
-              className="agent-card"
-              aria-current={current === w.name ? 'page' : undefined}
-              onClick={(e) => {
-                e.preventDefault();
-                setCreating(false);
-                navigate(`/automations/${encodeURIComponent(w.name)}`);
-              }}
+              active={current === w.name}
+              onClick={() => setCreating(false)}
+              title={
+                <>
+                  <span className="truncate">{w.name}</span>
+                  {dev && (
+                    <Badge variant="outline" className="ml-auto">
+                      {w.source === 'stored' ? `v${w.latest_version}` : 'file'}
+                    </Badge>
+                  )}
+                </>
+              }
             >
-              <div className="row between">
-                <strong>{w.name}</strong>
-                {dev && <span className="chip small">{w.source === 'stored' ? `v${w.latest_version}` : 'file'}</span>}
-              </div>
-              {w.description && <span className="muted small">{w.description}</span>}
+              {w.description && <ItemDescription>{w.description}</ItemDescription>}
               {dev && Object.keys(w.labels).length > 0 && (
-                <div className="row gap wrap">
+                <div className="flex flex-wrap gap-1 pt-1">
                   {Object.entries(w.labels).map(([l, v]) => (
-                    <span key={l} className="chip accent small">
+                    <Badge key={l} variant="outline">
                       {l}=v{v}
-                    </span>
+                    </Badge>
                   ))}
                 </div>
               )}
-            </a>
+            </LinkItem>
           ))}
           {list.data?.length === 0 && !creating && (
-            <Empty title="No workflows yet">Start from a template, or make your own.</Empty>
+            <EmptyState title="No workflows yet" icon={<WorkflowIcon />}>
+              Start from a template, or make your own.
+            </EmptyState>
           )}
-        </div>
+        </ItemGroup>
         {creating === 'pick' ? (
           <WorkflowTemplates
             onBlank={() => setCreating('blank')}
@@ -117,7 +128,7 @@ export function Workflows({ selected }: { selected?: string }) {
           />
         ) : null}
       </div>
-    </div>
+    </Page>
   );
 }
 
@@ -138,28 +149,49 @@ function WorkflowTemplates({ onBlank, onInstalled }: { onBlank: () => void; onIn
     }
   }
   return (
-    <section className="card stack">
-      <div>
-        <h3>New workflow</h3>
-        <p className="muted small">Start from a template, or build one step by step.</p>
-      </div>
-      <ErrorNote error={templates.error} />
-      <div className="template-grid">
-        {(templates.data ?? [])
-          .filter((t) => t.kind === 'workflow')
-          .map((t) => (
-            <button key={t.id} type="button" className="template" onClick={() => install(t)} disabled={busy !== null}>
-              <strong>{t.title}</strong>
-              <span className="muted small">{t.description}</span>
-              {t.installed ? <span className="chip small">already added</span> : busy === t.id && <span className="chip small">adding…</span>}
+    <Card>
+      <CardHeader>
+        <CardTitle>New workflow</CardTitle>
+        <CardDescription>Start from a template, or build one step by step.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <ErrorNote error={templates.error} />
+        <ItemGroup className="grid gap-2 sm:grid-cols-2">
+          {(templates.data ?? [])
+            .filter((t) => t.kind === 'workflow')
+            .map((t) => (
+              <Item key={t.id} asChild variant="outline">
+                <button type="button" className="text-left" onClick={() => install(t)} disabled={busy !== null}>
+                  <ItemContent>
+                    <ItemTitle>
+                      {t.title}
+                      {t.installed ? (
+                        <Badge variant="secondary">Already added</Badge>
+                      ) : (
+                        busy === t.id && (
+                          <Badge variant="outline">
+                            <Spinner data-icon="inline-start" />
+                            Adding
+                          </Badge>
+                        )
+                      )}
+                    </ItemTitle>
+                    <ItemDescription>{t.description}</ItemDescription>
+                  </ItemContent>
+                </button>
+              </Item>
+            ))}
+          <Item asChild variant="outline">
+            <button type="button" className="text-left" onClick={onBlank}>
+              <ItemContent>
+                <ItemTitle>Build your own</ItemTitle>
+                <ItemDescription>Start with two simple steps and change them.</ItemDescription>
+              </ItemContent>
             </button>
-          ))}
-        <button type="button" className="template blank" onClick={onBlank}>
-          <strong>Build your own</strong>
-          <span className="muted small">Start with two simple steps and change them.</span>
-        </button>
-      </div>
-    </section>
+          </Item>
+        </ItemGroup>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -172,32 +204,36 @@ function WorkflowPanel({ name, labels, onChange }: { name: string; labels: Recor
   if (!wf.data) return null;
   const w = wf.data;
   return (
-    <section className="stack">
-      <div className="card">
-        <div className="row between">
-          <div>
-            <h2 style={{ margin: 0 }}>
-              {w.name} {dev && w.version != null && <span className="muted small">v{w.version}</span>}
-            </h2>
-            {w.spec.description && <p className="muted" style={{ margin: '4px 0 0' }}>{w.spec.description}</p>}
-          </div>
+    <div className="flex flex-col gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            {w.name}
+            {dev && w.version != null && <Badge variant="outline">v{w.version}</Badge>}
+          </CardTitle>
+          {w.spec.description && <CardDescription>{w.spec.description}</CardDescription>}
           {w.version != null && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={async () => {
-                if (!confirm(`Delete ${w.name} and all its versions?`)) return;
-                await api.deleteWorkflow(w.name).catch((e: Error) => toast.error(e.message));
-                navigate('/automations');
-                onChange();
-              }}
-            >
-              <IconTrash data-icon="inline-start" />
-              Delete
-            </Button>
+            <CardAction>
+              <ConfirmAction
+                title={`Delete ${w.name}?`}
+                description="All its versions are deleted too. Runs it already made are kept."
+                action="Delete"
+                destructive
+                onConfirm={async () => {
+                  await api.deleteWorkflow(w.name).catch((e: Error) => toast.error(e.message));
+                  navigate('/automations');
+                  onChange();
+                }}
+              >
+                <Button variant="ghost" size="sm">
+                  <IconTrash data-icon="inline-start" />
+                  Delete
+                </Button>
+              </ConfirmAction>
+            </CardAction>
           )}
-        </div>
-      </div>
+        </CardHeader>
+      </Card>
       <TabBar
         items={[
           { id: 'run', label: 'Run' },
@@ -226,12 +262,18 @@ function WorkflowPanel({ name, labels, onChange }: { name: string; labels: Recor
           }}
         />
       )}
-      {tab === 'edit' && viewing !== undefined && <VersionEditor name={w.name} version={viewing} onSaved={() => {
-        setViewing(undefined);
-        wf.reload();
-        onChange();
-        setTab('run');
-      }} />}
+      {tab === 'edit' && viewing !== undefined && (
+        <VersionEditor
+          name={w.name}
+          version={viewing}
+          onSaved={() => {
+            setViewing(undefined);
+            wf.reload();
+            onChange();
+            setTab('run');
+          }}
+        />
+      )}
       {tab === 'edit' && viewing === undefined && (
         <Editor
           initial={stringify(w.spec)}
@@ -243,7 +285,7 @@ function WorkflowPanel({ name, labels, onChange }: { name: string; labels: Recor
           }}
         />
       )}
-    </section>
+    </div>
   );
 }
 
@@ -251,7 +293,10 @@ function RunPanel({ w }: { w: WorkflowView }) {
   const inputs = Object.entries(w.spec.inputs ?? {});
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(
-      inputs.map(([k, s]) => [k, s.default === undefined || s.default === null ? '' : typeof s.default === 'string' ? s.default : JSON.stringify(s.default)]),
+      inputs.map(([k, s]) => [
+        k,
+        s.default === undefined || s.default === null ? '' : typeof s.default === 'string' ? s.default : JSON.stringify(s.default),
+      ]),
     ),
   );
   const [status, setStatus] = useState<Record<string, NodeStatus>>({});
@@ -299,58 +344,70 @@ function RunPanel({ w }: { w: WorkflowView }) {
   }
 
   return (
-    <div className="stack">
-      <section className="card stack">
+    <div className="flex flex-col gap-4">
+      <Card>
         {inputs.length > 0 && (
-          <div className="mcp-form" style={{ paddingTop: 0 }}>
-            {inputs.map(([k, s]) => (
-              <TextField
-                key={k}
-                label={k}
-                description={s.description ?? undefined}
-                placeholder={s.default === undefined || s.default === null ? 'required' : undefined}
-                value={values[k] ?? ''}
-                onChange={(e) => setValues((v) => ({ ...v, [k]: e.target.value }))}
-              />
-            ))}
-          </div>
+          <CardContent>
+            <FieldGroup className="grid gap-4 sm:grid-cols-2">
+              {inputs.map(([k, s]) => (
+                <TextField
+                  key={k}
+                  label={k}
+                  description={s.description ?? undefined}
+                  placeholder={s.default === undefined || s.default === null ? 'required' : undefined}
+                  value={values[k] ?? ''}
+                  onChange={(e) => setValues((v) => ({ ...v, [k]: e.target.value }))}
+                />
+              ))}
+            </FieldGroup>
+          </CardContent>
         )}
-        <div className="row gap">
-          <Button onClick={start}>
-            Run workflow
-          </Button>
+        <CardFooter className="gap-2">
+          <Button onClick={start}>Run workflow</Button>
           {runId && (
-            <button type="button" className="link small" onClick={() => navigate(`/activity/${runId}`)}>
+            <Button variant="link" size="sm" onClick={() => navigate(`/activity/${runId}`)}>
               Open run {runId.slice(-8)}
-            </button>
+            </Button>
           )}
-        </div>
-      </section>
+        </CardFooter>
+      </Card>
 
-      <section className="card">
-        <Dag nodes={w.graph as GraphNode[]} status={status} selected={selected} onSelect={setSelected} />
-        {selected && (
-          <div className="stack tight" style={{ marginTop: 12 }}>
-            <strong className="mono">{selected}</strong>
-            {outputs[selected]?.error && <div className="error-note">{outputs[selected].error}</div>}
-            {outputs[selected]?.output !== undefined ? <Json value={outputs[selected].output} /> : <span className="muted small">No output yet.</span>}
-          </div>
-        )}
-      </section>
+      <Card>
+        <CardContent className="flex flex-col gap-3">
+          <Dag nodes={w.graph as GraphNode[]} status={status} selected={selected} onSelect={setSelected} />
+          {selected && (
+            <Item variant="muted">
+              <ItemContent className="min-w-0 gap-2">
+                <ItemTitle className="font-mono">{selected}</ItemTitle>
+                <ErrorNote error={outputs[selected]?.error} />
+                {outputs[selected]?.output !== undefined ? (
+                  <Json value={outputs[selected].output} />
+                ) : (
+                  <ItemDescription>No output yet.</ItemDescription>
+                )}
+              </ItemContent>
+            </Item>
+          )}
+        </CardContent>
+      </Card>
 
       {pending.map((p) => (
         <Waiting key={p.id} runId={runId!} p={p} />
       ))}
 
       {result && (
-        <section className="card">
-          <div className="row gap">
-            <h3 style={{ margin: 0 }}>Result</h3>
-            <StatusPill status={result.status as never} />
-          </div>
-          {result.error && <div className="error-note">{result.error}</div>}
-          {result.output !== undefined && <Json value={result.output} />}
-        </section>
+        <Card>
+          <CardHeader>
+            <CardTitle>Result</CardTitle>
+            <CardAction>
+              <StatusPill status={result.status as never} />
+            </CardAction>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <ErrorNote error={result.error} />
+            {result.output !== undefined && <Json value={result.output} />}
+          </CardContent>
+        </Card>
       )}
     </div>
   );
@@ -360,12 +417,23 @@ function Waiting({ runId, p }: { runId: string; p: { id: string; name: string; i
   const [reply, setReply] = useState('');
   const prompt = p.name === 'human' ? String((p.input as { prompt?: string })?.prompt ?? '') : null;
   return (
-    <section className="card approval-card">
-      <strong>{prompt !== null ? 'Waiting for you' : `${p.name} needs your OK`}</strong>
-      {prompt !== null ? <div className="pre">{prompt}</div> : <Json value={p.input} />}
-      <div className="row gap">
+    <Item variant="outline">
+      <ItemMedia variant="icon">
+        <HandIcon />
+      </ItemMedia>
+      <ItemContent className="min-w-0">
+        <ItemTitle>{prompt !== null ? 'Waiting for you' : `${p.name} needs your OK`}</ItemTitle>
+        {prompt !== null ? <p className="text-sm whitespace-pre-wrap">{prompt}</p> : <Json value={p.input} />}
+      </ItemContent>
+      <ItemFooter className="justify-start gap-2">
         {prompt !== null && (
-          <input className="plain-input" placeholder="Optional reply" aria-label="Reply" value={reply} onChange={(e) => setReply(e.target.value)} />
+          <Input
+            className="max-w-sm"
+            placeholder="Optional reply"
+            aria-label="Reply"
+            value={reply}
+            onChange={(e) => setReply(e.target.value)}
+          />
         )}
         <Button
           size="sm"
@@ -377,37 +445,41 @@ function Waiting({ runId, p }: { runId: string; p: { id: string; name: string; i
         >
           Continue
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => api.decide(runId, p.id, false, 'declined in the dashboard').catch((e: Error) => toast.error(e.message))}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => api.decide(runId, p.id, false, 'declined in the dashboard').catch((e: Error) => toast.error(e.message))}
+        >
           Stop here
         </Button>
-      </div>
-    </section>
+      </ItemFooter>
+    </Item>
   );
 }
 
 function RecentRuns({ name }: { name: string }) {
   const runs = useLoad(() => api.workflowRuns(name), [name]);
-  if (runs.data?.length === 0) return <Empty title="No runs yet" />;
+  if (runs.data?.length === 0) return <EmptyState title="No runs yet" icon={<HistoryIcon />} />;
   return (
-    <div className="card flush">
-      {runs.data?.map((r) => (
-        <a
-          key={r.id}
-          className="run-row"
-          href={`#/activity/${r.id}`}
-          onClick={(e) => {
-            e.preventDefault();
-            navigate(`/activity/${r.id}`);
-          }}
-        >
-          <StatusPill status={r.status} />
-          <span className="small">{new Date(r.created_at).toLocaleString()}</span>
-          <span className="muted small">{r.steps} steps</span>
-          <span className="muted small num">{money(r.cost)}</span>
-          <span className="muted small">{ago(r.created_at)}</span>
-        </a>
-      ))}
-    </div>
+    <Card>
+      <CardContent>
+        <ItemGroup className="gap-1">
+          {runs.data?.map((r) => (
+            <Item key={r.id} asChild size="xs">
+              <a href={`#/activity/${r.id}`}>
+                <StatusPill status={r.status} />
+                <ItemContent>
+                  <ItemTitle>{new Date(r.created_at).toLocaleString()}</ItemTitle>
+                </ItemContent>
+                <span className="text-sm text-muted-foreground">
+                  {r.steps} steps · {money(r.cost)} · {ago(r.created_at)}
+                </span>
+              </a>
+            </Item>
+          ))}
+        </ItemGroup>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -471,7 +543,7 @@ function Editor({ initial, isNew, onSaved }: { initial: string; isNew: boolean; 
 
   const showTabs = dev || !formOk;
   return (
-    <section className="stack">
+    <div className="flex flex-col gap-4">
       {showTabs && (
         <TabBar
           items={[
@@ -484,32 +556,50 @@ function Editor({ initial, isNew, onSaved }: { initial: string; isNew: boolean; 
           aria-label="Workflow editor"
         />
       )}
-      {!formOk && <p className="note">This workflow uses steps the form can't show yet, so it opens as YAML.</p>}
+      {!formOk && (
+        <Alert>
+          <InfoIcon />
+          <AlertDescription>This workflow uses steps the form can't show yet, so it opens as YAML.</AlertDescription>
+        </Alert>
+      )}
       {mode === 'form' && formOk ? (
-        <div className="card form-body">
-          <WorkflowForm spec={spec} onChange={fromForm} isNew={isNew} />
-        </div>
+        <WorkflowForm spec={spec} onChange={fromForm} isNew={isNew} />
       ) : (
-        <textarea className="code-editor" aria-label="Workflow YAML" spellCheck={false} value={text} onChange={(e) => fromYaml(e.target.value)} />
+        <Textarea
+          className="min-h-96 font-mono"
+          aria-label="Workflow YAML"
+          spellCheck={false}
+          value={text}
+          onChange={(e) => fromYaml(e.target.value)}
+        />
       )}
       {graph.length > 0 && (
-        <div className="card">
-          <h3>Preview</h3>
-          <Dag nodes={graph} />
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Preview</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Dag nodes={graph} />
+          </CardContent>
+        </Card>
       )}
       <ErrorNote error={error} />
-      <div className="row gap">
+      <div className="flex items-center justify-end gap-2">
         {dev && (
-          <input className="plain-input" placeholder="Version note (optional)" aria-label="Version note" value={note} onChange={(e) => setNote(e.target.value)} />
+          <Input
+            className="max-w-64"
+            placeholder="Version note (optional)"
+            aria-label="Version note"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
         )}
-        <div className="spacer" />
-        <Button onClick={save} disabled={busy || !!error && !error.startsWith('Give')}>
+        <Button onClick={save} disabled={busy || (!!error && !error.startsWith('Give'))}>
           {busy && <Spinner data-icon="inline-start" />}
           {isNew ? 'Create workflow' : 'Save changes'}
         </Button>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -526,20 +616,22 @@ function VersionsPanel({
 }) {
   const versions = useLoad(() => api.workflowVersions(name), [name]);
   return (
-    <section className="card">
-      <ErrorNote error={versions.error} />
-      <VersionHistory
-        kind="workflow"
-        name={name}
-        versions={versions.data ?? []}
-        labels={labels}
-        onView={onView}
-        onChanged={() => {
-          versions.reload();
-          onChanged();
-        }}
-      />
-    </section>
+    <Card>
+      <CardContent className="flex flex-col gap-3">
+        <ErrorNote error={versions.error} />
+        <VersionHistory
+          kind="workflow"
+          name={name}
+          versions={versions.data ?? []}
+          labels={labels}
+          onView={onView}
+          onChanged={() => {
+            versions.reload();
+            onChanged();
+          }}
+        />
+      </CardContent>
+    </Card>
   );
 }
 
@@ -548,8 +640,11 @@ function VersionEditor({ name, version, onSaved }: { name: string; version: numb
   const v = useLoad(() => api.workflowVersions(name).then((all) => all.find((x) => x.version === version)), [name, version]);
   if (!v.data) return <ErrorNote error={v.error} />;
   return (
-    <div className="stack">
-      <p className="note">Editing from v{version}. Saving makes a new version.</p>
+    <div className="flex flex-col gap-4">
+      <Alert>
+        <HistoryIcon />
+        <AlertDescription>Editing from v{version}. Saving makes a new version.</AlertDescription>
+      </Alert>
       <Editor initial={stringify(v.data.spec as WorkflowSpec)} isNew={false} onSaved={onSaved} />
     </div>
   );

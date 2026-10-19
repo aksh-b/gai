@@ -1,6 +1,20 @@
-// A sortable table over plain rows, built on shadcn's Table.
+// A sortable table over plain rows: shadcn's Data Table pattern (TanStack
+// Table v9 over the Table component). Pages describe columns with `Column`.
 
 import { useMemo, useState, type ReactNode } from 'react';
+import {
+  createColumnHelper,
+  createSortedRowModel,
+  rowSortingFeature,
+  sortFn_alphanumeric,
+  sortFn_basic,
+  sortFn_datetime,
+  sortFn_text,
+  tableFeatures,
+  useTable,
+  type ColumnDef,
+  type SortingState,
+} from '@tanstack/react-table';
 import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -39,96 +53,143 @@ export type DataTableProps<T> = {
   'aria-label'?: string;
 };
 
-const cmp = (a: CellValue, b: CellValue) => {
-  if (a == null) return b == null ? 0 : 1;
-  if (b == null) return -1;
-  if (a instanceof Date && b instanceof Date) return a.getTime() - b.getTime();
-  if (typeof a === 'number' && typeof b === 'number') return a - b;
-  return String(a).localeCompare(String(b), undefined, { numeric: true });
-};
+const features = tableFeatures({
+  rowSortingFeature,
+  sortedRowModel: createSortedRowModel(),
+  sortFns: { alphanumeric: sortFn_alphanumeric, basic: sortFn_basic, datetime: sortFn_datetime, text: sortFn_text },
+});
 
 const alignClass = { start: 'text-left', end: 'text-right', center: 'text-center' } as const;
 
-export function DataTable<T>({ rows, columns, getRowId, height, onRowAction, defaultSort, empty, ...aria }: DataTableProps<T>) {
-  const [sort, setSort] = useState<SortKey | undefined>(defaultSort?.[0]);
+function formatValue(v: CellValue): ReactNode {
+  if (v instanceof Date) return v.toLocaleString();
+  return v ?? '';
+}
 
-  const sorted = useMemo(() => {
-    if (!sort) return rows;
-    const col = columns.find((c) => c.key === sort.key);
-    if (!col?.value) return rows;
-    const get = col.value;
-    const out = [...rows].sort((a, b) => cmp(get(a), get(b)));
-    return sort.dir === 'desc' ? out.reverse() : out;
-  }, [rows, columns, sort]);
+export function DataTable<T extends object>({
+  rows,
+  columns,
+  getRowId,
+  height,
+  onRowAction,
+  defaultSort,
+  empty,
+  ...aria
+}: DataTableProps<T>) {
+  const [sorting, setSorting] = useState<SortingState>(() => (defaultSort ?? []).map((s) => ({ id: s.key, desc: s.dir === 'desc' })));
 
-  const toggle = (key: string) =>
-    setSort((s) => (s?.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
+  const defs = useMemo((): ColumnDef<typeof features, T>[] => {
+    const helper = createColumnHelper<typeof features, T>();
+    return columns.map((c) => {
+      const meta = { align: c.align ?? 'start', width: c.width, minWidth: c.minWidth };
+      if (!c.value) {
+        return helper.display({ id: c.key, header: () => c.header, cell: ({ row }) => c.cell?.(row.original), meta }) as ColumnDef<
+          typeof features,
+          T
+        >;
+      }
+      const get = c.value;
+      return helper.accessor((row: T) => get(row), {
+        id: c.key,
+        header: () => c.header,
+        cell: ({ row, getValue }) => (c.cell ? c.cell(row.original) : formatValue(getValue() as CellValue)),
+        enableSorting: c.sortable !== false,
+        sortFn: 'auto',
+        sortUndefined: 'last',
+        meta,
+      }) as ColumnDef<typeof features, T>;
+    });
+  }, [columns]);
+
+  const table = useTable({
+    features,
+    data: rows,
+    columns: defs,
+    getRowId: getRowId ? (row: T) => getRowId(row) : undefined,
+    onSortingChange: setSorting,
+    state: { sorting },
+  });
+
+  const metaOf = (m: unknown) => (m ?? {}) as { align: 'start' | 'end' | 'center'; width?: number; minWidth?: number };
 
   return (
     <div className="overflow-auto rounded-lg border" style={height ? { maxHeight: height } : undefined}>
-      <Table aria-label={aria['aria-label']}>
-        <TableHeader className="sticky top-0 z-[1] bg-background">
-          <TableRow>
-            {columns.map((c) => {
-              const sortable = c.value && c.sortable !== false;
-              const active = sort?.key === c.key;
-              return (
-                <TableHead
-                  key={c.key}
-                  className={alignClass[c.align ?? 'start']}
-                  style={{ width: c.width, minWidth: c.minWidth }}
-                  aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
-                >
-                  {sortable ? (
-                    <Button variant="ghost" size="xs" className={cn('-mx-2', c.align === 'end' && 'flex-row-reverse')} onClick={() => toggle(c.key)}>
-                      {c.header}
-                      {active && (sort.dir === 'asc' ? <ArrowUpIcon data-icon="inline-end" /> : <ArrowDownIcon data-icon="inline-end" />)}
-                    </Button>
-                  ) : (
-                    c.header
-                  )}
-                </TableHead>
-              );
-            })}
-          </TableRow>
+      <Table aria-label={aria['aria-label']} className="min-w-[42rem]">
+        <TableHeader className="sticky top-0 bg-background">
+          {table.getHeaderGroups().map((group) => (
+            <TableRow key={group.id}>
+              {group.headers.map((header) => {
+                const meta = metaOf(header.column.columnDef.meta);
+                const sorted = header.column.getIsSorted();
+                return (
+                  <TableHead
+                    key={header.id}
+                    className={alignClass[meta.align]}
+                    style={{ width: meta.width, minWidth: meta.minWidth }}
+                    aria-sort={sorted ? (sorted === 'asc' ? 'ascending' : 'descending') : undefined}
+                  >
+                    {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className={cn('-mx-2', meta.align === 'end' && 'flex-row-reverse')}
+                        onClick={() => header.column.toggleSorting(sorted === 'asc')}
+                      >
+                        <table.FlexRender header={header} />
+                        {sorted === 'asc' ? (
+                          <ArrowUpIcon data-icon="inline-end" />
+                        ) : sorted === 'desc' ? (
+                          <ArrowDownIcon data-icon="inline-end" />
+                        ) : null}
+                      </Button>
+                    ) : (
+                      <table.FlexRender header={header} />
+                    )}
+                  </TableHead>
+                );
+              })}
+            </TableRow>
+          ))}
         </TableHeader>
         <TableBody>
-          {sorted.length === 0 ? (
+          {table.getRowModel().rows.length ? (
+            table.getRowModel().rows.map((row) => (
+              <TableRow
+                key={row.id}
+                className={onRowAction ? 'cursor-pointer' : undefined}
+                tabIndex={onRowAction ? 0 : undefined}
+                onClick={onRowAction ? () => onRowAction(row.original) : undefined}
+                onKeyDown={
+                  onRowAction
+                    ? (e) => {
+                        if (e.key === 'Enter') onRowAction(row.original);
+                      }
+                    : undefined
+                }
+              >
+                {row.getAllCells().map((cell) => {
+                  const meta = metaOf(cell.column.columnDef.meta);
+                  return (
+                    <TableCell
+                      key={cell.id}
+                      className={cn(alignClass[meta.align], 'max-w-0 truncate')}
+                      style={{ width: meta.width, minWidth: meta.minWidth }}
+                    >
+                      <table.FlexRender cell={cell} />
+                    </TableCell>
+                  );
+                })}
+              </TableRow>
+            ))
+          ) : (
             <TableRow>
               <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
                 {empty ?? 'Nothing here yet.'}
               </TableCell>
             </TableRow>
-          ) : (
-            sorted.map((row, i) => (
-              <TableRow
-                key={getRowId ? getRowId(row) : i}
-                className={onRowAction ? 'cursor-pointer' : undefined}
-                tabIndex={onRowAction ? 0 : undefined}
-                onClick={onRowAction ? () => onRowAction(row) : undefined}
-                onKeyDown={
-                  onRowAction
-                    ? (e) => {
-                        if (e.key === 'Enter') onRowAction(row);
-                      }
-                    : undefined
-                }
-              >
-                {columns.map((c) => (
-                  <TableCell key={c.key} className={cn(alignClass[c.align ?? 'start'], 'max-w-0 truncate')} style={{ width: c.width, minWidth: c.minWidth }}>
-                    {c.cell ? c.cell(row) : formatValue(c.value?.(row))}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))
           )}
         </TableBody>
       </Table>
     </div>
   );
-}
-
-function formatValue(v: CellValue): ReactNode {
-  if (v instanceof Date) return v.toLocaleString();
-  return v ?? '';
 }

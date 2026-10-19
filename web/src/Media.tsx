@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { api, type ContentBlock, type MediaSource } from './api';
 
 /** Object URLs for stored blobs, fetched once per page load. */
@@ -45,11 +46,11 @@ export function MediaView({ block }: { block: ContentBlock }) {
   const url = useMediaUrl(source);
   if (!source) return null;
   const id = source.kind === 'blob' ? source.id : undefined;
-  if (!url) return <div className="media-placeholder muted small">Loading {block.type}…</div>;
-  if (block.type === 'audio') return <audio className="media-audio" controls src={url} aria-label={id ?? 'Audio'} />;
+  if (!url) return <Skeleton className={block.type === 'audio' ? 'h-9 w-full max-w-sm' : 'aspect-square w-full max-w-sm'} />;
+  if (block.type === 'audio') return <audio className="h-9 w-full max-w-sm" controls src={url} aria-label={id ?? 'Audio'} />;
   return (
-    <a className="media-image" href={url} target="_blank" rel="noreferrer" title={id}>
-      <img src={url} alt={id ?? 'Image'} />
+    <a href={url} target="_blank" rel="noreferrer" title={id} className="block w-fit max-w-sm overflow-hidden rounded-lg border">
+      <img src={url} alt={id ?? 'Image'} className="block h-auto w-full" />
     </a>
   );
 }

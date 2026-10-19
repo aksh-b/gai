@@ -3,21 +3,23 @@
 // Settings → AI models.
 
 import { useEffect, useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
+import { CircleCheckIcon, CircleHelpIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { ErrorNote } from '@/components/shared';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item';
+import { Progress } from '@/components/ui/progress';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Spinner } from '@/components/ui/spinner';
 import { api, type CloudProvider, type LibraryModel, type OllamaStatus, type PullProgress } from './api';
-import { IconCheck } from './icons';
 import { useDevMode } from './prefs';
 
 /** Pick a cloud provider, paste a key, and check it works. */
-export function CloudConnect({
-  providers,
-  onConnected,
-}: {
-  providers: CloudProvider[];
-  onConnected: (model: string) => void;
-}) {
+export function CloudConnect({ providers, onConnected }: { providers: CloudProvider[]; onConnected: (model: string) => void }) {
   const [picked, setPicked] = useState(providers.find((p) => !p.connected)?.name ?? providers[0]?.name ?? '');
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
@@ -46,76 +48,84 @@ export function CloudConnect({
   }
 
   return (
-    <div className="stack">
-      <div className="choice-grid" role="radiogroup" aria-label="Provider">
+    <div className="flex flex-col gap-4">
+      <RadioGroup
+        aria-label="Provider"
+        value={picked}
+        onValueChange={(v) => {
+          setPicked(v);
+          setProblem(null);
+        }}
+        className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+      >
         {providers.map((p) => (
-          <button
-            key={p.name}
-            type="button"
-            role="radio"
-            aria-checked={p.name === picked}
-            className="choice"
-            onClick={() => {
-              setPicked(p.name);
-              setProblem(null);
-            }}
-          >
-            <span className="choice-title">
-              {p.title}
-              {p.connected && <span className="chip accent">connected</span>}
-            </span>
-            <span className="muted small">{p.description}</span>
-          </button>
+          <FieldLabel key={p.name} htmlFor={`provider-${p.name}`}>
+            <Field orientation="horizontal">
+              <FieldContent>
+                <FieldTitle>
+                  {p.title}
+                  {p.connected && <Badge variant="secondary">Connected</Badge>}
+                </FieldTitle>
+                <FieldDescription>{p.description}</FieldDescription>
+              </FieldContent>
+              <RadioGroupItem value={p.name} id={`provider-${p.name}`} />
+            </Field>
+          </FieldLabel>
         ))}
-      </div>
+      </RadioGroup>
       {provider && (
         <form
-          className="stack"
+          className="flex flex-col gap-3"
           onSubmit={(e) => {
             e.preventDefault();
             connect();
           }}
         >
-          <label className="field-label" htmlFor="provider-key">
-            {provider.title} API key
-          </label>
-          <div className="row gap">
-            <input
-              id="provider-key"
-              className="plain-input"
-              type="password"
-              autoComplete="off"
-              placeholder={provider.saved_key ? `saved key ending in ${provider.saved_key}` : provider.connected ? 'a key is already set' : 'paste your key here'}
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-            />
-            <Button type="submit" disabled={busy || !key.trim() && !provider.connected}>
-              {busy && <Spinner data-icon="inline-start" />}
-              {key.trim() || !provider.connected ? 'Connect' : 'Test again'}
-            </Button>
-          </div>
-          <p className="muted small">
-            No key yet?{' '}
-            <a href={provider.key_url} target="_blank" rel="noreferrer">
-              Get one from {provider.title} ↗
-            </a>{' '}
-            The key is stored on your gai server and never shown again.
-          </p>
-          {problem && <div className="error-note">{problem}</div>}
-          {provider.saved_key && (
-            <div>
-              <button
-                type="button"
-                className="link small"
-                onClick={async () => {
-                  await api.forgetProviderKey(provider.name).catch((e: Error) => toast.error(e.message));
-                  toast.info(`Removed the saved ${provider.title} key`);
-                  location.reload();
-                }}
-              >
-                Remove saved key
-              </button>
+          <Field>
+            <FieldLabel htmlFor="provider-key">{provider.title} API key</FieldLabel>
+            <div className="flex gap-2">
+              <Input
+                id="provider-key"
+                type="password"
+                autoComplete="off"
+                placeholder={
+                  provider.saved_key
+                    ? `saved key ending in ${provider.saved_key}`
+                    : provider.connected
+                      ? 'a key is already set'
+                      : 'paste your key here'
+                }
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
+              />
+              <Button type="submit" disabled={busy || (!key.trim() && !provider.connected)}>
+                {busy && <Spinner data-icon="inline-start" />}
+                {key.trim() || !provider.connected ? 'Connect' : 'Test again'}
+              </Button>
             </div>
+            <FieldDescription>
+              No key yet?{' '}
+              <a href={provider.key_url} target="_blank" rel="noreferrer">
+                Get one from {provider.title}
+              </a>
+              . The key is stored on your gai server and never shown again.
+            </FieldDescription>
+          </Field>
+          <ErrorNote error={problem ?? undefined} />
+          {provider.saved_key && (
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="w-fit px-0"
+              onClick={async () => {
+                await api.forgetProviderKey(provider.name).catch((e: Error) => toast.error(e.message));
+                toast.info(`Removed the saved ${provider.title} key`);
+                location.reload();
+              }}
+            >
+              Remove saved key
+            </Button>
           )}
         </form>
       )}
@@ -172,48 +182,55 @@ export function LocalModels({ onUse }: { onUse: (model: string) => void }) {
     }
   }
 
-  if (!status) return <p className="muted">Looking for Ollama…</p>;
+  if (!status)
+    return (
+      <p className="flex items-center gap-2 text-muted-foreground">
+        <Spinner /> Looking for Ollama…
+      </p>
+    );
 
   if (!status.reachable) {
     return (
-      <div className="stack">
-        <p>
-          Local models run with <strong>Ollama</strong>, a free app. It isn't running yet
-          {dev && status.base_url ? (
-            <>
-              {' '}
-              (looked at <span className="mono">{status.base_url}</span>)
-            </>
-          ) : null}
-          .
-        </p>
-        <ol className="steps-list">
-          <li>
-            Install Ollama from{' '}
-            <a href="https://ollama.com/download" target="_blank" rel="noreferrer">
-              ollama.com/download ↗
-            </a>{' '}
-            and start it, <em>or</em>, in this project, run <span className="mono">scripts/ollama.sh</span> and then restart{' '}
-            <span className="mono">scripts/serve.sh</span>.
-          </li>
-          <li>Come back here and press “Check again”.</li>
-        </ol>
-        <div>
-          <Button variant="outline" onClick={load} disabled={checking}>
+      <Alert>
+        <CircleHelpIcon />
+        <AlertTitle>Ollama isn't running yet</AlertTitle>
+        <AlertDescription>
+          <p>
+            Local models run with Ollama, a free app
+            {dev && status.base_url ? (
+              <>
+                {' '}
+                (looked at <code>{status.base_url}</code>)
+              </>
+            ) : null}
+            .
+          </p>
+          <ol className="list-decimal pl-4">
+            <li>
+              Install Ollama from{' '}
+              <a href="https://ollama.com/download" target="_blank" rel="noreferrer">
+                ollama.com/download
+              </a>{' '}
+              and start it, <em>or</em>, in this project, run <code>scripts/ollama.sh</code> and then restart <code>scripts/serve.sh</code>.
+            </li>
+            <li>Come back here and press “Check again”.</li>
+          </ol>
+          <Button variant="outline" size="sm" className="mt-2" onClick={load} disabled={checking}>
             {checking && <Spinner data-icon="inline-start" />}
             Check again
           </Button>
-        </div>
-      </div>
+        </AlertDescription>
+      </Alert>
     );
   }
 
+  const others = status.models.filter((n) => !library.some((m) => m.name === n || `${m.name}:latest` === n));
   return (
-    <div className="stack">
-      <p className="muted">
+    <div className="flex flex-col gap-4">
+      <p className="text-muted-foreground">
         Ollama is running. Models are downloaded once and then work offline. Pick one to start; you can add more later.
       </p>
-      <div className="model-list">
+      <ItemGroup className="gap-2">
         {library.map((m) => {
           const p = pulls[m.name];
           const pulling = p?.state === 'pulling';
@@ -221,58 +238,59 @@ export function LocalModels({ onUse }: { onUse: (model: string) => void }) {
           const pct = p && p.total > 0 ? Math.round((p.completed / p.total) * 100) : 0;
           const embed = m.name.includes('embed');
           return (
-            <div key={m.name} className="model-row">
-              <div className="model-row-text">
-                <div className="row gap wrap">
-                  <strong>{m.name}</strong>
-                  <span className="chip">{m.size}</span>
-                  {m.tools && <span className="chip accent">can use tools</span>}
-                </div>
-                <span className="muted small">{m.description}</span>
+            <Item key={m.name} variant="outline">
+              <ItemContent>
+                <ItemTitle>
+                  {m.name}
+                  <Badge variant="outline">{m.size}</Badge>
+                  {m.tools && <Badge variant="secondary">Can use tools</Badge>}
+                </ItemTitle>
+                <ItemDescription>{m.description}</ItemDescription>
                 {pulling && (
-                  <div className="progress" aria-label={`Downloading ${m.name}`}>
-                    <span style={{ width: `${pct}%` }} />
-                    <em className="small muted">
+                  <div className="flex flex-col gap-1 pt-1">
+                    <Progress value={pct} aria-label={`Downloading ${m.name}`} />
+                    <span className="text-xs text-muted-foreground">
                       {p.status}
                       {p.total > 0 ? ` · ${pct}%` : ''}
-                    </em>
+                    </span>
                   </div>
                 )}
-                {p?.state === 'failed' && <div className="error-note small">{p.error}</div>}
-              </div>
-              {installed ? (
-                embed ? (
-                  <span className="chip">
-                    <IconCheck width={12} height={12} /> installed
-                  </span>
+                {p?.state === 'failed' && <ErrorNote error={p.error ?? 'The download failed.'} />}
+              </ItemContent>
+              <ItemActions>
+                {installed ? (
+                  embed ? (
+                    <Badge variant="secondary">
+                      <CircleCheckIcon data-icon="inline-start" />
+                      Installed
+                    </Badge>
+                  ) : (
+                    <Button size="sm" onClick={() => onUse(`ollama/${m.name}`)}>
+                      Use this
+                    </Button>
+                  )
                 ) : (
-                  <Button size="sm" onClick={() => onUse(`ollama/${m.name}`)}>
-                    Use this
+                  <Button variant="outline" size="sm" onClick={() => download(m.name)} disabled={pulling}>
+                    {pulling && <Spinner data-icon="inline-start" />}
+                    Download
                   </Button>
-                )
-              ) : (
-                <Button variant="outline" size="sm" onClick={() => download(m.name)} disabled={pulling}>
-                  {pulling && <Spinner data-icon="inline-start" />}
-                  Download
-                </Button>
-              )}
-            </div>
+                )}
+              </ItemActions>
+            </Item>
           );
         })}
-      </div>
-      {status.models.filter((n) => !library.some((m) => m.name === n || `${m.name}:latest` === n)).length > 0 && (
-        <div className="stack tight">
-          <span className="field-label">Also installed</span>
-          <div className="row gap wrap">
-            {status.models
-              .filter((n) => !library.some((m) => m.name === n || `${m.name}:latest` === n))
-              .map((n) => (
-                <Button variant="secondary" size="sm" key={n} onClick={() => onUse(`ollama/${n}`)}>
-                  Use {n}
-                </Button>
-              ))}
+      </ItemGroup>
+      {others.length > 0 && (
+        <Field>
+          <FieldLabel>Also installed</FieldLabel>
+          <div className="flex flex-wrap gap-2">
+            {others.map((n) => (
+              <Button variant="secondary" size="sm" key={n} onClick={() => onUse(`ollama/${n}`)}>
+                Use {n}
+              </Button>
+            ))}
           </div>
-        </div>
+        </Field>
       )}
     </div>
   );

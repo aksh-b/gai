@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
+import { BotIcon, HistoryIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from '@/components/ui/input-group';
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item';
+import { Separator } from '@/components/ui/separator';
+import { Spinner } from '@/components/ui/spinner';
 import YAML from 'yaml';
 import { AgentForm } from '../AgentForm';
 import { api, streamRun, type AgentSpec, type AgentVersion, type Template } from '../api';
 import { SpecEditor } from '../forms';
-import { Empty, ErrorNote, PageHeader } from '../components';
+import { ConfirmAction, EmptyState, ErrorNote, LinkItem, Page, PageHeader } from '@/components/shared';
 import { IconChat, IconPlus, IconSpark, IconTrash } from '../icons';
 import { modelLabel, toolLabel } from '../labels';
 import { useDevMode } from '../prefs';
@@ -74,7 +82,10 @@ export function Agents({ selected, creating = false }: { selected?: string; crea
       setLoaded(JSON.stringify(current.spec));
       setViewing(undefined);
       setPicking(false);
-      api.agentVersions(current.summary.name).then(setVersions).catch(() => setVersions([]));
+      api
+        .agentVersions(current.summary.name)
+        .then(setVersions)
+        .catch(() => setVersions([]));
     }
   }, [selected, current]);
 
@@ -101,7 +112,6 @@ export function Agents({ selected, creating = false }: { selected?: string; crea
   }
 
   async function remove(name: string) {
-    if (!confirm(`Delete ${name}? Its earlier versions are deleted too.`)) return;
     await api.deleteAgent(name).catch((e: Error) => toast.error(e.message));
     list.reload();
     navigate('/assistants');
@@ -113,7 +123,7 @@ export function Agents({ selected, creating = false }: { selected?: string; crea
   };
 
   return (
-    <div className="page">
+    <Page wide>
       <PageHeader
         title="Assistants"
         subtitle="Each assistant has its own instructions, tools and knowledge. Every change is kept, so you can always go back."
@@ -125,132 +135,151 @@ export function Agents({ selected, creating = false }: { selected?: string; crea
         }
       />
       <ErrorNote error={list.error} />
-      <div className="agents-layout">
-        <div className="agent-list">
+      <div className="grid items-start gap-4 lg:grid-cols-[19rem_minmax(0,1fr)]">
+        <ItemGroup className="gap-2">
           {list.data?.map(({ summary, spec }) => (
-            <a
+            <LinkItem
               key={summary.name}
               href={`#/assistants/${encodeURIComponent(summary.name)}`}
-              className="agent-card"
-              aria-current={summary.name === selected ? 'true' : undefined}
+              active={summary.name === selected}
+              title={
+                <>
+                  <span className="truncate">{summary.name}</span>
+                  {dev && (
+                    <Badge variant="outline" className="ml-auto">
+                      v{summary.latest_version}
+                    </Badge>
+                  )}
+                </>
+              }
             >
-              <div className="row between">
-                <strong>{summary.name}</strong>
-                {dev && <span className="chip">v{summary.latest_version}</span>}
-              </div>
-              <p className="muted small">{spec?.description ?? (spec?.model ? modelLabel(spec.model) : '')}</p>
-              <div className="row gap wrap">
+              <ItemDescription>{spec?.description ?? (spec?.model ? modelLabel(spec.model) : '')}</ItemDescription>
+              <div className="flex flex-wrap gap-1 pt-1">
                 {(spec?.tools ?? []).slice(0, 4).map((t) => (
-                  <span key={t} className="chip small" title={t}>
+                  <Badge key={t} variant="secondary" title={t}>
                     {toolLabel(t)}
-                  </span>
+                  </Badge>
                 ))}
                 {dev &&
                   Object.entries(summary.labels).map(([l, v]) => (
-                    <span key={l} className="chip accent small">
+                    <Badge key={l} variant="outline">
                       {l}=v{v}
-                    </span>
+                    </Badge>
                   ))}
               </div>
-            </a>
+            </LinkItem>
           ))}
           {list.data?.length === 0 && !picking && (
-            <div className="empty">
-              <strong>No assistants yet</strong>
-              <p className="muted">Start from a ready-made one and change it as you like.</p>
-              <Button onClick={startNew}>
-                Browse templates
-              </Button>
-            </div>
+            <EmptyState title="No assistants yet" icon={<BotIcon />} action={<Button onClick={startNew}>Browse templates</Button>}>
+              Start from a ready-made one and change it as you like.
+            </EmptyState>
           )}
-        </div>
+        </ItemGroup>
 
         {picking && selected !== 'new' ? (
-          <section className="card editor">
-            <TemplatePicker
-              onBlank={() => navigate('/assistants/new')}
-              onInstalled={(name) => {
-                list.reload();
-                navigate(`/assistants/${encodeURIComponent(name)}`);
-              }}
-              onDraft={(draft) => {
-                stashDraft(draft);
-                navigate('/assistants/new');
-              }}
-            />
-          </section>
+          <TemplatePicker
+            onBlank={() => navigate('/assistants/new')}
+            onInstalled={(name) => {
+              list.reload();
+              navigate(`/assistants/${encodeURIComponent(name)}`);
+            }}
+            onDraft={(draft) => {
+              stashDraft(draft);
+              navigate('/assistants/new');
+            }}
+          />
         ) : selected ? (
-          <section className="card editor">
-            <div className="row between">
-              <h3>{selected === 'new' ? 'New assistant' : selected}</h3>
-              <div className="row gap">
-                {current && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => navigate(`/chat?agent=${encodeURIComponent(current.summary.name)}`)}
-                    >
-                      <IconChat data-icon="inline-start" />
-                      Chat
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={() => remove(current.summary.name)}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">{selected === 'new' ? 'New assistant' : selected}</CardTitle>
+              {current && (
+                <CardAction className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => navigate(`/chat?agent=${encodeURIComponent(current.summary.name)}`)}>
+                    <IconChat data-icon="inline-start" />
+                    Chat
+                  </Button>
+                  <ConfirmAction
+                    title={`Delete ${current.summary.name}?`}
+                    description="Its earlier versions are deleted too. Chats with it are kept."
+                    action="Delete"
+                    destructive
+                    onConfirm={() => remove(current.summary.name)}
+                  >
+                    <Button variant="destructive" size="sm">
                       <IconTrash data-icon="inline-start" />
                       Delete
                     </Button>
-                  </>
-                )}
-              </div>
-            </div>
-            <SpecEditor label="Assistant" value={spec} onChange={setSpec}>
-              <AgentForm key={selected} spec={spec} onChange={setSpec} isNew={selected === 'new'} />
-            </SpecEditor>
-            <div className="save-bar">
+                  </ConfirmAction>
+                </CardAction>
+              )}
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              {viewing !== undefined && current && viewing !== current.summary.latest_version && (
+                <Alert>
+                  <HistoryIcon />
+                  <AlertDescription>
+                    Showing an earlier version in the editor. Saving it makes it the current one; Roll back below does the same without
+                    edits.
+                  </AlertDescription>
+                </Alert>
+              )}
+              <SpecEditor label="Assistant" value={spec} onChange={setSpec}>
+                <AgentForm key={selected} spec={spec} onChange={setSpec} isNew={selected === 'new'} />
+              </SpecEditor>
+            </CardContent>
+            <CardFooter className="sticky bottom-0 flex-col items-stretch gap-3 border-t bg-card">
               <ErrorNote error={parseError} />
-              <div className="row gap">
-                {dirty && <span className="muted small nowrap">Unsaved changes</span>}
+              <div className="flex items-center justify-end gap-2">
+                {dirty && <span className="text-sm whitespace-nowrap text-muted-foreground">Unsaved changes</span>}
                 {dev && (
-                  <input className="plain-input" placeholder="Version note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
+                  <Input
+                    className="max-w-64"
+                    placeholder="Version note (optional)"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                  />
                 )}
-                <Button onClick={save} disabled={saving || !dirty && selected !== 'new'}>
+                <Button onClick={save} disabled={saving || (!dirty && selected !== 'new')}>
                   {saving && <Spinner data-icon="inline-start" />}
                   {selected === 'new' ? 'Create assistant' : 'Save changes'}
                 </Button>
               </div>
-            </div>
-            {viewing !== undefined && current && viewing !== current.summary.latest_version && (
-              <p className="note">
-                Showing an earlier version in the editor. Saving it makes it the current one; <em>Roll back</em> below does the same without
-                edits.
-              </p>
-            )}
+            </CardFooter>
             {current && versions.length > 1 && (
               <>
-                <h4>History</h4>
-                <VersionHistory
-                  kind="agent"
-                  name={current.summary.name}
-                  versions={versions}
-                  labels={current.summary.labels}
-                  onView={(n) => {
-                    const v = versions.find((x) => x.version === n);
-                    if (v) {
-                      setSpec(v.spec);
-                      setViewing(n);
-                    }
-                  }}
-                  onChanged={list.reload}
-                />
+                <Separator />
+                <CardHeader>
+                  <CardTitle>History</CardTitle>
+                  <CardDescription>Every saved version. Open one to load it into the editor.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <VersionHistory
+                    kind="agent"
+                    name={current.summary.name}
+                    versions={versions}
+                    labels={current.summary.labels}
+                    onView={(n) => {
+                      const v = versions.find((x) => x.version === n);
+                      if (v) {
+                        setSpec(v.spec);
+                        setViewing(n);
+                      }
+                    }}
+                    onChanged={list.reload}
+                  />
+                </CardContent>
               </>
             )}
-          </section>
+          </Card>
         ) : (
-          <section className="card editor">
-            <Empty title="Pick an assistant">Choose one on the left to change it, or make a new one.</Empty>
-          </section>
+          <Card>
+            <CardContent>
+              <EmptyState title="Pick an assistant">Choose one on the left to change it, or make a new one.</EmptyState>
+            </CardContent>
+          </Card>
         )}
       </div>
-    </div>
+    </Page>
   );
 }
 
@@ -317,44 +346,68 @@ function TemplatePicker({
   const agents = (templates.data ?? []).filter((t) => t.kind === 'agent');
 
   return (
-    <div className="stack">
-      <div>
-        <h3>New assistant</h3>
-        <p className="muted small">Describe what you need, or start from a template. You can change everything afterwards.</p>
-      </div>
-      <form
-        className="describe"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (describe.trim()) draft();
-        }}
-      >
-        <textarea
-          className="plain-input"
-          rows={2}
-          placeholder="e.g. Reads web pages I give it and summarizes them in three bullet points"
-          value={describe}
-          onChange={(e) => setDescribe(e.target.value)}
-        />
-        <Button type="submit" disabled={drafting || !describe.trim()}>
-          {drafting ? <Spinner data-icon="inline-start" /> : <IconSpark data-icon="inline-start" />}
-          Draft it for me
-        </Button>
-      </form>
-      <ErrorNote error={templates.error} />
-      <div className="template-grid">
-        {agents.map((t) => (
-          <button key={t.id} type="button" className="template" onClick={() => install(t)} disabled={busy !== null}>
-            <strong>{t.title}</strong>
-            <span className="muted small">{t.description}</span>
-            {t.installed ? <span className="chip small">already added</span> : busy === t.id && <span className="chip small">adding…</span>}
-          </button>
-        ))}
-        <button type="button" className="template blank" onClick={onBlank}>
-          <strong>Blank assistant</strong>
-          <span className="muted small">Start from an empty form.</span>
-        </button>
-      </div>
-    </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>New assistant</CardTitle>
+        <CardDescription>Describe what you need, or start from a template. You can change everything afterwards.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (describe.trim()) draft();
+          }}
+        >
+          <InputGroup>
+            <InputGroupTextarea
+              rows={2}
+              aria-label="What the assistant should do"
+              placeholder="e.g. Reads web pages I give it and summarizes them in three bullet points"
+              value={describe}
+              onChange={(e) => setDescribe(e.target.value)}
+            />
+            <InputGroupAddon align="block-end">
+              <InputGroupButton variant="default" size="sm" type="submit" className="ml-auto" disabled={drafting || !describe.trim()}>
+                {drafting ? <Spinner data-icon="inline-start" /> : <IconSpark data-icon="inline-start" />}
+                Draft it for me
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+        </form>
+        <ErrorNote error={templates.error} />
+        <ItemGroup className="grid gap-2 sm:grid-cols-2">
+          {agents.map((t) => (
+            <Item key={t.id} asChild variant="outline">
+              <button type="button" className="text-left" onClick={() => install(t)} disabled={busy !== null}>
+                <ItemContent>
+                  <ItemTitle>
+                    {t.title}
+                    {t.installed ? (
+                      <Badge variant="secondary">Already added</Badge>
+                    ) : (
+                      busy === t.id && (
+                        <Badge variant="outline">
+                          <Spinner data-icon="inline-start" />
+                          Adding
+                        </Badge>
+                      )
+                    )}
+                  </ItemTitle>
+                  <ItemDescription>{t.description}</ItemDescription>
+                </ItemContent>
+              </button>
+            </Item>
+          ))}
+          <Item asChild variant="outline">
+            <button type="button" className="text-left" onClick={onBlank}>
+              <ItemContent>
+                <ItemTitle>Blank assistant</ItemTitle>
+                <ItemDescription>Start from an empty form.</ItemDescription>
+              </ItemContent>
+            </button>
+          </Item>
+        </ItemGroup>
+      </CardContent>
+    </Card>
   );
 }

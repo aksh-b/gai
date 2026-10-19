@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { SelectField, SwitchField, TextField } from '@/components/fields';
+import { AlertCircleIcon, CalendarClockIcon } from 'lucide-react';
+import { SelectField, SwitchField, TextField, ToggleField } from '@/components/fields';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { FieldDescription } from '@/components/ui/field';
 import { api } from './api';
 import { NumberInput, Section, TemplateVars, TextArea, insertAt, setIn } from './forms';
 import { useLoad } from './util';
@@ -91,7 +94,9 @@ export function TriggerForm({ draft, onChange, isNew }: { draft: TriggerDraft; o
   );
 
   // Ask the server what this would do, a moment after typing stops.
-  const [preview, setPreview] = useState<{ ok: boolean; error?: string | null; schedule_text?: string | null; next: string[] } | null>(null);
+  const [preview, setPreview] = useState<{ ok: boolean; error?: string | null; schedule_text?: string | null; next: string[] } | null>(
+    null,
+  );
   useEffect(() => {
     if (!targetName) {
       setPreview({ ok: false, error: `Choose the ${targetKind} this trigger runs.`, next: [] });
@@ -110,8 +115,19 @@ export function TriggerForm({ draft, onChange, isNew }: { draft: TriggerDraft; o
   const switchKind = (k: 'cron' | 'webhook' | 'file') => {
     // Keep what the kinds share; take the rest from that kind's starter.
     const base = TRIGGER_TEMPLATES[k];
-    const keep: TriggerDraft = { name: draft.name, description: draft.description, target: draft.target, auto_approve: draft.auto_approve, skip_if_running: draft.skip_if_running, enabled: draft.enabled };
-    onChange(Object.fromEntries(Object.entries({ ...base, ...keep, kind: k, input: draft.input ?? base.input }).filter(([, v]) => v !== undefined)) as TriggerDraft);
+    const keep: TriggerDraft = {
+      name: draft.name,
+      description: draft.description,
+      target: draft.target,
+      auto_approve: draft.auto_approve,
+      skip_if_running: draft.skip_if_running,
+      enabled: draft.enabled,
+    };
+    onChange(
+      Object.fromEntries(
+        Object.entries({ ...base, ...keep, kind: k, input: draft.input ?? base.input }).filter(([, v]) => v !== undefined),
+      ) as TriggerDraft,
+    );
   };
 
   return (
@@ -127,21 +143,17 @@ export function TriggerForm({ draft, onChange, isNew }: { draft: TriggerDraft; o
       </Section>
 
       <Section title="When">
-        <div className="span-all">
-          <div className="segmented" role="group" aria-label="Trigger kind">
-            {(
-              [
-                ['cron', 'On a schedule'],
-                ['webhook', 'From a webhook'],
-                ['file', 'When files change'],
-              ] as const
-            ).map(([k, label]) => (
-              <button key={k} type="button" aria-pressed={kind === k} disabled={!isNew && kind !== k && k === 'webhook'} onClick={() => switchKind(k)}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <ToggleField
+          className="col-span-full"
+          aria-label="Trigger kind"
+          options={[
+            { value: 'cron', label: 'On a schedule' },
+            { value: 'webhook', label: 'From a webhook', disabled: !isNew && kind !== 'webhook' },
+            { value: 'file', label: 'When files change' },
+          ]}
+          value={kind}
+          onValueChange={(k) => switchKind(k as typeof kind)}
+        />
         {kind === 'cron' && (
           <>
             <SelectField
@@ -154,7 +166,7 @@ export function TriggerForm({ draft, onChange, isNew }: { draft: TriggerDraft; o
               label="Cron schedule"
               description="minute hour day month weekday; a sixth field in front adds seconds"
               value={draft.schedule ?? ''}
-              className="mono"
+              className="font-mono"
               onChange={(e) => set(['schedule'], e.target.value)}
             />
             <SelectField
@@ -163,51 +175,72 @@ export function TriggerForm({ draft, onChange, isNew }: { draft: TriggerDraft; o
               value={draft.timezone ?? 'UTC'}
               onValueChange={(v) => set(['timezone'], v === 'UTC' ? undefined : v)}
             />
-            <div className="span-all">
-              <SwitchField
-                size="sm"
-                label="Catch up once after downtime"
-                description="If gai was not running at a scheduled time, run once when it starts again."
-                checked={(draft.catch_up ?? 'once') === 'once'}
-                onCheckedChange={(checked) => set(['catch_up'], checked ? undefined : 'skip')}
-              />
-            </div>
+            <SwitchField
+              size="sm"
+              className="col-span-full"
+              label="Catch up once after downtime"
+              description="If gai was not running at a scheduled time, run once when it starts again."
+              checked={(draft.catch_up ?? 'once') === 'once'}
+              onCheckedChange={(checked) => set(['catch_up'], checked ? undefined : 'skip')}
+            />
           </>
         )}
         {kind === 'webhook' && (
-          <p className="muted span-all">
+          <FieldDescription className="col-span-full">
             {isNew
               ? 'After saving you get a URL and a secret. Anything that can POST to a URL can start this trigger.'
               : 'The URL and secret are below.'}{' '}
-            The request body becomes <span className="mono">payload</span>.
-          </p>
+            The request body becomes <code>payload</code>.
+          </FieldDescription>
         )}
         {kind === 'file' && (
           <>
-            <TextField label="Folder or file" description="A path gai can see (inside its container on this machine)" value={draft.path ?? ''} onChange={(e) => set(['path'], e.target.value)} />
-            <TextField label="Only names like" placeholder="*.pdf" value={draft.pattern ?? ''} onChange={(e) => set(['pattern'], e.target.value)} />
-            <NumberInput label="Wait for quiet (ms)" description="Fire once changes settle" min={50} value={draft.debounce_ms} onChange={(v) => set(['debounce_ms'], v)} />
+            <TextField
+              label="Folder or file"
+              description="A path gai can see (inside its container on this machine)"
+              value={draft.path ?? ''}
+              onChange={(e) => set(['path'], e.target.value)}
+            />
+            <TextField
+              label="Only names like"
+              placeholder="*.pdf"
+              value={draft.pattern ?? ''}
+              onChange={(e) => set(['pattern'], e.target.value)}
+            />
+            <NumberInput
+              label="Wait for quiet (ms)"
+              description="Fire once changes settle"
+              min={50}
+              value={draft.debounce_ms}
+              onChange={(v) => set(['debounce_ms'], v)}
+            />
           </>
         )}
       </Section>
 
       <Section title="What runs">
-        <div className="span-all">
-          <div className="segmented" role="group" aria-label="Target kind">
-            {(['agent', 'workflow'] as const).map((k) => (
-              <button key={k} type="button" aria-pressed={targetKind === k} onClick={() => set(['target'], { [k]: '' })}>
-                {k === 'agent' ? 'An agent' : 'A workflow'}
-              </button>
-            ))}
-          </div>
-        </div>
+        <ToggleField
+          className="col-span-full"
+          aria-label="Target kind"
+          options={[
+            { value: 'agent', label: 'An agent' },
+            { value: 'workflow', label: 'A workflow' },
+          ]}
+          value={targetKind}
+          onValueChange={(k) => set(['target'], { [k]: '' })}
+        />
         <SelectField
           label={targetKind === 'agent' ? 'Agent' : 'Workflow'}
           placeholder="Choose…"
           options={(targetKind === 'agent'
             ? (agents.data ?? []).map((a) => ({ value: a.summary.name, label: a.summary.name, description: a.spec?.description ?? '' }))
             : (workflows.data ?? []).map((w) => ({ value: w.name, label: w.name, description: w.description ?? '' }))
-          ).concat(targetName && ![...(agents.data ?? []).map((a) => a.summary.name), ...(workflows.data ?? []).map((w) => w.name)].includes(targetName) ? [{ value: targetName, label: targetName, description: 'not found' }] : [])}
+          ).concat(
+            targetName &&
+              ![...(agents.data ?? []).map((a) => a.summary.name), ...(workflows.data ?? []).map((w) => w.name)].includes(targetName)
+              ? [{ value: targetName, label: targetName, description: 'not found' }]
+              : [],
+          )}
           value={targetName || null}
           onValueChange={(v) => set(['target'], { [targetKind]: v })}
         />
@@ -224,14 +257,22 @@ export function TriggerForm({ draft, onChange, isNew }: { draft: TriggerDraft; o
             <TemplateVars vars={VARS[kind]} onInsert={(t) => set(['input'], insertAt(inputRef.current, draft.input ?? '', t))} />
           </>
         ) : (
-          <div className="span-all stack tight">
-            {wf.data && Object.keys(wf.data.spec.inputs ?? {}).length === 0 && <p className="muted small">This workflow takes no inputs.</p>}
+          <div className="col-span-full flex flex-col gap-4">
+            {wf.data && Object.keys(wf.data.spec.inputs ?? {}).length === 0 && (
+              <FieldDescription>This workflow takes no inputs.</FieldDescription>
+            )}
             {Object.entries(wf.data?.spec.inputs ?? {}).map(([k, i]) => (
               <TextField
                 key={k}
                 label={k}
                 description={`${(i as { description?: string }).description ?? ''} Templates work, e.g. {{ ${VARS[kind][0].name} }}. ${(i as { default?: unknown }).default !== undefined ? 'Leave empty for the default.' : 'Required.'}`}
-                value={typeof draft.inputs?.[k] === 'string' ? (draft.inputs[k] as string) : draft.inputs?.[k] === undefined ? '' : JSON.stringify(draft.inputs[k])}
+                value={
+                  typeof draft.inputs?.[k] === 'string'
+                    ? (draft.inputs[k] as string)
+                    : draft.inputs?.[k] === undefined
+                      ? ''
+                      : JSON.stringify(draft.inputs[k])
+                }
                 onChange={(e) => set(['inputs', k], e.target.value)}
               />
             ))}
@@ -240,7 +281,12 @@ export function TriggerForm({ draft, onChange, isNew }: { draft: TriggerDraft; o
       </Section>
 
       <Section title="Options">
-        <SwitchField size="sm" label="Turned on" checked={draft.enabled !== false} onCheckedChange={(checked) => set(['enabled'], checked ? undefined : false)} />
+        <SwitchField
+          size="sm"
+          label="Turned on"
+          checked={draft.enabled !== false}
+          onCheckedChange={(checked) => set(['enabled'], checked ? undefined : false)}
+        />
         <SwitchField
           size="sm"
           label="Skip while the last run is going"
@@ -257,22 +303,32 @@ export function TriggerForm({ draft, onChange, isNew }: { draft: TriggerDraft; o
       </Section>
 
       {preview && (
-        <div className="preview-box" data-ok={preview.ok || undefined}>
-          {preview.ok ? (
-            <>
-              <strong className="small">{preview.schedule_text ?? (kind === 'webhook' ? 'Fires when the webhook is called.' : kind === 'file' ? 'Fires when matching files change.' : 'Looks good.')}</strong>
-              {preview.next.length > 0 && (
-                <ul className="small muted">
+        <Alert variant={preview.ok ? 'default' : 'destructive'}>
+          {preview.ok ? <CalendarClockIcon /> : <AlertCircleIcon />}
+          <AlertTitle>
+            {preview.ok
+              ? (preview.schedule_text ??
+                (kind === 'webhook'
+                  ? 'Fires when the webhook is called.'
+                  : kind === 'file'
+                    ? 'Fires when matching files change.'
+                    : 'Looks good.'))
+              : "This won't work yet"}
+          </AlertTitle>
+          {(preview.ok ? preview.next.length > 0 : true) && (
+            <AlertDescription>
+              {preview.ok ? (
+                <ul className="list-disc pl-4">
                   {preview.next.slice(0, 3).map((t) => (
                     <li key={t}>{new Date(t).toLocaleString()}</li>
                   ))}
                 </ul>
+              ) : (
+                preview.error
               )}
-            </>
-          ) : (
-            <span className="small error-text">{preview.error}</span>
+            </AlertDescription>
           )}
-        </div>
+        </Alert>
       )}
     </>
   );

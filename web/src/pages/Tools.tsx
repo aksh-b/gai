@@ -1,11 +1,18 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
-import { SelectField, TextField } from '@/components/fields';
+import { AlertCircleIcon, PlugIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { SelectField, TextField, ToggleField } from '@/components/fields';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { FieldGroup } from '@/components/ui/field';
+import { Item, ItemActions, ItemContent, ItemDescription, ItemFooter, ItemGroup, ItemTitle } from '@/components/ui/item';
+import { Spinner } from '@/components/ui/spinner';
 import { api, type McpServerConfig, type McpServerInfo, type ToolPolicy } from '../api';
-import { Disclosure, Empty, ErrorNote, Json, PageHeader } from '../components';
+import { ConfirmAction, Disclosure, EmptyState, ErrorNote, Json, Page, PageHeader } from '@/components/shared';
 import { IconPlus, IconTrash } from '../icons';
+import { TextArea } from '../forms';
 import { useLoad } from '../util';
 import { toolLabel } from '../labels';
 import { useDevMode } from '../prefs';
@@ -23,68 +30,79 @@ export function Tools() {
   const builtin = tools.data?.filter((t) => !t.spec.name.startsWith('mcp__')) ?? [];
 
   return (
-    <div className="page">
+    <Page>
       <PageHeader
         title="Tools & connections"
         subtitle="What assistants can do, and the apps they can work with. Choose whether each tool acts on its own or asks you first."
       />
       <ErrorNote error={tools.error ?? mcp.error} />
 
-      <section className="card">
-        <div className="row between">
-          <h3>Connected apps</h3>
+      <Card>
+        <CardHeader>
+          <CardTitle>Connected apps</CardTitle>
+          <CardDescription>
+            Apps that speak MCP (the Model Context Protocol) add their own tools. Pick “Everything from …” in an assistant's abilities to
+            use them all.
+          </CardDescription>
           {hooks.data && hooks.data.length > 0 && (
-            <span className="muted small">
-              Guardrail hooks:{' '}
+            <CardAction className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
+              Guardrail hooks:
               {hooks.data.map((h) => (
-                <span key={h} className="chip mono small">
+                <Badge key={h} variant="outline" className="font-mono">
                   {h}
-                </span>
+                </Badge>
               ))}
-            </span>
+            </CardAction>
           )}
-        </div>
-        <p className="muted small">
-          Apps that speak MCP (the Model Context Protocol) add their own tools. Pick “Everything from …” in an assistant's abilities to use
-          them all.
-        </p>
-        <div className="mcp-list">
-          {mcp.data?.map((s) => (
-            <McpCard key={s.name} s={s} onChange={reload} />
-          ))}
-          {mcp.data?.length === 0 && <Empty title="No apps connected">Connect one below (any MCP server: Jira, GitHub, a database, …).</Empty>}
-        </div>
-        <Disclosure summary={<strong>Connect an app</strong>}>
-          <AddMcp onAdded={reload} />
-        </Disclosure>
-      </section>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {mcp.data?.length === 0 ? (
+            <EmptyState title="No apps connected" icon={<PlugIcon />}>
+              Connect one below (any MCP server: Jira, GitHub, a database, …).
+            </EmptyState>
+          ) : (
+            <ItemGroup className="gap-2">
+              {mcp.data?.map((s) => (
+                <McpCard key={s.name} s={s} onChange={reload} />
+              ))}
+            </ItemGroup>
+          )}
+          <Disclosure summary="Connect an app">
+            <AddMcp onAdded={reload} />
+          </Disclosure>
+        </CardContent>
+      </Card>
 
-      <h3>Built-in abilities</h3>
-      <div className="tool-list">
+      <h2 className="text-lg font-semibold">Built-in abilities</h2>
+      <div className="grid gap-3 md:grid-cols-2">
         {builtin.map((t) => (
-          <section key={t.spec.name} className="card">
-            <div className="row between">
-              <strong title={t.spec.name}>{dev ? <span className="mono">{t.spec.name}</span> : toolLabel(t.spec.name)}</strong>
-              <PolicyPill policy={t.policy} />
-            </div>
-            <p className="muted">{t.spec.description}</p>
+          <Card key={t.spec.name}>
+            <CardHeader>
+              <CardTitle title={t.spec.name}>{dev ? <span className="font-mono">{t.spec.name}</span> : toolLabel(t.spec.name)}</CardTitle>
+              <CardDescription>{t.spec.description}</CardDescription>
+              <CardAction>
+                <PolicyPill policy={t.policy} />
+              </CardAction>
+            </CardHeader>
             {dev && (
-              <Disclosure summary={<span className="muted small">Input schema</span>}>
-                <Json value={t.spec.input_schema} />
-              </Disclosure>
+              <CardContent>
+                <Disclosure summary="Input schema">
+                  <Json value={t.spec.input_schema} />
+                </Disclosure>
+              </CardContent>
             )}
-          </section>
+          </Card>
         ))}
       </div>
-    </div>
+    </Page>
   );
 }
 
 function PolicyPill({ policy }: { policy: ToolPolicy }) {
   return (
-    <span className="pill" data-tone={policy === 'auto' ? 'ok' : policy === 'approve' ? 'warn' : 'bad'}>
-      {policy === 'auto' ? 'acts on its own' : policy === 'approve' ? 'asks first' : 'never'}
-    </span>
+    <Badge variant={policy === 'auto' ? 'secondary' : policy === 'approve' ? 'outline' : 'destructive'}>
+      {policy === 'auto' ? 'Acts on its own' : policy === 'approve' ? 'Asks first' : 'Never'}
+    </Badge>
   );
 }
 
@@ -92,7 +110,6 @@ function McpCard({ s, onChange }: { s: McpServerInfo; onChange: () => void }) {
   const [busy, setBusy] = useState(false);
   const target = s.config.url ?? [s.config.command, ...(s.config.args ?? [])].filter(Boolean).join(' ');
   const state = s.status.state;
-  const tone = state === 'ready' ? 'ok' : state === 'failed' ? 'bad' : state === 'connecting' ? 'busy' : 'warn';
   const isHttp = !!s.config.url;
 
   // OAuth: open the provider's consent page; its redirect lands on the
@@ -144,59 +161,80 @@ function McpCard({ s, onChange }: { s: McpServerInfo; onChange: () => void }) {
   }
 
   return (
-    <div className="mcp-card">
-      <div className="row between">
-        <div className="row gap">
-          <strong className="mono">{s.name}</strong>
-          <span className="pill" data-tone={tone}>
-            {state === 'needs_auth' ? 'needs sign-in' : state}
-          </span>
-          <span className="chip small">{s.source === 'config' ? 'gai.toml' : 'added here'}</span>
-        </div>
-        <div className="row gap">
-          {state === 'needs_auth' ? (
-            <Button size="sm" onClick={signIn} disabled={busy}>
-              {busy && <Spinner data-icon="inline-start" />}
-              Sign in
-            </Button>
-          ) : (
-            <Button variant="outline" size="sm" onClick={() => act(() => api.reconnectMcp(s.name))} disabled={busy}>
-              {busy && <Spinner data-icon="inline-start" />}
-              Reconnect
-            </Button>
-          )}
-          {isHttp && state === 'ready' && (
-            <Button variant="ghost" size="sm" onClick={() => confirm(`Sign out of ${s.name}?`) && act(() => api.mcpSignOut(s.name))}>
+    <Item variant="outline">
+      <ItemContent className="min-w-0">
+        <ItemTitle className="flex-wrap">
+          <span className="font-mono">{s.name}</span>
+          <Badge variant={state === 'ready' ? 'secondary' : state === 'failed' ? 'destructive' : 'outline'}>
+            {state === 'connecting' && <Spinner data-icon="inline-start" />}
+            {state === 'needs_auth' ? 'Needs sign-in' : state.charAt(0).toUpperCase() + state.slice(1)}
+          </Badge>
+          <Badge variant="outline">{s.source === 'config' ? 'gai.toml' : 'Added here'}</Badge>
+        </ItemTitle>
+        <ItemDescription className="truncate font-mono">{target}</ItemDescription>
+      </ItemContent>
+      <ItemActions className="flex-wrap">
+        {state === 'needs_auth' ? (
+          <Button size="sm" onClick={signIn} disabled={busy}>
+            {busy && <Spinner data-icon="inline-start" />}
+            Sign in
+          </Button>
+        ) : (
+          <Button variant="outline" size="sm" onClick={() => act(() => api.reconnectMcp(s.name))} disabled={busy}>
+            {busy && <Spinner data-icon="inline-start" />}
+            Reconnect
+          </Button>
+        )}
+        {isHttp && state === 'ready' && (
+          <ConfirmAction
+            title={`Sign out of ${s.name}?`}
+            description="Its tools stop working until you sign in again."
+            action="Sign out"
+            onConfirm={() => act(() => api.mcpSignOut(s.name))}
+          >
+            <Button variant="ghost" size="sm">
               Sign out
             </Button>
-          )}
-          {s.source !== 'config' && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => confirm(`Remove ${s.name}?`) && act(() => api.removeMcp(s.name))}
-            >
+          </ConfirmAction>
+        )}
+        {s.source !== 'config' && (
+          <ConfirmAction
+            title={`Remove ${s.name}?`}
+            description="Assistants lose its tools. You can connect it again later."
+            action="Remove"
+            destructive
+            onConfirm={() => act(() => api.removeMcp(s.name))}
+          >
+            <Button variant="destructive" size="sm">
               <IconTrash data-icon="inline-start" />
               Remove
             </Button>
+          </ConfirmAction>
+        )}
+      </ItemActions>
+      {(state === 'failed' || state === 'needs_auth' || s.tools.length > 0) && (
+        <ItemFooter className="flex-col items-stretch gap-2">
+          {state === 'failed' && 'message' in s.status && (
+            <Alert variant="destructive">
+              <AlertCircleIcon />
+              <AlertDescription>{String(s.status.message)}</AlertDescription>
+            </Alert>
           )}
-        </div>
-      </div>
-      <div className="muted small mono">{target}</div>
-      {state === 'failed' && 'message' in s.status && <div className="error-note small">{String(s.status.message)}</div>}
-      {state === 'needs_auth' && (
-        <div className="muted small">This server needs you to sign in. Sign in opens its approval page in a new tab.</div>
+          {state === 'needs_auth' && (
+            <p className="text-sm text-muted-foreground">This server needs you to sign in. Sign in opens its approval page in a new tab.</p>
+          )}
+          {s.tools.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {s.tools.map((t) => (
+                <Badge key={t} variant="secondary" className="font-mono">
+                  {t.replace(`mcp__${s.name}__`, '')}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </ItemFooter>
       )}
-      {s.tools.length > 0 && (
-        <div className="row gap wrap">
-          {s.tools.map((t) => (
-            <span key={t} className="chip mono small">
-              {t.replace(`mcp__${s.name}__`, '')}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
+    </Item>
   );
 }
 
@@ -226,9 +264,7 @@ function AddMcp({ onAdded }: { onAdded: () => void }) {
   async function add() {
     const parts = argv(command);
     const config: McpServerConfig =
-      kind === 'stdio'
-        ? { command: parts[0], args: parts.slice(1), env: lines(pairs) }
-        : { url: url.trim(), headers: lines(pairs) };
+      kind === 'stdio' ? { command: parts[0], args: parts.slice(1), env: lines(pairs) } : { url: url.trim(), headers: lines(pairs) };
     if (policy) config.policy = policy as ToolPolicy;
     setBusy(true);
     try {
@@ -248,33 +284,41 @@ function AddMcp({ onAdded }: { onAdded: () => void }) {
   }
 
   return (
-    <div className="mcp-form">
+    <FieldGroup className="grid gap-4 pt-2 sm:grid-cols-2">
       <TextField label="Name" placeholder="e.g. github" value={name} onChange={(e) => setName(e.target.value)} />
-      <SelectField
-        label="Transport"
+      <ToggleField
+        label="Connects by"
         value={kind}
         onValueChange={setKind}
         options={[
-          { value: 'stdio', label: 'stdio', description: 'Start a local program' },
-          { value: 'http', label: 'Streamable HTTP', description: 'Connect to a URL' },
+          { value: 'stdio', label: 'Starting a program' },
+          { value: 'http', label: 'A URL' },
         ]}
       />
       {kind === 'stdio' ? (
         <TextField
           label="Command"
+          className="col-span-full"
           placeholder="npx -y @modelcontextprotocol/server-filesystem /data"
           value={command}
           onChange={(e) => setCommand(e.target.value)}
         />
       ) : (
-        <TextField label="URL" placeholder="https://example.com/mcp" value={url} onChange={(e) => setUrl(e.target.value)} />
+        <TextField
+          label="URL"
+          className="col-span-full"
+          placeholder="https://example.com/mcp"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+        />
       )}
-      <div className="full">
-        <label className="label" htmlFor="mcp-pairs">
-          {kind === 'stdio' ? 'Environment' : 'Headers'} (one NAME=value per line; values may use {'${VAR}'})
-        </label>
-        <textarea id="mcp-pairs" className="code-editor small-editor" value={pairs} onChange={(e) => setPairs(e.target.value)} />
-      </div>
+      <TextArea
+        label={`${kind === 'stdio' ? 'Environment' : 'Headers'} (one NAME=value per line; values may use \${VAR})`}
+        mono
+        rows={3}
+        value={pairs}
+        onChange={setPairs}
+      />
       <SelectField
         label="Policy"
         value={policy}
@@ -286,12 +330,12 @@ function AddMcp({ onAdded }: { onAdded: () => void }) {
           { value: 'deny', label: 'Never' },
         ]}
       />
-      <div className="row end full">
+      <div className="col-span-full flex justify-end">
         <Button onClick={add} disabled={busy || !name.trim() || (kind === 'stdio' ? !command.trim() : !url.trim())}>
           {busy ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
           Add and connect
         </Button>
       </div>
-    </div>
+    </FieldGroup>
   );
 }

@@ -5,12 +5,12 @@
 import { useId, type ComponentProps, type ReactNode } from 'react';
 
 import { Checkbox } from '@/components/ui/checkbox';
-import { Field, FieldContent, FieldDescription, FieldError, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field';
+import { Field, FieldContent, FieldDescription, FieldError, FieldLabel, FieldTitle } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 
 type Labelled = {
@@ -61,7 +61,17 @@ export type SelectFieldProps = Labelled & {
 };
 
 /** A dropdown from a list of options, labelled when `label` is given. */
-export function SelectField({ label, description, options, value, onValueChange, placeholder, disabled, className, ...aria }: SelectFieldProps) {
+export function SelectField({
+  label,
+  description,
+  options,
+  value,
+  onValueChange,
+  placeholder,
+  disabled,
+  className,
+  ...aria
+}: SelectFieldProps) {
   const id = useId();
   const hasEmpty = options.some((o) => o.value === '');
   const current = value == null || (value === '' && !hasEmpty) ? '' : enc(value);
@@ -134,31 +144,6 @@ function ToggleLabel({ id, label, description }: Labelled & { id: string }) {
   );
 }
 
-export type RadioFieldProps = {
-  label?: ReactNode;
-  options: SelectOption[];
-  value?: string;
-  onValueChange?: (value: string) => void;
-};
-
-/** One choice from a few options, each with an optional description. */
-export function RadioField({ label, options, value, onValueChange }: RadioFieldProps) {
-  const id = useId();
-  return (
-    <FieldSet>
-      {label && <FieldLegend variant="label">{label}</FieldLegend>}
-      <RadioGroup value={value} onValueChange={onValueChange}>
-        {options.map((o) => (
-          <Field key={o.value} orientation="horizontal" data-disabled={o.disabled || undefined}>
-            <RadioGroupItem id={`${id}-${o.value}`} value={o.value} disabled={o.disabled} />
-            <ToggleLabel id={`${id}-${o.value}`} label={o.label} description={o.description} />
-          </Field>
-        ))}
-      </RadioGroup>
-    </FieldSet>
-  );
-}
-
 export interface TabItem {
   id: string;
   label: ReactNode;
@@ -191,5 +176,41 @@ export function TabBar({ items, value, onValueChange, variant = 'pill', classNam
         ))}
       </TabsList>
     </Tabs>
+  );
+}
+
+export type ToggleFieldProps = {
+  label?: ReactNode;
+  options: SelectOption[];
+  value: string;
+  onValueChange: (value: string) => void;
+  className?: string;
+  'aria-label'?: string;
+};
+
+/** One choice from two to five options, shown side by side. */
+export function ToggleField({ label, options, value, onValueChange, className, ...aria }: ToggleFieldProps) {
+  const id = useId();
+  return (
+    <Field className={className}>
+      {label && <FieldTitle id={id}>{label}</FieldTitle>}
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        spacing={0}
+        aria-labelledby={label ? id : undefined}
+        aria-label={aria['aria-label']}
+        value={value}
+        // Radix sends "" when the chosen item is clicked again; keep the choice.
+        onValueChange={(v) => v && onValueChange(v)}
+        className="w-fit"
+      >
+        {options.map((o) => (
+          <ToggleGroupItem key={o.value} value={o.value} disabled={o.disabled}>
+            {o.label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+    </Field>
   );
 }

@@ -1,11 +1,21 @@
 import { useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
-import { TabBar, TextField } from '@/components/fields';
+import { ChevronRightIcon, FilesIcon, SearchXIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { TabBar, TextField, ToggleField } from '@/components/fields';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item';
+import { Spinner } from '@/components/ui/spinner';
+import { Textarea } from '@/components/ui/textarea';
 import { api, fileToBase64, type Collection, type KnowledgeDocument, type SearchHit, type SearchMode } from '../api';
-import { Disclosure, Empty, ErrorNote, PageHeader } from '../components';
-import { IconPlus, IconSearch, IconTrash } from '../icons';
+import { ConfirmAction, Disclosure, EmptyState, ErrorNote, LinkItem, Page, PageHeader } from '@/components/shared';
+import { IconPlus, IconSearch, IconTrash, IconUpload } from '../icons';
 import { navigate } from '../router';
 import { ago, useLoad } from '../util';
 import { useDevMode } from '../prefs';
@@ -59,8 +69,7 @@ export function Knowledge({ selected }: { selected?: string }) {
 
   return (
     <div
-      className="page drop-page"
-      data-dragging={dragging || undefined}
+      className="relative"
       onDragOver={(e) => {
         if (e.dataTransfer.types.includes('Files')) {
           e.preventDefault();
@@ -76,7 +85,16 @@ export function Knowledge({ selected }: { selected?: string }) {
         addFiles(e.dataTransfer.files);
       }}
     >
-      {dragging && <div className="drop-overlay">Drop to add to {current?.name ?? 'your documents'}</div>}
+      {dragging && (
+        <Empty className="pointer-events-none absolute inset-2 z-10 border bg-background/90" aria-hidden="true">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <IconUpload />
+            </EmptyMedia>
+            <EmptyTitle>Drop to add to {current?.name ?? 'your documents'}</EmptyTitle>
+          </EmptyHeader>
+        </Empty>
+      )}
       <input
         ref={picker}
         type="file"
@@ -87,68 +105,72 @@ export function Knowledge({ selected }: { selected?: string }) {
           e.target.value = '';
         }}
       />
-      <PageHeader
-        title="Knowledge"
-        subtitle={
-          <>
-            Documents your assistants can search and quote. Drop files anywhere on this page, then pick the folder in an assistant's
-            settings (or just ask in Chat).
-          </>
-        }
-        actions={
-          <Button onClick={() => picker.current?.click()} disabled={adding > 0}>
-            {adding > 0 ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
-            Add files
-          </Button>
-        }
-      />
-      <ErrorNote error={list.error} />
-      <div className="agents-layout">
-        <aside className="stack">
-          <div className="agent-list">
-            {list.data?.map((c) => (
-              <a
-                key={c.name}
-                href={`#/knowledge/${encodeURIComponent(c.name)}`}
-                className="agent-card"
-                aria-current={current?.name === c.name ? 'page' : undefined}
-                onClick={(e) => {
-                  e.preventDefault();
-                  navigate(`/knowledge/${encodeURIComponent(c.name)}`);
-                }}
-              >
-                <strong>{c.name}</strong>
-                <span className="muted small">
-                  {c.documents} document{c.documents === 1 ? '' : 's'}
-                  {dev && ` · ${c.chunks} chunks`}
-                </span>
-                {dev && <span className="muted small mono">{c.embedding_model}</span>}
-              </a>
-            ))}
+      <Page wide>
+        <PageHeader
+          title="Knowledge"
+          subtitle={
+            <>
+              Documents your assistants can search and quote. Drop files anywhere on this page, then pick the folder in an assistant's
+              settings (or just ask in Chat).
+            </>
+          }
+          actions={
+            <Button onClick={() => picker.current?.click()} disabled={adding > 0}>
+              {adding > 0 ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
+              Add files
+            </Button>
+          }
+        />
+        <ErrorNote error={list.error} />
+        <div className="grid items-start gap-4 lg:grid-cols-[19rem_minmax(0,1fr)]">
+          <div className="flex flex-col gap-3">
+            <ItemGroup className="gap-2">
+              {list.data?.map((c) => (
+                <LinkItem key={c.name} href={`#/knowledge/${encodeURIComponent(c.name)}`} active={current?.name === c.name} title={c.name}>
+                  <ItemDescription>
+                    {c.documents} document{c.documents === 1 ? '' : 's'}
+                    {dev && ` · ${c.chunks} chunks`}
+                  </ItemDescription>
+                  {dev && <ItemDescription className="font-mono">{c.embedding_model}</ItemDescription>}
+                </LinkItem>
+              ))}
+            </ItemGroup>
             {list.data?.length === 0 && (
-              <div className="drop-zone" onClick={() => picker.current?.click()} role="button" tabIndex={0}>
-                <strong>Drop files here</strong>
-                <span className="muted small">PDF, text, Markdown or HTML. Or click to choose files.</span>
-              </div>
+              <Empty className="border">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <FilesIcon />
+                  </EmptyMedia>
+                  <EmptyTitle>Drop files here</EmptyTitle>
+                  <EmptyDescription>PDF, text, Markdown or HTML.</EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button variant="outline" onClick={() => picker.current?.click()}>
+                    Choose files
+                  </Button>
+                </EmptyContent>
+              </Empty>
             )}
+            <Card>
+              <CardContent>
+                <Disclosure summary="New folder">
+                  <NewCollection
+                    onCreated={(name) => {
+                      list.reload();
+                      navigate(`/knowledge/${encodeURIComponent(name)}`);
+                    }}
+                  />
+                </Disclosure>
+              </CardContent>
+            </Card>
           </div>
-          <section className="card">
-            <Disclosure summary={<strong>New folder</strong>}>
-              <NewCollection
-                onCreated={(name) => {
-                  list.reload();
-                  navigate(`/knowledge/${encodeURIComponent(name)}`);
-                }}
-              />
-            </Disclosure>
-          </section>
-        </aside>
-        {current ? (
-          <CollectionView key={current.name} c={current} onChange={list.reload} />
-        ) : (
-          list.data && list.data.length > 0 && <Empty title="Pick a folder" />
-        )}
-      </div>
+          {current ? (
+            <CollectionView key={current.name} c={current} onChange={list.reload} />
+          ) : (
+            list.data && list.data.length > 0 && <EmptyState title="Pick a folder" />
+          )}
+        </div>
+      </Page>
     </div>
   );
 }
@@ -178,7 +200,7 @@ function NewCollection({ onCreated }: { onCreated: (name: string) => void }) {
     }
   }
   return (
-    <div className="stack" style={{ paddingTop: 8 }}>
+    <FieldGroup className="pt-2">
       <TextField label="Name" placeholder="handbook" value={name} onChange={(e) => setName(e.target.value)} />
       <TextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
       {dev && (
@@ -190,11 +212,11 @@ function NewCollection({ onCreated }: { onCreated: (name: string) => void }) {
           onChange={(e) => setModel(e.target.value)}
         />
       )}
-      <Button onClick={create} disabled={busy || !name.trim()}>
+      <Button className="w-fit" onClick={create} disabled={busy || !name.trim()}>
         {busy ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
         Create
       </Button>
-    </div>
+    </FieldGroup>
   );
 }
 
@@ -207,7 +229,6 @@ function CollectionView({ c, onChange }: { c: Collection; onChange: () => void }
   };
 
   async function remove() {
-    if (!confirm(`Delete ${c.name} and its ${c.documents} documents?`)) return;
     try {
       await api.deleteCollection(c.name);
       navigate('/knowledge');
@@ -218,30 +239,40 @@ function CollectionView({ c, onChange }: { c: Collection; onChange: () => void }
   }
 
   return (
-    <section className="stack">
-      <div className="card">
-        <div className="row between">
-          <div>
-            <h2 style={{ margin: 0 }}>{c.name}</h2>
-            {c.description && <p className="muted" style={{ margin: '4px 0 0' }}>{c.description}</p>}
-          </div>
-          <Button variant="ghost" size="sm" onClick={remove}>
-            <IconTrash data-icon="inline-start" />
-            Delete
-          </Button>
-        </div>
-        <div className="row gap wrap small muted" style={{ marginTop: 10 }}>
-          <span className="chip mono">{c.embedding_model}</span>
-          {c.dimensions != null && <span className="chip">{c.dimensions} dims</span>}
-          <span className="chip">
-            chunks of ~{c.chunk_tokens} tokens, {c.chunk_overlap} overlap
-          </span>
-          <span>updated {ago(c.updated_at)}</span>
-        </div>
-      </div>
+    <div className="flex flex-col gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">{c.name}</CardTitle>
+          {c.description && <CardDescription>{c.description}</CardDescription>}
+          <CardAction>
+            <ConfirmAction
+              title={`Delete ${c.name}?`}
+              description={`Its ${c.documents} documents are deleted too. Assistants that search it lose it.`}
+              action="Delete"
+              destructive
+              onConfirm={remove}
+            >
+              <Button variant="ghost" size="sm">
+                <IconTrash data-icon="inline-start" />
+                Delete
+              </Button>
+            </ConfirmAction>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <Badge variant="outline" className="font-mono">
+            {c.embedding_model}
+          </Badge>
+          {c.dimensions != null && <Badge variant="outline">{c.dimensions} dims</Badge>}
+          <Badge variant="outline">
+            Chunks of ~{c.chunk_tokens} tokens, {c.chunk_overlap} overlap
+          </Badge>
+          <span>Updated {ago(c.updated_at)}</span>
+        </CardContent>
+      </Card>
       <TabBar
         items={[
-          { id: 'documents', label: 'Documents', badge: c.documents },
+          { id: 'documents', label: 'Documents', badge: <Badge variant="secondary">{c.documents}</Badge> },
           { id: 'search', label: 'Search' },
         ]}
         value={tab}
@@ -253,17 +284,20 @@ function CollectionView({ c, onChange }: { c: Collection; onChange: () => void }
         <>
           <AddDocument collection={c.name} onAdded={refresh} />
           <ErrorNote error={docs.error} />
-          <div className="card flush">
-            {docs.data?.map((d) => (
-              <DocumentRow key={d.id} collection={c.name} d={d} onDeleted={refresh} />
-            ))}
-            {docs.data?.length === 0 && <Empty title="No documents">Add text, a file or a web page above.</Empty>}
-          </div>
+          {docs.data?.length === 0 ? (
+            <EmptyState title="No documents">Add text, a file or a web page above.</EmptyState>
+          ) : (
+            <ItemGroup className="gap-2">
+              {docs.data?.map((d) => (
+                <DocumentRow key={d.id} collection={c.name} d={d} onDeleted={refresh} />
+              ))}
+            </ItemGroup>
+          )}
         </>
       ) : (
         <SearchPanel collection={c.name} />
       )}
-    </section>
+    </div>
   );
 }
 
@@ -317,51 +351,89 @@ function AddDocument({ collection, onAdded }: { collection: string; onAdded: () 
   }
 
   return (
-    <section className="card stack">
-      <div className="row between">
-        <h3 style={{ margin: 0 }}>Add documents</h3>
-        <TabBar
-          items={[
-            { id: 'file', label: 'Files' },
-            { id: 'text', label: 'Text' },
-            { id: 'url', label: 'Web page' },
-          ]}
-          value={kind}
-          onValueChange={setKind}
-          variant="pill"
-          aria-label="Document source"
-        />
-      </div>
-      {kind === 'file' && (
-        <label className="dropzone">
-          <input ref={fileInput} type="file" multiple accept=".txt,.md,.markdown,.html,.htm,.pdf,.csv,.json,.yaml,.yml,.rst" onChange={(e) => upload(e.target.files)} />
-          <strong>{busy ? 'Adding…' : 'Choose files'}</strong>
-          <span className="muted small">Text, Markdown, HTML or PDF. Uploading a file with the same name again replaces it.</span>
-        </label>
-      )}
-      {kind === 'text' && (
-        <>
-          <div className="mcp-form" style={{ paddingTop: 0 }}>
-            <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
-            <TextField label="Source" description="Re-adding the same source replaces it." placeholder="faq/refunds" value={source} onChange={(e) => setSource(e.target.value)} />
-          </div>
-          <textarea className="code-editor small-editor" aria-label="Text" placeholder="Paste text or Markdown…" value={text} onChange={(e) => setText(e.target.value)} />
-          <Button onClick={submit} disabled={busy || !text.trim()}>
-            {busy ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
-            Add text
-          </Button>
-        </>
-      )}
-      {kind === 'url' && (
-        <div className="row gap">
-          <input className="plain-input" aria-label="URL" placeholder="https://example.com/guide" value={url} onChange={(e) => setUrl(e.target.value)} />
-          <Button onClick={submit} disabled={busy || !/^https?:\/\//.test(url.trim())}>
-            {busy ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
-            Fetch and add
-          </Button>
-        </div>
-      )}
-    </section>
+    <Card>
+      <CardHeader>
+        <CardTitle>Add documents</CardTitle>
+        <CardAction>
+          <TabBar
+            items={[
+              { id: 'file', label: 'Files' },
+              { id: 'text', label: 'Text' },
+              { id: 'url', label: 'Web page' },
+            ]}
+            value={kind}
+            onValueChange={setKind}
+            variant="pill"
+            aria-label="Document source"
+          />
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        {kind === 'file' && (
+          <Field>
+            <FieldLabel htmlFor="doc-files">{busy ? 'Adding…' : 'Choose files'}</FieldLabel>
+            <Input
+              id="doc-files"
+              ref={fileInput}
+              type="file"
+              multiple
+              accept=".txt,.md,.markdown,.html,.htm,.pdf,.csv,.json,.yaml,.yml,.rst"
+              disabled={busy}
+              onChange={(e) => upload(e.target.files)}
+            />
+            <FieldDescription>Text, Markdown, HTML or PDF. Uploading a file with the same name again replaces it.</FieldDescription>
+          </Field>
+        )}
+        {kind === 'text' && (
+          <FieldGroup>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
+              <TextField
+                label="Source"
+                description="Re-adding the same source replaces it."
+                placeholder="faq/refunds"
+                value={source}
+                onChange={(e) => setSource(e.target.value)}
+              />
+            </div>
+            <Textarea
+              className="min-h-28"
+              aria-label="Text"
+              placeholder="Paste text or Markdown…"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+            />
+            <Button className="w-fit" onClick={submit} disabled={busy || !text.trim()}>
+              {busy ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
+              Add text
+            </Button>
+          </FieldGroup>
+        )}
+        {kind === 'url' && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
+            }}
+          >
+            <InputGroup>
+              <InputGroupInput
+                aria-label="URL"
+                placeholder="https://example.com/guide"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+              />
+              <InputGroupAddon align="inline-end">
+                <InputGroupButton type="submit" variant="default" disabled={busy || !/^https?:\/\//.test(url.trim())}>
+                  {busy ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
+                  Fetch and add
+                </InputGroupButton>
+              </InputGroupAddon>
+            </InputGroup>
+          </form>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -369,7 +441,6 @@ function DocumentRow({ collection, d, onDeleted }: { collection: string; d: Know
   const [open, setOpen] = useState(false);
   const view = useLoad(() => (open ? api.document(collection, d.id) : Promise.resolve(undefined)), [open, d.id]);
   async function remove() {
-    if (!confirm(`Delete ${d.title ?? d.source}?`)) return;
     try {
       await api.deleteDocument(collection, d.id);
       onDeleted();
@@ -379,34 +450,54 @@ function DocumentRow({ collection, d, onDeleted }: { collection: string; d: Know
   }
   const format = (d.metadata as { format?: string } | null)?.format;
   return (
-    <div className="doc-row">
-      <div className="doc-head">
-        <button type="button" className="disclosure-head" onClick={() => setOpen(!open)} aria-expanded={open}>
-          <span className="doc-title">{d.title ?? d.source}</span>
-        </button>
-        <span className="muted small mono doc-source">{d.source}</span>
-        {format && <span className="chip small">{format}</span>}
-        <span className="muted small num">{d.chunks} chunks</span>
-        <span className="muted small">{ago(d.created_at)}</span>
-        <button type="button" className="icon-btn" aria-label={`Delete ${d.source}`} onClick={remove}>
-          <IconTrash />
-        </button>
-      </div>
-      {open && (
-        <div className="chunks">
-          {view.data?.chunks.map((c) => (
-            <div key={c.id} className="chunk">
-              <div className="muted small">
-                #{c.seq}
-                {(c.metadata as { heading?: string } | null)?.heading && ` · ${(c.metadata as { heading: string }).heading}`}
-              </div>
-              <div className="pre small">{c.text}</div>
-            </div>
-          ))}
-          {view.loading && <span className="muted small">Loading…</span>}
-        </div>
-      )}
-    </div>
+    <Collapsible open={open} onOpenChange={setOpen} asChild>
+      <Item variant="outline" size="sm">
+        <ItemContent className="min-w-0">
+          <ItemTitle className="w-full">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="group/doc -ml-2 min-w-0 justify-start">
+                <ChevronRightIcon data-icon="inline-start" className="transition-transform group-data-[state=open]/doc:rotate-90" />
+                <span className="truncate">{d.title ?? d.source}</span>
+              </Button>
+            </CollapsibleTrigger>
+            {format && <Badge variant="outline">{format}</Badge>}
+          </ItemTitle>
+          <ItemDescription className="truncate font-mono">{d.source}</ItemDescription>
+        </ItemContent>
+        <ItemActions>
+          <span className="text-sm text-muted-foreground tabular-nums">
+            {d.chunks} chunks · {ago(d.created_at)}
+          </span>
+          <ConfirmAction
+            title={`Delete ${d.title ?? d.source}?`}
+            description="Assistants can no longer find it."
+            action="Delete"
+            destructive
+            onConfirm={remove}
+          >
+            <Button variant="ghost" size="icon-sm" aria-label={`Delete ${d.source}`}>
+              <IconTrash />
+            </Button>
+          </ConfirmAction>
+        </ItemActions>
+        <CollapsibleContent className="basis-full">
+          <ItemGroup className="gap-2 pt-2">
+            {view.data?.chunks.map((c) => (
+              <Item key={c.id} variant="muted" size="xs">
+                <ItemContent>
+                  <ItemDescription>
+                    #{c.seq}
+                    {(c.metadata as { heading?: string } | null)?.heading && ` · ${(c.metadata as { heading: string }).heading}`}
+                  </ItemDescription>
+                  <p className="text-sm whitespace-pre-wrap">{c.text}</p>
+                </ItemContent>
+              </Item>
+            ))}
+            {view.loading && <Spinner />}
+          </ItemGroup>
+        </CollapsibleContent>
+      </Item>
+    </Collapsible>
   );
 }
 
@@ -433,47 +524,69 @@ function SearchPanel({ collection }: { collection: string }) {
     }
   }
   return (
-    <section className="card stack">
-      <form
-        className="row gap"
-        onSubmit={(e) => {
-          e.preventDefault();
-          run();
-        }}
-      >
-        <input className="plain-input" aria-label="Search query" placeholder="What does an agent need to find?" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <TabBar
-          items={MODES}
-          value={mode}
-          onValueChange={(m) => {
-            setMode(m as SearchMode);
-            run(m as SearchMode);
+    <Card>
+      <CardContent className="flex flex-col gap-4">
+        <form
+          className="flex flex-wrap items-end gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run();
           }}
-          variant="pill"
-          aria-label="Search mode"
-        />
-        <Button type="submit" disabled={busy || !query.trim()}>
-          {busy ? <Spinner data-icon="inline-start" /> : <IconSearch data-icon="inline-start" />}
-          Search
-        </Button>
-      </form>
-      {hits?.length === 0 && <Empty title="No results" />}
-      <ol className="hits">
-        {hits?.map((h, i) => (
-          <li key={h.chunk_id} className="hit">
-            <div className="row gap wrap">
-              <span className="chip">{i + 1}</span>
-              <strong>{h.title ?? h.source}</strong>
-              {h.heading && <span className="muted small">› {h.heading}</span>}
-              <span className="spacer" />
-              {h.vector_score != null && <span className="chip small mono">cos {h.vector_score.toFixed(3)}</span>}
-              {h.text_score != null && <span className="chip small mono">bm25 {h.text_score.toFixed(2)}</span>}
-            </div>
-            <div className="pre small">{h.text}</div>
-            <div className="muted small mono">{h.source}</div>
-          </li>
-        ))}
-      </ol>
-    </section>
+        >
+          <InputGroup className="min-w-64 flex-1">
+            <InputGroupInput
+              aria-label="Search query"
+              placeholder="What does an agent need to find?"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton type="submit" variant="default" disabled={busy || !query.trim()}>
+                {busy ? <Spinner data-icon="inline-start" /> : <IconSearch data-icon="inline-start" />}
+                Search
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+          <ToggleField
+            className="w-auto"
+            aria-label="Search mode"
+            options={MODES.map((m) => ({ value: m.id, label: m.label }))}
+            value={mode}
+            onValueChange={(m) => {
+              setMode(m as SearchMode);
+              run(m as SearchMode);
+            }}
+          />
+        </form>
+        {hits?.length === 0 && <EmptyState title="No results" icon={<SearchXIcon />} />}
+        <ItemGroup className="gap-2">
+          {hits?.map((h, i) => (
+            <Item key={h.chunk_id} variant="outline">
+              <ItemContent className="min-w-0">
+                <ItemTitle className="flex-wrap">
+                  <Badge variant="secondary">{i + 1}</Badge>
+                  {h.title ?? h.source}
+                  {h.heading && <span className="font-normal text-muted-foreground">› {h.heading}</span>}
+                </ItemTitle>
+                <p className="text-sm whitespace-pre-wrap">{h.text}</p>
+                <ItemDescription className="font-mono">{h.source}</ItemDescription>
+              </ItemContent>
+              <ItemActions className="flex-col items-end">
+                {h.vector_score != null && (
+                  <Badge variant="outline" className="font-mono">
+                    cos {h.vector_score.toFixed(3)}
+                  </Badge>
+                )}
+                {h.text_score != null && (
+                  <Badge variant="outline" className="font-mono">
+                    bm25 {h.text_score.toFixed(2)}
+                  </Badge>
+                )}
+              </ItemActions>
+            </Item>
+          ))}
+        </ItemGroup>
+      </CardContent>
+    </Card>
   );
 }

@@ -1,10 +1,16 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { TabBar } from '@/components/fields';
-import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
+import { Button } from '@/components/ui/button';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 import YAML from 'yaml';
-import { ErrorNote } from './components';
+import { ErrorNote } from '@/components/shared';
 import { useDevMode } from './prefs';
 
 /** Empty values are left out, so specs (and their YAML) stay short. */
@@ -66,15 +72,11 @@ export function SpecEditor<T extends object>({
 
   // The YAML view is a developer detail.
   if (!dev && tab === 'form') {
-    return (
-      <div className="spec-editor">
-        <div className="form-body">{children}</div>
-      </div>
-    );
+    return <div className="flex flex-col gap-4">{children}</div>;
   }
 
   return (
-    <div className="spec-editor">
+    <div className="flex flex-col gap-4">
       <TabBar
         items={[
           { id: 'form', label: 'Form' },
@@ -89,11 +91,11 @@ export function SpecEditor<T extends object>({
         aria-label={`${label} editor`}
       />
       {tab === 'form' ? (
-        <div className="form-body">{children}</div>
+        <div className="flex flex-col gap-4">{children}</div>
       ) : (
         <>
-          <textarea
-            className="code-editor"
+          <Textarea
+            className="min-h-96 font-mono"
             spellCheck={false}
             value={text}
             aria-label={`${label} (YAML)`}
@@ -120,14 +122,16 @@ export function SpecEditor<T extends object>({
 /** A titled group of fields. */
 export function Section({ title, hint, children, aside }: { title: string; hint?: ReactNode; children: ReactNode; aside?: ReactNode }) {
   return (
-    <fieldset className="form-section">
-      <div className="row between">
-        <legend>{title}</legend>
-        {aside}
-      </div>
-      {hint && <p className="muted small form-hint">{hint}</p>}
-      <div className="form-grid">{children}</div>
-    </fieldset>
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        {hint && <CardDescription>{hint}</CardDescription>}
+        {aside && <CardAction>{aside}</CardAction>}
+      </CardHeader>
+      <CardContent>
+        <FieldGroup className="grid gap-4 sm:grid-cols-2">{children}</FieldGroup>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -156,23 +160,21 @@ export function TextArea({
 }) {
   const id = useId();
   return (
-    <div className={wide ? 'span-all' : undefined}>
-      <Field data-invalid={error ? true : undefined}>
-        {label && <FieldLabel htmlFor={id}>{label}</FieldLabel>}
-        <Textarea
-          id={id}
-          ref={textareaRef}
-          className={mono ? 'font-mono' : undefined}
-          rows={rows}
-          value={value}
-          placeholder={placeholder}
-          aria-invalid={error ? true : undefined}
-          onChange={(e) => onChange(e.target.value)}
-        />
-        {description && <FieldDescription>{description}</FieldDescription>}
-        {error && <FieldError>{error}</FieldError>}
-      </Field>
-    </div>
+    <Field data-invalid={error ? true : undefined} className={cn(wide && 'col-span-full')}>
+      {label && <FieldLabel htmlFor={id}>{label}</FieldLabel>}
+      <Textarea
+        id={id}
+        ref={textareaRef}
+        className={mono ? 'font-mono' : undefined}
+        rows={rows}
+        value={value}
+        placeholder={placeholder}
+        aria-invalid={error ? true : undefined}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {description && <FieldDescription>{description}</FieldDescription>}
+      {error && <FieldError>{error}</FieldError>}
+    </Field>
   );
 }
 
@@ -255,60 +257,73 @@ export function PickList({
   const toggle = (v: string) => onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]);
 
   return (
-    <div className="picklist span-all">
-      {items.length > 8 && (
-        <input className="plain-input full" placeholder="Filter…" aria-label="Filter" value={q} onChange={(e) => setQ(e.target.value)} />
-      )}
-      <div className="picklist-items" style={{ maxHeight }}>
-        {items.length === 0 && unknown.length === 0 && <p className="muted small">{empty}</p>}
-        {unknown.map((v) => (
-          <PickRow key={v} item={{ value: v, description: 'Not found here; kept as written.' }} on onToggle={() => toggle(v)} extra={extra} />
-        ))}
+    <div className="col-span-full flex flex-col gap-2">
+      {items.length > 8 && <Input placeholder="Filter…" aria-label="Filter" value={q} onChange={(e) => setQ(e.target.value)} />}
+      <ScrollArea className="rounded-lg border" style={{ maxHeight }}>
+        {items.length === 0 && unknown.length === 0 && <p className="p-3 text-sm text-muted-foreground">{empty}</p>}
+        <ItemGroup>
+          {unknown.map((v) => (
+            <PickRow
+              key={v}
+              item={{ value: v, description: 'Not found here; kept as written.' }}
+              on
+              onToggle={() => toggle(v)}
+              extra={extra}
+            />
+          ))}
+        </ItemGroup>
         {groups.map((g) => (
-          <div key={g}>
-            {g && <div className="picklist-group">{g}</div>}
+          <ItemGroup key={g}>
+            {g && <p className="sticky top-0 border-b bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">{g}</p>}
             {shown
               .filter((i) => (i.group ?? '') === g)
               .map((i) => (
                 <PickRow key={i.value} item={i} on={selected.includes(i.value)} onToggle={() => toggle(i.value)} extra={extra} />
               ))}
-          </div>
+          </ItemGroup>
         ))}
-      </div>
+      </ScrollArea>
     </div>
   );
 }
 
 function PickRow({ item, on, onToggle, extra }: { item: PickItem; on: boolean; onToggle: () => void; extra?: (v: string) => ReactNode }) {
+  const id = useId();
   return (
-    <div className="pick-row" data-on={on || undefined}>
-      <label className="pick-main">
-        <input type="checkbox" checked={on} onChange={onToggle} />
-        <span className="pick-text">
-          <span className={item.label ? 'small' : 'mono small'}>{item.label ?? item.value}</span>
-          {item.description && <span className="muted small pick-desc">{item.description}</span>}
-        </span>
-      </label>
-      {on && extra?.(item.value)}
-    </div>
+    <Item size="xs" variant={on ? 'muted' : 'default'} className="rounded-none border-b last:border-b-0">
+      <ItemMedia>
+        <Checkbox id={id} checked={on} onCheckedChange={onToggle} />
+      </ItemMedia>
+      <ItemContent className="min-w-0">
+        <ItemTitle>
+          <label htmlFor={id} className={cn('cursor-pointer', !item.label && 'font-mono')}>
+            {item.label ?? item.value}
+          </label>
+        </ItemTitle>
+        {item.description && <ItemDescription>{item.description}</ItemDescription>}
+      </ItemContent>
+      {on && extra && <ItemActions>{extra(item.value)}</ItemActions>}
+    </Item>
   );
 }
 
 /** Buttons that insert template variables into a text area. */
-export function TemplateVars({
-  vars,
-  onInsert,
-}: {
-  vars: { name: string; hint: string }[];
-  onInsert: (text: string) => void;
-}) {
+export function TemplateVars({ vars, onInsert }: { vars: { name: string; hint: string }[]; onInsert: (text: string) => void }) {
   return (
-    <div className="template-vars span-all">
-      <span className="muted small">Insert:</span>
+    <div className="col-span-full flex flex-wrap items-center gap-1.5">
+      <span className="text-sm text-muted-foreground">Insert:</span>
       {vars.map((v) => (
-        <button key={v.name} type="button" className="chip mono small var-chip" title={v.hint} onClick={() => onInsert(`{{ ${v.name} }}`)}>
+        <Button
+          key={v.name}
+          type="button"
+          variant="secondary"
+          size="xs"
+          className="font-mono"
+          title={v.hint}
+          onClick={() => onInsert(`{{ ${v.name} }}`)}
+        >
           {v.name}
-        </button>
+        </Button>
       ))}
     </div>
   );

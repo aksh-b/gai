@@ -1,8 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
-import { SelectField } from '@/components/fields';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { SelectField } from '@/components/fields';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
+import { Textarea } from '@/components/ui/textarea';
 import {
   api,
   type AgentVersion,
@@ -13,7 +17,7 @@ import {
   type Run,
   type Step,
 } from '../api';
-import { ErrorNote } from '../components';
+import { ErrorNote } from '@/components/shared';
 import { navigate } from '../router';
 import { blocksText } from '../util';
 
@@ -74,7 +78,6 @@ export function forkOf(run: Run): ForkInfo | undefined {
  * the model; the rest run live with the chosen changes.
  */
 export function ForkDialog({ run, steps, from, onClose }: { run: Run; steps: Step[]; from: number | null; onClose: () => void }) {
-  const ref = useRef<HTMLDialogElement>(null);
   const ts = turns(steps);
   const max = (ts.at(-1)?.step ?? 0) + 1;
   const spec = run.metadata.spec;
@@ -91,10 +94,7 @@ export function ForkDialog({ run, steps, from, onClose }: { run: Run; steps: Ste
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (from === null) {
-      ref.current?.close();
-      return;
-    }
+    if (from === null) return;
     setFromStep(Math.min(Math.max(1, from), max));
     setModel('');
     setVersion('');
@@ -103,9 +103,14 @@ export function ForkDialog({ run, steps, from, onClose }: { run: Run; steps: Ste
     setEditStep('');
     setEditText('');
     setError(undefined);
-    api.models().then(setModels).catch(() => {});
-    api.agentVersions(run.agent).then(setVersions).catch(() => setVersions([]));
-    ref.current?.showModal();
+    api
+      .models()
+      .then(setModels)
+      .catch(() => {});
+    api
+      .agentVersions(run.agent)
+      .then(setVersions)
+      .catch(() => setVersions([]));
   }, [from]);
 
   const replayedTurns = ts.filter((t) => t.step < fromStep);
@@ -159,61 +164,81 @@ export function ForkDialog({ run, steps, from, onClose }: { run: Run; steps: Ste
   ];
 
   return (
-    <dialog ref={ref} className="key-dialog fork-dialog" aria-labelledby="fork-title" onClose={onClose}>
-      <form
-        method="dialog"
-        className="stack"
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit();
-        }}
-      >
-        <h2 id="fork-title">Fork this run</h2>
-        <p className="muted">
-          Steps before the one you pick are copied from this run without calling the model or any tool. From there on the fork runs live,
-          with your changes, in a copy of the conversation.
-        </p>
-        <SelectField label="Run live from step" options={stepOptions} value={String(fromStep)} onValueChange={(v) => setFromStep(Number(v))} />
-        <SelectField label="Model" options={modelOptions} value={model} onValueChange={setModel} />
-        {versions.length > 0 && <SelectField label="Agent version" options={versionOptions} value={version} onValueChange={setVersion} />}
-        <label className="stack tight">
-          <span className="label">Tools (comma-separated; none for no tools)</span>
-          <input className="plain-input" value={tools} onChange={(e) => setTools(e.target.value)} />
-        </label>
-        <label className="stack tight">
-          <span className="label">System prompt</span>
-          <textarea className="code-editor short" spellCheck={false} value={system} onChange={(e) => setSystem(e.target.value)} />
-        </label>
-        {replayedTurns.length > 0 && (
-          <div className="stack tight">
+    <Dialog open={from !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[calc(100svh-3rem)] overflow-y-auto sm:max-w-2xl">
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Fork this run</DialogTitle>
+            <DialogDescription>
+              Steps before the one you pick are copied from this run without calling the model or any tool. From there on the fork runs
+              live, with your changes, in a copy of the conversation.
+            </DialogDescription>
+          </DialogHeader>
+          <FieldGroup>
             <SelectField
-              label="Change what the model said at a replayed step (optional)"
-              options={[{ value: '', label: 'No change' }, ...replayedTurns.map((t) => ({ value: String(t.step), label: `Step ${t.step}` }))]}
-              value={editStep}
-              onValueChange={setEditStep}
+              label="Run live from step"
+              options={stepOptions}
+              value={String(fromStep)}
+              onValueChange={(v) => setFromStep(Number(v))}
             />
-            {editStep && (
-              <textarea
-                className="code-editor short"
-                aria-label="Reply text"
-                value={editText}
-                onChange={(e) => setEditText(e.target.value)}
-                placeholder="The reply's text (tool calls are kept)"
-              />
+            <SelectField label="Model" options={modelOptions} value={model} onValueChange={setModel} />
+            {versions.length > 0 && (
+              <SelectField label="Agent version" options={versionOptions} value={version} onValueChange={setVersion} />
             )}
-          </div>
-        )}
-        <ErrorNote error={error} />
-        <div className="row gap end">
-          <Button variant="ghost" type="button" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={busy}>
-            {busy && <Spinner data-icon="inline-start" />}
-            Fork and run
-          </Button>
-        </div>
-      </form>
-    </dialog>
+            <Field>
+              <FieldLabel htmlFor="fork-tools">Tools (comma-separated; none for no tools)</FieldLabel>
+              <Input id="fork-tools" value={tools} onChange={(e) => setTools(e.target.value)} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="fork-system">System prompt</FieldLabel>
+              <Textarea
+                id="fork-system"
+                className="font-mono"
+                spellCheck={false}
+                value={system}
+                onChange={(e) => setSystem(e.target.value)}
+              />
+            </Field>
+            {replayedTurns.length > 0 && (
+              <>
+                <SelectField
+                  label="Change what the model said at a replayed step (optional)"
+                  options={[
+                    { value: '', label: 'No change' },
+                    ...replayedTurns.map((t) => ({ value: String(t.step), label: `Step ${t.step}` })),
+                  ]}
+                  value={editStep}
+                  onValueChange={setEditStep}
+                />
+                {editStep && (
+                  <Textarea
+                    aria-label="Reply text"
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    placeholder="The reply's text (tool calls are kept)"
+                  />
+                )}
+              </>
+            )}
+          </FieldGroup>
+          <ErrorNote error={error} />
+          <DialogFooter>
+            <Button variant="ghost" type="button" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={busy}>
+              {busy && <Spinner data-icon="inline-start" />}
+              Fork and run
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

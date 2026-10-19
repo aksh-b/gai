@@ -1,10 +1,50 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
-import { SelectField, SwitchField } from '@/components/fields';
+import { AlertCircleIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { SwitchField } from '@/components/fields';
+import { PickerMenu, type PickerOption } from '@/components/picker-menu';
+import { Json, Markdown } from '@/components/shared';
+import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert';
+import {
+  Attachment,
+  AttachmentAction,
+  AttachmentActions,
+  AttachmentContent,
+  AttachmentDescription,
+  AttachmentGroup,
+  AttachmentMedia,
+  AttachmentTitle,
+} from '@/components/ui/attachment';
+import { Badge } from '@/components/ui/badge';
+import { Bubble, BubbleContent } from '@/components/ui/bubble';
+import { Button } from '@/components/ui/button';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from '@/components/ui/input-group';
+import { Item as ListItem, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item';
 import { Kbd } from '@/components/ui/kbd';
+import { Marker, MarkerContent } from '@/components/ui/marker';
+import { Message, MessageContent, MessageFooter } from '@/components/ui/message';
+import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+} from '@/components/ui/message-scroller';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Trace,
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceDescription,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
+} from '@/components/ui/trace';
 import {
   api,
   fileToBase64,
@@ -17,8 +57,22 @@ import {
   type StoredMessage,
   type Usage,
 } from '../api';
-import { Disclosure, Json, Markdown } from '../components';
-import { IconCheck, IconClip, IconMic, IconPlus, IconSend, IconSpark, IconSpeaker, IconStop, IconTrash, IconX } from '../icons';
+import {
+  IconBrain,
+  IconCheck,
+  IconClip,
+  IconHand,
+  IconMic,
+  IconPlus,
+  IconSend,
+  IconSpark,
+  IconSpeaker,
+  IconStop,
+  IconTool,
+  IconTrash,
+  IconUpload,
+  IconX,
+} from '../icons';
 import { modelLabel, toolLabel, toolSentence } from '../labels';
 import { blobToBase64, blobUrl, MediaView, mediaBlocks, useRecorder } from '../Media';
 import { modelOptions, useModelGroups } from '../models';
@@ -43,7 +97,7 @@ type Item =
   | { kind: 'note'; text: string; tone: 'muted' | 'warn' | 'bad'; action?: { label: string; to: string } };
 
 /** A file waiting in the composer. */
-interface Attachment {
+interface PendingFile {
   name: string;
   /** Images and audio go to the model as they are. */
   block?: ContentBlock;
@@ -85,8 +139,7 @@ function itemsFromHistory(messages: StoredMessage[]): Item[] {
       else if (b.type === 'tool_use') items.push({ kind: 'tool', id: b.id, name: b.name, input: b.input });
       else if (b.type === 'tool_result') {
         const t = items.find((i) => i.kind === 'tool' && i.id === b.tool_use_id);
-        if (t && t.kind === 'tool')
-          t.result = { ok: !b.is_error, text: blocksText(b.content), ms: 0, media: mediaBlocks(b.content) };
+        if (t && t.kind === 'tool') t.result = { ok: !b.is_error, text: blocksText(b.content), ms: 0, media: mediaBlocks(b.content) };
       }
     }
   }
@@ -100,16 +153,43 @@ function explain(error: string): { text: string; action?: { label: string; to: s
     return { text: `The model could not be used: ${error}`, action: { label: 'Connect a model', to: '/settings' } };
   if (l.includes('no model') || l.includes('no default model'))
     return { text: 'No AI model is set up yet.', action: { label: 'Connect one', to: '/welcome' } };
-  if (l.includes('exceeds the available context') || l.includes('context length') || l.includes('context window') || l.includes('too many tokens'))
+  if (
+    l.includes('exceeds the available context') ||
+    l.includes('context length') ||
+    l.includes('context window') ||
+    l.includes('too many tokens')
+  )
     return {
       text: "This doesn't fit in the model's memory: the conversation plus the assistant's tools are too long. Start a new chat, give the assistant fewer tools, or pick a model with more room.",
       action: { label: 'Models', to: '/settings' },
     };
   if (l.includes('does not support tools'))
-    return { text: `${error}. Pick a model that can use tools, or an assistant without tools.`, action: { label: 'Models', to: '/settings' } };
+    return {
+      text: `${error}. Pick a model that can use tools, or an assistant without tools.`,
+      action: { label: 'Models', to: '/settings' },
+    };
   if (l.includes('connect') && (l.includes('refused') || l.includes('error sending')))
     return { text: `Could not reach the model's server. ${error}`, action: { label: 'Check models', to: '/settings' } };
   return { text: error };
+}
+
+type TraceItem = Extract<Item, { kind: 'tool' | 'reasoning' }>;
+type Block = { kind: 'trace'; key: string; items: TraceItem[] } | { kind: 'item'; key: string; item: Item };
+
+/**
+ * Consecutive thinking and tool calls share one Trace; a text turn, a note
+ * or a call waiting for an OK ends the run.
+ */
+function groupItems(items: Item[]): Block[] {
+  const out: Block[] = [];
+  items.forEach((item, i) => {
+    const traced = item.kind === 'reasoning' || (item.kind === 'tool' && item.approval !== 'pending');
+    const last = out[out.length - 1];
+    if (traced && last?.kind === 'trace') last.items.push(item as TraceItem);
+    else if (traced) out.push({ kind: 'trace', key: `t${i}`, items: [item as TraceItem] });
+    else out.push({ kind: 'item', key: `i${i}`, item });
+  });
+  return out;
 }
 
 export function Playground({ route }: { route: Route }) {
@@ -126,26 +206,40 @@ export function Playground({ route }: { route: Route }) {
   const [autoApprove, setAutoApprove] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
   const [input, setInput] = useState('');
-  const [files, setFiles] = useState<Attachment[]>([]);
+  const [files, setFiles] = useState<PendingFile[]>([]);
   const [dragging, setDragging] = useState(false);
   const [running, setRunning] = useState<{ runId?: string; abort: AbortController } | null>(null);
   const [usage, setUsage] = useState<{ usage: Usage; cost: number }>({ usage: ZERO, cost: 0 });
   const [media, setMedia] = useState<MediaDefaults | null>(null);
   const recorder = useRecorder();
   const [transcribing, setTranscribing] = useState(false);
-  const scroller = useRef<HTMLDivElement>(null);
   const filePicker = useRef<HTMLInputElement>(null);
-  const stick = useRef(true);
   const sessionRef = useRef<string | null>(sessionParam);
   // Tools the person said may run without asking, for this chat.
   const allowed = useRef(new Set<string>());
 
-  const loadSessions = useCallback(() => api.sessions().then(setSessions).catch(() => {}), []);
+  const loadSessions = useCallback(
+    () =>
+      api
+        .sessions()
+        .then(setSessions)
+        .catch(() => {}),
+    [],
+  );
 
   useEffect(() => {
-    api.agents().then((a) => setAgents(a.map((x) => ({ name: x.summary.name, spec: x.spec })))).catch(() => {});
-    api.defaultAgent().then(setDefaultSpec).catch(() => {});
-    api.mediaDefaults().then(setMedia).catch(() => {});
+    api
+      .agents()
+      .then((a) => setAgents(a.map((x) => ({ name: x.summary.name, spec: x.spec }))))
+      .catch(() => {});
+    api
+      .defaultAgent()
+      .then(setDefaultSpec)
+      .catch(() => {});
+    api
+      .mediaDefaults()
+      .then(setMedia)
+      .catch(() => {});
     loadSessions();
   }, [loadSessions]);
 
@@ -163,17 +257,9 @@ export function Playground({ route }: { route: Route }) {
     }
     api
       .messages(sessionParam)
-      .then((m) => {
-        setItems(itemsFromHistory(m));
-        stick.current = true;
-      })
+      .then((m) => setItems(itemsFromHistory(m)))
       .catch((e: Error) => toast.error(e.message));
   }, [sessionParam]);
-
-  useEffect(() => {
-    const el = scroller.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [items]);
 
   const activeSpec = useMemo(
     () => (agent ? agents.find((a) => a.name === agent)?.spec : defaultSpec) ?? null,
@@ -325,7 +411,6 @@ export function Playground({ route }: { route: Route }) {
     const attached = files;
     setInput('');
     setFiles([]);
-    stick.current = true;
     const blocks: ContentBlock[] = [];
     const notes = attached
       .filter((f) => f.text !== undefined)
@@ -421,23 +506,26 @@ export function Playground({ route }: { route: Route }) {
     navigate('/assistants/new');
   }
 
-  const agentOptions = [
+  const agentOptions: PickerOption[] = [
     { value: '', label: 'General assistant', description: 'Built in: files, web pages, calculator' },
-    ...agents.map((a) => ({ value: a.name, label: a.name, description: a.spec?.description ?? '' })),
+    ...agents.map((a) => ({ value: a.name, label: a.name, description: a.spec?.description ?? '', group: 'Your assistants' })),
   ];
   const defaultLabel = activeSpec?.model
     ? `${agent || 'Assistant'}'s model (${dev ? activeSpec.model : modelLabel(activeSpec.model)})`
     : `Default (${dev ? (groups.defaultModel ?? 'none') : modelLabel(groups.defaultModel)})`;
-  const options = [{ value: '', label: defaultLabel, description: 'Change the default in Settings' }, ...modelOptions(groups, dev)];
+  const options: PickerOption[] = [
+    { value: '', label: defaultLabel, description: 'Change the default in Settings' },
+    ...modelOptions(groups, dev),
+  ];
   const nothingConnected = groups.loaded && !groups.cloud.length && !groups.local.length;
   const suggestions = canUseTools && (activeSpec?.tools?.length ?? 0) > 0 ? SUGGESTIONS_TOOLS : SUGGESTIONS_CHAT;
+  const blocks = groupItems(items);
 
   return (
-    <div className="playground">
-      <aside className="sessions">
+    <div className="grid h-svh min-h-0 md:grid-cols-[16rem_minmax(0,1fr)]">
+      <aside className="hidden min-h-0 flex-col gap-3 border-r p-3 md:flex">
         <Button
           variant="secondary"
-          className="w-full"
           onClick={() => {
             sessionRef.current = null;
             setItems([]);
@@ -447,27 +535,34 @@ export function Playground({ route }: { route: Route }) {
           <IconPlus data-icon="inline-start" />
           New chat
         </Button>
-        <div className="session-list">
-          {sessions.map((s) => (
-            <div key={s.id} className="session" aria-current={s.id === sessionParam ? 'true' : undefined}>
-              <a href={`#/chat?session=${s.id}`} className="session-link">
-                <span className="session-title">{s.title || 'Untitled'}</span>
-                <span className="muted small">
-                  {s.agent ?? 'assistant'} · {ago(s.updated_at)}
-                </span>
-              </a>
-              <button type="button" className="icon-btn" aria-label="Delete chat" onClick={() => removeSession(s.id)}>
-                <IconTrash />
-              </button>
-            </div>
-          ))}
-          {sessions.length === 0 && <p className="muted small pad">Your chats will show up here.</p>}
-        </div>
+        <ScrollArea className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:block!">
+          <ItemGroup className="gap-1">
+            {sessions.map((s) => (
+              <ListItem key={s.id} size="xs" variant={s.id === sessionParam ? 'muted' : 'default'} className="group/session relative">
+                <ItemContent className="min-w-0">
+                  <ItemTitle className="w-full">
+                    <a href={`#/chat?session=${s.id}`} className="truncate after:absolute after:inset-0">
+                      {s.title || 'Untitled'}
+                    </a>
+                  </ItemTitle>
+                  <ItemDescription>
+                    {s.agent ?? 'assistant'} · {ago(s.updated_at)}
+                  </ItemDescription>
+                </ItemContent>
+                <ItemActions className="relative opacity-0 group-focus-within/session:opacity-100 group-hover/session:opacity-100">
+                  <Button variant="ghost" size="icon-xs" aria-label="Delete chat" onClick={() => removeSession(s.id)}>
+                    <IconTrash />
+                  </Button>
+                </ItemActions>
+              </ListItem>
+            ))}
+          </ItemGroup>
+          {sessions.length === 0 && <p className="p-2 text-sm text-muted-foreground">Your chats will show up here.</p>}
+        </ScrollArea>
       </aside>
 
       <section
-        className="conversation"
-        data-dragging={dragging || undefined}
+        className="relative grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto]"
         onDragOver={(e) => {
           if (e.dataTransfer.types.includes('Files')) {
             e.preventDefault();
@@ -483,124 +578,133 @@ export function Playground({ route }: { route: Route }) {
           if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
         }}
       >
-        <div className="toolbar">
-          <div className="toolbar-field">
-            <SelectField aria-label="Assistant" options={agentOptions} value={agent} onValueChange={setAgent} />
-          </div>
-          <div className="toolbar-field wide">
-            <SelectField aria-label="Model" options={options} value={model} onValueChange={setModel} />
-          </div>
-          <a className="small link-quiet" href="#/settings">
-            + Connect models
-          </a>
-          <div className="spacer" />
+        <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
+          <PickerMenu aria-label="Assistant" options={agentOptions} value={agent} onValueChange={setAgent} className="max-w-48" />
+          <PickerMenu aria-label="Model" options={options} value={model} onValueChange={setModel} className="max-w-72" />
+          <Button variant="link" size="sm" asChild>
+            <a href="#/settings">Connect models</a>
+          </Button>
+          <div className="flex-1" />
           <Tooltip>
             <TooltipTrigger asChild>
               <div>
-                <SwitchField size="sm" label="Act without asking" checked={autoApprove} onCheckedChange={(checked) => setAutoApprove(checked)} />
+                <SwitchField
+                  size="sm"
+                  label="Act without asking"
+                  checked={autoApprove}
+                  onCheckedChange={(checked) => setAutoApprove(checked)}
+                />
               </div>
             </TooltipTrigger>
             <TooltipContent>When off, it asks before doing anything that needs your OK</TooltipContent>
           </Tooltip>
           {dev ? (
-            <span className="chip mono" title="Tokens this conversation (since opened)">
+            <Badge variant="outline" className="font-mono" title="Tokens this conversation (since opened)">
               {tokens(totalIn(usage.usage))} in · {tokens(usage.usage.output_tokens)} out
               {usage.cost > 0 && ` · ${money(usage.cost)}`}
-            </span>
+            </Badge>
           ) : (
             usage.cost > 0 && (
-              <span className="chip" title="What this chat has cost so far">
+              <Badge variant="outline" title="What this chat has cost so far">
                 {money(usage.cost)}
-              </span>
+              </Badge>
             )
           )}
         </div>
 
-        <div
-          className="transcript"
-          ref={scroller}
-          onScroll={(e) => {
-            const el = e.currentTarget;
-            stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-          }}
-        >
-          {items.length === 0 ? (
-            <div className="welcome">
-              <div className="welcome-mark">
-                <IconSpark width={28} height={28} />
-              </div>
-              <h2>How can {agent || 'I'} help?</h2>
-              <p className="muted">
+        {items.length === 0 ? (
+          <Empty className="self-start pt-[10vh]">
+            <EmptyHeader className="max-w-xl">
+              <EmptyMedia variant="icon">
+                <IconSpark />
+              </EmptyMedia>
+              <EmptyTitle>How can {agent || 'I'} help?</EmptyTitle>
+              <EmptyDescription>
                 {effectiveModel ? (
-                  <>Using {dev ? <span className="mono">{effectiveModel}</span> : modelLabel(effectiveModel)}.</>
+                  <>Using {dev ? <code>{effectiveModel}</code> : modelLabel(effectiveModel)}.</>
                 ) : (
                   'No AI model is connected yet.'
                 )}{' '}
                 {!canUseTools && 'This model can chat but not use tools. '}
                 You can also drop files here.
-              </p>
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent className="max-w-xl">
               {nothingConnected && (
-                <div className="setup-nudge">
-                  <span>
+                <Alert>
+                  <IconSpark />
+                  <AlertDescription>
                     {effectiveModel.startsWith('mock/')
                       ? 'You are using the demo model: it repeats what you say.'
                       : 'Connect an AI model to get real answers.'}
-                  </span>
-                  <Button size="sm" onClick={() => navigate('/welcome')}>
-                    Connect a model
-                  </Button>
-                </div>
+                  </AlertDescription>
+                  <AlertAction>
+                    <Button size="sm" onClick={() => navigate('/welcome')}>
+                      Connect a model
+                    </Button>
+                  </AlertAction>
+                </Alert>
               )}
-              <div className="suggestions">
+              <div className="flex w-full flex-col gap-2">
                 {suggestions.map((s) => (
-                  <button key={s} type="button" className="suggestion" onClick={() => send(s)}>
+                  <Button
+                    key={s}
+                    variant="outline"
+                    className="h-auto justify-start py-2.5 text-left whitespace-normal"
+                    onClick={() => send(s)}
+                  >
                     {s}
-                  </button>
+                  </Button>
                 ))}
               </div>
-            </div>
-          ) : (
-            <div className="thread">
-              {items.map((it, i) => (
-                <TranscriptItem key={i} item={it} onDecide={decide} canSpeak={!!media?.speech} dev={dev} />
-              ))}
-              {running && items[items.length - 1]?.kind === 'user' && <div className="typing" aria-label="Working" />}
-              {!running && items.length > 1 && (
-                <div className="thread-foot">
-                  <button type="button" className="link small" onClick={saveAsAssistant}>
-                    Save this setup as an assistant
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-          {dragging && (
-            <div className="drop-hint" aria-hidden="true">
-              Drop files to add them to your message
-            </div>
-          )}
-        </div>
+            </EmptyContent>
+          </Empty>
+        ) : (
+          <MessageScrollerProvider autoScroll>
+            <MessageScroller>
+              <MessageScrollerViewport>
+                <MessageScrollerContent className="mx-auto w-full max-w-3xl px-4 py-6">
+                  {blocks.map((b) => (
+                    <MessageScrollerItem key={b.key} messageId={b.key} scrollAnchor={b.kind === 'item' && b.item.kind === 'user'}>
+                      {b.kind === 'trace' ? (
+                        <Trace>
+                          {b.items.map((it, i) =>
+                            it.kind === 'tool' ? <ToolLine key={i} item={it} dev={dev} /> : <ThoughtLine key={i} text={it.text} />,
+                          )}
+                        </Trace>
+                      ) : (
+                        <TranscriptItem item={b.item} onDecide={decide} canSpeak={!!media?.speech} />
+                      )}
+                    </MessageScrollerItem>
+                  ))}
+                  {running && items[items.length - 1]?.kind === 'user' && (
+                    <MessageScrollerItem messageId="working">
+                      <TraceLine status="running">
+                        <TraceTitle>Working</TraceTitle>
+                      </TraceLine>
+                    </MessageScrollerItem>
+                  )}
+                  {!running && items.length > 1 && (
+                    <MessageScrollerItem messageId="save-setup">
+                      <Button variant="link" size="sm" className="self-start px-0" onClick={saveAsAssistant}>
+                        Save this setup as an assistant
+                      </Button>
+                    </MessageScrollerItem>
+                  )}
+                </MessageScrollerContent>
+              </MessageScrollerViewport>
+              <MessageScrollerButton />
+            </MessageScroller>
+          </MessageScrollerProvider>
+        )}
 
         <form
-          className="composer"
+          className="mx-auto w-full max-w-3xl px-4 pt-2 pb-4"
           onSubmit={(e) => {
             e.preventDefault();
             send();
           }}
         >
-          {files.length > 0 && (
-            <div className="attachments">
-              {files.map((f, i) => (
-                <span key={i} className="chip attachment">
-                  {f.name}
-                  {f.knowledge && <em className="muted"> · in your documents</em>}
-                  <button type="button" className="icon-btn" aria-label={`Remove ${f.name}`} onClick={() => setFiles((x) => x.filter((_, j) => j !== i))}>
-                    <IconX width={12} height={12} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
           <input
             ref={filePicker}
             type="file"
@@ -611,70 +715,107 @@ export function Playground({ route }: { route: Route }) {
               e.target.value = '';
             }}
           />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" type="button" aria-label="Attach files" onClick={() => filePicker.current?.click()}>
-                <IconClip />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Attach files (or drop them here)</TooltipContent>
-          </Tooltip>
-          <textarea
-            value={input}
-            placeholder={running ? 'Working… you can type your next message' : 'Message  (Enter to send, Shift+Enter for a new line)'}
-            rows={Math.min(8, Math.max(1, input.split('\n').length))}
-            onChange={(e) => setInput(e.target.value)}
-            onPaste={(e) => {
-              if (e.clipboardData.files.length) {
-                e.preventDefault();
-                addFiles(e.clipboardData.files);
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                send();
-              }
-            }}
-            autoFocus
-          />
-          {media?.transcription && recorder.supported && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant={recorder.recording ? 'destructive' : 'ghost'}
-                  size={recorder.recording ? 'default' : 'icon'}
-                  onClick={toggleMic}
-                  aria-label={recorder.recording ? 'Stop recording' : 'Record a message'}
-                  disabled={transcribing}
-                >
-                  {transcribing ? <Spinner data-icon="inline-start" /> : <IconMic data-icon="inline-start" />}
-                  {recorder.recording ? `${recorder.seconds}s` : undefined}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{recorder.recording ? 'Stop and turn into text' : 'Speak your message'}</TooltipContent>
-            </Tooltip>
-          )}
-          {running ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="destructive" type="button" onClick={stop}>
-                  <IconStop data-icon="inline-start" />
-                  Stop
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                Stop <Kbd>Esc</Kbd>
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <Button type="submit" disabled={!input.trim() && !files.length}>
-              <IconSend data-icon="inline-start" />
-              Send
-            </Button>
-          )}
+          <InputGroup>
+            {files.length > 0 && (
+              <InputGroupAddon align="block-start">
+                <AttachmentGroup>
+                  {files.map((f, i) => (
+                    <Attachment key={i} size="xs" state={f.text === '' ? 'processing' : 'done'}>
+                      <AttachmentMedia variant="icon">
+                        <IconClip />
+                      </AttachmentMedia>
+                      <AttachmentContent>
+                        <AttachmentTitle>{f.name}</AttachmentTitle>
+                        {f.knowledge && <AttachmentDescription>In your documents</AttachmentDescription>}
+                      </AttachmentContent>
+                      <AttachmentActions>
+                        <AttachmentAction aria-label={`Remove ${f.name}`} onClick={() => setFiles((x) => x.filter((_, j) => j !== i))}>
+                          <IconX />
+                        </AttachmentAction>
+                      </AttachmentActions>
+                    </Attachment>
+                  ))}
+                </AttachmentGroup>
+              </InputGroupAddon>
+            )}
+            <InputGroupTextarea
+              value={input}
+              placeholder={running ? 'Working… you can type your next message' : 'Message  (Enter to send, Shift+Enter for a new line)'}
+              rows={Math.min(8, Math.max(1, input.split('\n').length))}
+              onChange={(e) => setInput(e.target.value)}
+              onPaste={(e) => {
+                if (e.clipboardData.files.length) {
+                  e.preventDefault();
+                  addFiles(e.clipboardData.files);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+              autoFocus
+            />
+            <InputGroupAddon align="block-end">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <InputGroupButton size="icon-sm" type="button" aria-label="Attach files" onClick={() => filePicker.current?.click()}>
+                    <IconClip />
+                  </InputGroupButton>
+                </TooltipTrigger>
+                <TooltipContent>Attach files (or drop them here)</TooltipContent>
+              </Tooltip>
+              {media?.transcription && recorder.supported && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <InputGroupButton
+                      type="button"
+                      variant={recorder.recording ? 'destructive' : 'ghost'}
+                      size={recorder.recording ? 'sm' : 'icon-sm'}
+                      onClick={toggleMic}
+                      aria-label={recorder.recording ? 'Stop recording' : 'Record a message'}
+                      disabled={transcribing}
+                    >
+                      {transcribing ? <Spinner data-icon="inline-start" /> : <IconMic data-icon="inline-start" />}
+                      {recorder.recording ? `${recorder.seconds}s` : undefined}
+                    </InputGroupButton>
+                  </TooltipTrigger>
+                  <TooltipContent>{recorder.recording ? 'Stop and turn into text' : 'Speak your message'}</TooltipContent>
+                </Tooltip>
+              )}
+              {running ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <InputGroupButton variant="destructive" size="sm" type="button" className="ml-auto" onClick={stop}>
+                      <IconStop data-icon="inline-start" />
+                      Stop
+                    </InputGroupButton>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Stop <Kbd>Esc</Kbd>
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <InputGroupButton variant="default" size="sm" type="submit" className="ml-auto" disabled={!input.trim() && !files.length}>
+                  <IconSend data-icon="inline-start" />
+                  Send
+                </InputGroupButton>
+              )}
+            </InputGroupAddon>
+          </InputGroup>
         </form>
+
+        {dragging && (
+          <Empty className="pointer-events-none absolute inset-2 border bg-background/90" aria-hidden="true">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <IconUpload />
+              </EmptyMedia>
+              <EmptyTitle>Drop files to add them to your message</EmptyTitle>
+            </EmptyHeader>
+          </Empty>
+        )}
       </section>
     </div>
   );
@@ -705,16 +846,73 @@ function SpeakButton({ text }: { text: string }) {
     }
   }
   return (
-    <button
-      type="button"
-      className="icon-btn speak-btn"
+    <Button
+      variant="ghost"
+      size="icon-xs"
       onClick={play}
+      disabled={state === 'loading'}
       aria-label={state === 'playing' ? 'Stop reading aloud' : 'Read aloud'}
       title={state === 'playing' ? 'Stop' : 'Read aloud'}
-      data-state={state}
     >
-      {state === 'playing' ? <IconStop /> : <IconSpeaker />}
-    </button>
+      {state === 'loading' ? <Spinner /> : state === 'playing' ? <IconStop /> : <IconSpeaker />}
+    </Button>
+  );
+}
+
+function ThoughtLine({ text }: { text: string }) {
+  return (
+    <TraceCollapsible>
+      <TraceCollapsibleTrigger>
+        <TraceLine>
+          <TraceIcon>
+            <IconBrain />
+          </TraceIcon>
+          <TraceTitle>Thought</TraceTitle>
+        </TraceLine>
+      </TraceCollapsibleTrigger>
+      <TraceCollapsibleContent>
+        <p className="whitespace-pre-wrap text-muted-foreground">{text}</p>
+      </TraceCollapsibleContent>
+    </TraceCollapsible>
+  );
+}
+
+/** One tool call: a line while it runs, expandable once there is a result. */
+function ToolLine({ item, dev }: { item: Extract<Item, { kind: 'tool' }>; dev: boolean }) {
+  const sentence = toolSentence(item.name, item.input);
+  const declined = item.approval === 'declined';
+  const status = !item.result && !declined ? 'running' : declined || !item.result?.ok ? 'error' : undefined;
+  const line = (
+    <TraceLine status={status}>
+      <TraceIcon>
+        <IconTool />
+      </TraceIcon>
+      <TraceTitle title={item.name}>{sentence}</TraceTitle>
+      {declined && <TraceDescription>not allowed</TraceDescription>}
+      {!declined && status === 'error' && <TraceDescription>didn't work</TraceDescription>}
+      {dev && <TraceDescription className="font-mono">{item.name}</TraceDescription>}
+      {dev && item.result && item.result.ms > 0 && <TraceDescription>{item.result.ms} ms</TraceDescription>}
+    </TraceLine>
+  );
+  const media = item.result?.media ?? [];
+  if (!item.result) return line;
+  return (
+    <>
+      <TraceCollapsible>
+        <TraceCollapsibleTrigger>{line}</TraceCollapsibleTrigger>
+        <TraceCollapsibleContent className="flex flex-col gap-2">
+          {dev && <Json value={item.input} />}
+          <Json value={item.result.text} />
+        </TraceCollapsibleContent>
+      </TraceCollapsible>
+      {media.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {media.map((b, i) => (
+            <MediaView key={i} block={b} />
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -722,118 +920,106 @@ function TranscriptItem({
   item,
   onDecide,
   canSpeak,
-  dev,
 }: {
   item: Item;
   onDecide: (runId: string | undefined, id: string, approved: boolean, name?: string, always?: boolean) => void;
   canSpeak: boolean;
-  dev: boolean;
 }) {
   switch (item.kind) {
     case 'user':
       return (
-        <div className="msg user">
-          {item.text}
-          {item.media?.map((b, i) => (
-            <MediaView key={i} block={b} />
-          ))}
-          {!!item.files?.length && <div className="small muted">📎 {item.files.join(', ')}</div>}
-        </div>
+        <Message align="end">
+          <MessageContent>
+            {item.text && (
+              <Bubble variant="secondary" align="end">
+                <BubbleContent className="whitespace-pre-wrap">{item.text}</BubbleContent>
+              </Bubble>
+            )}
+            {item.media?.map((b, i) => (
+              <MediaView key={i} block={b} />
+            ))}
+            {!!item.files?.length && (
+              <AttachmentGroup>
+                {item.files.map((f) => (
+                  <Attachment key={f} size="xs">
+                    <AttachmentMedia variant="icon">
+                      <IconClip />
+                    </AttachmentMedia>
+                    <AttachmentContent>
+                      <AttachmentTitle>{f}</AttachmentTitle>
+                    </AttachmentContent>
+                  </Attachment>
+                ))}
+              </AttachmentGroup>
+            )}
+          </MessageContent>
+        </Message>
       );
     case 'assistant':
       return (
-        <div className="msg assistant">
-          <Markdown text={item.text} />
-          {canSpeak && item.text.trim() && <SpeakButton text={item.text} />}
-        </div>
+        <Message align="start">
+          <MessageContent>
+            <Markdown text={item.text} />
+            {canSpeak && item.text.trim() && (
+              <MessageFooter>
+                <SpeakButton text={item.text} />
+              </MessageFooter>
+            )}
+          </MessageContent>
+        </Message>
+      );
+    case 'note':
+      if (item.tone === 'muted')
+        return (
+          <Marker variant="separator">
+            <MarkerContent>{item.text}</MarkerContent>
+          </Marker>
+        );
+      return (
+        <Alert variant={item.tone === 'bad' ? 'destructive' : 'default'}>
+          <AlertCircleIcon />
+          <AlertDescription>{item.text}</AlertDescription>
+          {item.action && (
+            <AlertAction>
+              <Button size="sm" variant="outline" onClick={() => navigate(item.action!.to)}>
+                {item.action.label}
+              </Button>
+            </AlertAction>
+          )}
+        </Alert>
       );
     case 'reasoning':
       return (
-        <div className="reasoning">
-          <Disclosure summary={<span className="muted">Thinking</span>}>
-            <p className="muted pre">{item.text}</p>
-          </Disclosure>
-        </div>
-      );
-    case 'note':
-      return (
-        <div className="note" data-tone={item.tone}>
-          {item.text}
-          {item.action && (
-            <>
-              {' '}
-              <button type="button" className="link" onClick={() => navigate(item.action!.to)}>
-                {item.action.label} →
-              </button>
-            </>
-          )}
-        </div>
+        <Trace>
+          <ThoughtLine text={item.text} />
+        </Trace>
       );
     case 'tool': {
-      const state = item.approval === 'pending' ? 'pending' : !item.result ? 'running' : item.result.ok ? 'ok' : 'bad';
+      // A call waiting for an OK is a prompt, not a trace line.
       const sentence = toolSentence(item.name, item.input);
       return (
-        <div className="tool" data-state={state}>
-          <Disclosure
-            summary={
-              <span className="tool-head">
-                <span className="tool-dot" />
-                <span className="tool-name" title={item.name}>
-                  {sentence}
-                </span>
-                {state === 'running' && <span className="muted small">working…</span>}
-                {state === 'bad' && <span className="small bad-text">didn't work</span>}
-                {dev && <span className="muted mono small">{item.name}</span>}
-                {dev && item.result && item.result.ms > 0 && <span className="muted small">{item.result.ms} ms</span>}
-              </span>
-            }
-          >
-            <div className="tool-io">
-              {dev && (
-                <div>
-                  <div className="label">Input</div>
-                  <Json value={item.input} />
-                </div>
-              )}
-              {item.result ? (
-                <div>
-                  <div className="label">{item.result.ok ? 'Result' : 'What went wrong'}</div>
-                  <Json value={item.result.text} />
-                </div>
-              ) : (
-                !dev && <p className="muted small">No result yet.</p>
-              )}
-            </div>
-          </Disclosure>
-          {!!item.result?.media?.length && (
-            <div className="media-row">
-              {item.result.media.map((b, i) => (
-                <MediaView key={i} block={b} />
-              ))}
-            </div>
-          )}
-          {item.approval === 'pending' && (
-            <div className="approval">
-              <span>
-                OK to <strong>{sentence.charAt(0).toLowerCase() + sentence.slice(1)}</strong>?
-              </span>
-              <div className="row gap wrap">
-                <Button size="sm" onClick={() => onDecide(item.runId, item.id, true)}>
-                  <IconCheck data-icon="inline-start" />
-                  Allow once
-                </Button>
-                <Button variant="secondary" size="sm" onClick={() => onDecide(item.runId, item.id, true, item.name, true)}>
-                  Always allow “{toolLabel(item.name)}” in this chat
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => onDecide(item.runId, item.id, false)}>
-                  <IconX data-icon="inline-start" />
-                  Don't allow
-                </Button>
-              </div>
-            </div>
-          )}
-          {item.approval === 'declined' && <div className="muted small approval-note">Not allowed</div>}
-        </div>
+        <ListItem variant="outline">
+          <ItemMedia variant="icon">
+            <IconHand />
+          </ItemMedia>
+          <ItemContent>
+            <ItemTitle>OK to {sentence.charAt(0).toLowerCase() + sentence.slice(1)}?</ItemTitle>
+            <ItemDescription>The assistant waits until you decide.</ItemDescription>
+          </ItemContent>
+          <ItemActions className="flex-wrap">
+            <Button size="sm" onClick={() => onDecide(item.runId, item.id, true)}>
+              <IconCheck data-icon="inline-start" />
+              Allow once
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => onDecide(item.runId, item.id, true, item.name, true)}>
+              Always allow “{toolLabel(item.name)}” here
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => onDecide(item.runId, item.id, false)}>
+              <IconX data-icon="inline-start" />
+              Don't allow
+            </Button>
+          </ItemActions>
+        </ListItem>
       );
     }
   }

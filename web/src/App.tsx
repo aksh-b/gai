@@ -1,24 +1,35 @@
 import { useEffect, useMemo, useState, type ComponentType, type SVGProps } from 'react';
+import { PlugZapIcon, UnplugIcon } from 'lucide-react';
 import { CommandMenu, type CommandEntry } from '@/components/command-menu';
 import { TabBar } from '@/components/fields';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
+import { Kbd } from '@/components/ui/kbd';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/sonner';
+import { Spinner } from '@/components/ui/spinner';
 import { api, getApiKey, setApiKey } from './api';
 import { KeyDialog } from './KeyDialog';
 import { modelLabel } from './labels';
-import { applyTheme, setDevMode, useDevMode, useTheme, type Theme } from './prefs';
+import { applyTheme, isDark, setDevMode, useDevMode, useTheme, type Theme } from './prefs';
 import { navigate, useRoute } from './router';
-import {
-  IconAgent,
-  IconBook,
-  IconChat,
-  IconFlow,
-  IconGear,
-  IconMoon,
-  IconRuns,
-  IconSpark,
-  IconStack,
-  IconSun,
-} from './icons';
+import { IconAgent, IconBook, IconChat, IconFlow, IconGear, IconMoon, IconRuns, IconSearch, IconStack, IconSun } from './icons';
 import { MediaStudio } from './pages/MediaStudio';
 import { Triggers } from './pages/Triggers';
 import { Connect } from './pages/Connect';
@@ -115,7 +126,15 @@ export function App() {
   const [dev] = useDevMode();
   const [theme, setTheme] = useTheme();
 
-  useEffect(() => applyTheme(), []);
+  useEffect(() => {
+    applyTheme();
+  }, []);
+
+  // A new page starts at the top (the window scrolls, not a panel).
+  const path = route.parts.join('/');
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [path]);
 
   // Sign this browser in when the server allows it, then send a brand-new
   // install to the welcome screen. Pages load only after this, so they never
@@ -166,7 +185,11 @@ export function App() {
   }, [route]);
 
   useEffect(() => {
-    if (palette) api.agents().then((a) => setAgents(a.map((x) => x.summary.name))).catch(() => {});
+    if (palette)
+      api
+        .agents()
+        .then((a) => setAgents(a.map((x) => x.summary.name)))
+        .catch(() => {});
   }, [palette]);
 
   const section = NAV.find((n) => n.routes.includes(raw))?.id ?? (raw === 'welcome' ? 'welcome' : 'chat');
@@ -191,8 +214,20 @@ export function App() {
     return [
       { id: 'new-chat', group: 'Do', label: 'New chat', onSelect: go('/chat'), keywords: ['message', 'talk'] },
       { id: 'new-assistant', group: 'Do', label: 'New assistant', onSelect: go('/assistants?new=1'), keywords: ['agent', 'create'] },
-      { id: 'add-knowledge', group: 'Do', label: 'Add documents to Knowledge', onSelect: go('/knowledge'), keywords: ['upload', 'files', 'rag'] },
-      { id: 'add-model', group: 'Do', label: 'Connect an AI model', onSelect: go('/welcome'), keywords: ['key', 'ollama', 'provider', 'setup'] },
+      {
+        id: 'add-knowledge',
+        group: 'Do',
+        label: 'Add documents to Knowledge',
+        onSelect: go('/knowledge'),
+        keywords: ['upload', 'files', 'rag'],
+      },
+      {
+        id: 'add-model',
+        group: 'Do',
+        label: 'Connect an AI model',
+        onSelect: go('/welcome'),
+        keywords: ['key', 'ollama', 'provider', 'setup'],
+      },
       ...pages,
       ...agents.map((a) => ({
         id: `agent-${a}`,
@@ -213,7 +248,11 @@ export function App() {
 
   let page;
   if (boot === 'loading') {
-    page = <div className="boot" aria-busy="true" />;
+    page = (
+      <div className="flex flex-1 items-center justify-center" aria-busy="true">
+        <Spinner />
+      </div>
+    );
   } else {
     switch (tab) {
       case 'welcome':
@@ -230,7 +269,9 @@ export function App() {
           );
         break;
       case 'assistants':
-        page = <Agents selected={route.parts[1] ? decodeURIComponent(route.parts[1]) : undefined} creating={route.query.get('new') === '1'} />;
+        page = (
+          <Agents selected={route.parts[1] ? decodeURIComponent(route.parts[1]) : undefined} creating={route.query.get('new') === '1'} />
+        );
         break;
       case 'automations':
         page = <Workflows selected={route.parts[1] ? decodeURIComponent(route.parts[1]) : undefined} />;
@@ -278,115 +319,139 @@ export function App() {
 
   // Sub-pages (a run, an agent) keep their section's tabs but no tab is lit.
   const tabs = nav?.tabs && boot === 'ready' && (
-    <div className="hub-tabs">
-      <TabBar
-        variant="underline"
-        aria-label={nav.label}
-        items={nav.tabs.map((t) => ({
-          id: t.id,
-          label: t.label,
-          badge: t.id === 'approvals' && pending > 0 ? <span className="badge">{pending}</span> : undefined,
-        }))}
-        value={tab}
-        onValueChange={(id) => navigate(`/${id}`)}
-      />
-    </div>
+    <TabBar
+      variant="underline"
+      aria-label={nav.label}
+      items={nav.tabs.map((t) => ({
+        id: t.id,
+        label: t.label,
+        badge: t.id === 'approvals' && pending > 0 ? <Badge>{pending}</Badge> : undefined,
+      }))}
+      value={tab}
+      onValueChange={(id) => navigate(`/${id}`)}
+    />
   );
 
   const signedIn = !!getApiKey();
 
   return (
-    <div className="shell" data-section={section}>
-      <aside className="sidebar">
-        <a className="brand" href="#/chat">
-          <span className="logo">g</span>
-          <span>gai</span>
-        </a>
-        <button type="button" className="search-btn" onClick={() => setPalette(true)}>
-          <IconSpark />
-          <span>Search or jump to…</span>
-          <kbd>Ctrl K</kbd>
-        </button>
-        <nav aria-label="Main">
-          {NAV.map(({ id, label, icon: Icon }) => (
-            <a
-              key={id}
-              href={`#/${id}`}
-              className="nav-item"
-              aria-current={section === id ? 'page' : undefined}
-              onClick={(e) => {
-                e.preventDefault();
-                navigate(`/${id}`);
-              }}
-            >
-              <Icon />
-              <span className="nav-label">{label}</span>
-              {id === 'activity' && pending > 0 && (
-                <span className="badge" title={`${pending} waiting for your OK`}>
-                  {pending}
-                </span>
-              )}
-            </a>
-          ))}
-        </nav>
-        {dev && (
-          <a className="nav-item" href="/docs" target="_blank" rel="noreferrer">
-            <IconBook />
-            <span className="nav-label">API docs</span>
-          </a>
-        )}
-        <div className="sidebar-foot">
-          <span className="dot" data-ok={health.ok} />
-          <div className="foot-text">
-            <div>{health.ok ? 'Connected' : 'Server offline'}</div>
-            {health.model && (
-              <a className="muted small foot-model" href="#/settings" title={dev ? health.model : 'Change in Settings'}>
-                {dev ? health.model : modelLabel(health.model)}
-              </a>
-            )}
-            {dev && (
-              <div className="muted small">
-                {health.version && `v${health.version} · `}
-                {health.auth === 'open' ? 'open (no keys yet)' : signedIn ? 'signed in with a key' : 'key required'}
-                {signedIn && (
-                  <>
-                    {' · '}
-                    <button
-                      type="button"
-                      className="link small"
-                      onClick={() => {
-                        setApiKey(null);
-                        location.reload();
-                      }}
-                    >
-                      sign out
-                    </button>
-                  </>
+    <SidebarProvider>
+      <Sidebar>
+        <SidebarHeader>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton size="lg" asChild>
+                <a href="#/chat">
+                  <Avatar className="rounded-lg">
+                    <AvatarFallback className="rounded-lg bg-primary font-semibold text-primary-foreground">g</AvatarFallback>
+                  </Avatar>
+                  <span className="text-base font-semibold">gai</span>
+                </a>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton variant="outline" onClick={() => setPalette(true)}>
+                <IconSearch />
+                <span>Search or jump to…</span>
+                <Kbd className="ml-auto">Ctrl K</Kbd>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu aria-label="Main">
+                {NAV.map(({ id, label, icon: Icon }) => (
+                  <SidebarMenuItem key={id}>
+                    <SidebarMenuButton asChild isActive={section === id} tooltip={label}>
+                      <a
+                        href={`#/${id}`}
+                        aria-current={section === id ? 'page' : undefined}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          navigate(`/${id}`);
+                        }}
+                      >
+                        <Icon />
+                        <span>{label}</span>
+                      </a>
+                    </SidebarMenuButton>
+                    {id === 'activity' && pending > 0 && (
+                      <SidebarMenuBadge title={`${pending} waiting for your OK`}>{pending}</SidebarMenuBadge>
+                    )}
+                  </SidebarMenuItem>
+                ))}
+                {dev && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <a href="/docs" target="_blank" rel="noreferrer">
+                        <IconBook />
+                        <span>API docs</span>
+                      </a>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
                 )}
-              </div>
-            )}
-          </div>
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label={`Theme: ${theme}. Switch theme`}
-            title="Switch light / dark"
-            onClick={() => {
-              const dark = theme === 'dark' || (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-              setTheme(dark ? 'light' : 'dark');
-            }}
-          >
-            {theme === 'dark' || (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches) ? <IconSun /> : <IconMoon />}
-          </button>
-        </div>
-      </aside>
-      <main className="main">
-        {tabs}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter>
+          <Item size="xs">
+            <ItemMedia variant="icon">{health.ok ? <PlugZapIcon /> : <UnplugIcon className="text-destructive" />}</ItemMedia>
+            <ItemContent className="min-w-0">
+              <ItemTitle>{health.ok ? 'Connected' : 'Server offline'}</ItemTitle>
+              {health.model && (
+                <ItemDescription className="truncate">
+                  <a href="#/settings" title={dev ? health.model : 'Change in Settings'}>
+                    {dev ? health.model : modelLabel(health.model)}
+                  </a>
+                </ItemDescription>
+              )}
+              {dev && (
+                <ItemDescription>
+                  {health.version && `v${health.version} · `}
+                  {health.auth === 'open' ? 'open (no keys yet)' : signedIn ? 'signed in with a key' : 'key required'}
+                </ItemDescription>
+              )}
+            </ItemContent>
+            <ItemActions>
+              {dev && signedIn && (
+                <Button
+                  variant="link"
+                  size="xs"
+                  onClick={() => {
+                    setApiKey(null);
+                    location.reload();
+                  }}
+                >
+                  Sign out
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`Theme: ${theme}. Switch theme`}
+                title="Switch light / dark"
+                onClick={() => setTheme(isDark(theme) ? 'light' : 'dark')}
+              >
+                {isDark(theme) ? <IconSun /> : <IconMoon />}
+              </Button>
+            </ItemActions>
+          </Item>
+        </SidebarFooter>
+      </Sidebar>
+      <SidebarInset className="min-w-0">
+        <header className="flex h-12 items-center gap-2 border-b px-3 md:hidden">
+          <SidebarTrigger />
+          <span className="font-semibold">gai</span>
+        </header>
+        {tabs && <div className="sticky top-0 z-10 border-b bg-background px-6 pt-2 md:px-8">{tabs}</div>}
         {page}
-      </main>
+      </SidebarInset>
       <CommandMenu open={palette} onOpenChange={setPalette} items={commands} placeholder="Search pages, assistants and actions…" />
       <Toaster position="bottom-right" theme={theme} />
       <KeyDialog />
-    </div>
+    </SidebarProvider>
   );
 }

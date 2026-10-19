@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
-import { SwitchField } from '@/components/fields';
+import { CalendarClockIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { SwitchField } from '@/components/fields';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardAction, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item';
+import { Spinner } from '@/components/ui/spinner';
 import { api, type TriggerView } from '../api';
-import { Empty, ErrorNote, PageHeader, StatusPill } from '../components';
+import { ConfirmAction, Details, EmptyState, ErrorNote, LinkItem, Page, PageHeader, Snippet, StatusPill } from '@/components/shared';
 import { IconPlus, IconTrash } from '../icons';
 import { navigate } from '../router';
 import { ago, useLoad } from '../util';
@@ -20,46 +24,49 @@ export function Triggers({ selected }: { selected?: string }) {
   const current = list.data?.find((t) => t.id === selected || t.name === selected);
 
   return (
-    <div className="page">
+    <Page wide>
       <PageHeader
         title="Schedules & webhooks"
         subtitle="Run an assistant or workflow by itself: every morning, when another app calls a link, or when files change."
-        actions={
-          <div className="row gap">
-            {Object.keys(TRIGGER_TEMPLATES).map((k) => (
-              <Button variant="outline" size="sm" key={k} onClick={() => setCreating(k)}>
-                <IconPlus data-icon="inline-start" />
-                {k === 'cron' ? 'Schedule' : k === 'webhook' ? 'Webhook' : 'File watcher'}
-              </Button>
-            ))}
-          </div>
-        }
+        actions={Object.keys(TRIGGER_TEMPLATES).map((k) => (
+          <Button variant="outline" size="sm" key={k} onClick={() => setCreating(k)}>
+            <IconPlus data-icon="inline-start" />
+            {k === 'cron' ? 'Schedule' : k === 'webhook' ? 'Webhook' : 'File watcher'}
+          </Button>
+        ))}
       />
       <ErrorNote error={list.error} />
-      <div className="agents-layout">
-        <div className="agent-list">
+      <div className="grid items-start gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
+        <ItemGroup className="gap-2">
           {list.data?.map((t) => (
-            <a
+            <LinkItem
               key={t.id}
               href={`#/schedules/${t.id}`}
-              className="agent-card"
-              aria-current={current?.id === t.id && !creating ? 'page' : undefined}
+              active={current?.id === t.id && !creating}
               onClick={() => setCreating(null)}
+              title={
+                <>
+                  <span className="truncate">{t.name}</span>
+                  <Badge variant={t.enabled ? 'secondary' : 'outline'} className="ml-auto">
+                    {t.enabled ? t.kind : 'Off'}
+                  </Badge>
+                </>
+              }
             >
-              <div className="row between">
-                <strong>{t.name}</strong>
-                <span className={`chip small${t.enabled ? ' accent' : ''}`}>{t.enabled ? t.kind : 'off'}</span>
-              </div>
-              <span className="muted small">
-                {t.kind === 'cron' && t.next_fire_at ? `next ${new Date(t.next_fire_at).toLocaleString()}` : (t.schedule_text ?? t.webhook_path ?? '')}
-              </span>
-              {t.last_fired_at && <span className="muted small">fired {ago(t.last_fired_at)}</span>}
-            </a>
+              <ItemDescription>
+                {t.kind === 'cron' && t.next_fire_at
+                  ? `Next ${new Date(t.next_fire_at).toLocaleString()}`
+                  : (t.schedule_text ?? t.webhook_path ?? '')}
+                {t.last_fired_at && ` · fired ${ago(t.last_fired_at)}`}
+              </ItemDescription>
+            </LinkItem>
           ))}
           {list.data?.length === 0 && !creating && (
-            <Empty title="Nothing scheduled yet">Add a schedule, a webhook or a file watcher with the buttons above.</Empty>
+            <EmptyState title="Nothing scheduled yet" icon={<CalendarClockIcon />}>
+              Add a schedule, a webhook or a file watcher with the buttons above.
+            </EmptyState>
           )}
-        </div>
+        </ItemGroup>
         {creating ? (
           <Editor
             key={creating}
@@ -74,16 +81,26 @@ export function Triggers({ selected }: { selected?: string }) {
         ) : current ? (
           <Detail key={current.id} t={current} onChange={list.reload} />
         ) : (
-          <section className="card">
-            <Empty title="Pick one">Or add one with the buttons above.</Empty>
-          </section>
+          <Card>
+            <CardContent>
+              <EmptyState title="Pick one">Or add one with the buttons above.</EmptyState>
+            </CardContent>
+          </Card>
         )}
       </div>
-    </div>
+    </Page>
   );
 }
 
-function Editor({ initial, existing, onSaved }: { initial: TriggerDraft; existing?: TriggerView; onSaved: (t: TriggerView, secret?: string | null) => void }) {
+function Editor({
+  initial,
+  existing,
+  onSaved,
+}: {
+  initial: TriggerDraft;
+  existing?: TriggerView;
+  onSaved: (t: TriggerView, secret?: string | null) => void;
+}) {
   const [draft, setDraft] = useState<TriggerDraft>(initial);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -114,21 +131,23 @@ function Editor({ initial, existing, onSaved }: { initial: TriggerDraft; existin
   }
 
   return (
-    <section className="card editor">
-      <h3>{existing ? `Edit ${existing.name}` : 'New trigger'}</h3>
-      <SpecEditor label="Trigger" value={draft} onChange={setDraft}>
-        <TriggerForm draft={draft} onChange={setDraft} isNew={!existing} />
-      </SpecEditor>
-      <div className="save-bar">
+    <Card>
+      <CardHeader>
+        <CardTitle>{existing ? `Edit ${existing.name}` : 'New trigger'}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <SpecEditor label="Trigger" value={draft} onChange={setDraft}>
+          <TriggerForm draft={draft} onChange={setDraft} isNew={!existing} />
+        </SpecEditor>
+      </CardContent>
+      <CardFooter className="sticky bottom-0 flex-col items-stretch gap-3 border-t bg-card">
         <ErrorNote error={error} />
-        <div className="row gap end">
-          <Button onClick={save} disabled={busy}>
-            {busy && <Spinner data-icon="inline-start" />}
-            {existing ? 'Save' : 'Create trigger'}
-          </Button>
-        </div>
-      </div>
-    </section>
+        <Button className="self-end" onClick={save} disabled={busy}>
+          {busy && <Spinner data-icon="inline-start" />}
+          {existing ? 'Save' : 'Create trigger'}
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
 
@@ -176,13 +195,14 @@ function Detail({ t, onChange }: { t: TriggerView; onChange: () => void }) {
   }
   const hookUrl = t.webhook_path ? `${location.origin}${t.webhook_path}` : null;
   return (
-    <section className="stack">
-      <div className="card stack tight">
-        <div className="row between wrap">
-          <h2 style={{ margin: 0, whiteSpace: 'nowrap' }}>{t.name}</h2>
-          <div className="row gap wrap">
+    <div className="flex flex-col gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">{t.name}</CardTitle>
+          <CardAction className="flex flex-wrap items-center gap-2">
             <SwitchField
               size="sm"
+              className="w-auto"
               label={t.enabled ? 'On' : 'Off'}
               checked={t.enabled}
               onCheckedChange={async (checked) => {
@@ -197,100 +217,134 @@ function Detail({ t, onChange }: { t: TriggerView; onChange: () => void }) {
             <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
               Edit
             </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={async () => {
-                if (!confirm(`Delete ${t.name}?`)) return;
+            <ConfirmAction
+              title={`Delete ${t.name}?`}
+              description="It stops firing. Runs it already started are kept."
+              action="Delete"
+              destructive
+              onConfirm={async () => {
                 await api.deleteTrigger(t.id).catch((e: Error) => toast.error(e.message));
                 navigate('/schedules');
                 onChange();
               }}
             >
-              <IconTrash data-icon="inline-start" />
-              Delete
-            </Button>
-          </div>
-        </div>
-        <div className="kv">
-          <span className="muted">Kind</span>
-          <span>{t.kind}</span>
-          {t.schedule_text && (
-            <>
-              <span className="muted">Schedule</span>
-              <span>{t.schedule_text}</span>
-            </>
-          )}
-          {t.next_fire_at && t.enabled && (
-            <>
-              <span className="muted">Next</span>
-              <span>{new Date(t.next_fire_at).toLocaleString()}</span>
-            </>
-          )}
-          <span className="muted">Last fired</span>
-          <span>{t.last_fired_at ? `${new Date(t.last_fired_at).toLocaleString()} (${ago(t.last_fired_at)})` : 'never'}</span>
-        </div>
-        {hookUrl && (
-          <div className="stack tight">
-            <span className="label">Webhook</span>
-            <pre className="code">{`curl -X POST ${hookUrl} \\
+              <Button variant="destructive" size="sm">
+                <IconTrash data-icon="inline-start" />
+                Delete
+              </Button>
+            </ConfirmAction>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <Details
+            items={[
+              ['Kind', t.kind],
+              ...(t.schedule_text ? [['Schedule', t.schedule_text] as [string, string]] : []),
+              ...(t.next_fire_at && t.enabled ? [['Next', new Date(t.next_fire_at).toLocaleString()] as [string, string]] : []),
+              ['Last fired', t.last_fired_at ? `${new Date(t.last_fired_at).toLocaleString()} (${ago(t.last_fired_at)})` : 'Never'],
+            ]}
+          />
+          {hookUrl && (
+            <div className="flex flex-col gap-2">
+              <Snippet
+                title="Webhook"
+                code={`curl -X POST ${hookUrl} \\
   -H 'content-type: application/json' \\
   -H 'x-gai-token: ${secret ?? '<secret>'}' \\
-  -d '{"hello": "world"}'`}</pre>
-            <div className="row gap">
-              {!secret && (
-                <Button variant="outline" size="sm" onClick={() => api.triggerSecret(t.id).then((r) => setSecret(r.secret)).catch((e: Error) => toast.error(e.message))}>
-                  Show secret
-                </Button>
-              )}
-              <span className="muted small">Or sign the body: X-Gai-Signature (or GitHub&apos;s X-Hub-Signature-256): sha256=&lt;hex HMAC-SHA256 of the body&gt;.</span>
+  -d '{"hello": "world"}'`}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                {!secret && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      api
+                        .triggerSecret(t.id)
+                        .then((r) => setSecret(r.secret))
+                        .catch((e: Error) => toast.error(e.message))
+                    }
+                  >
+                    Show secret
+                  </Button>
+                )}
+                <span className="text-sm text-muted-foreground">
+                  Or sign the body: X-Gai-Signature (or GitHub&apos;s X-Hub-Signature-256): sha256=&lt;hex HMAC-SHA256 of the body&gt;.
+                </span>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
-      <section className="card flush">
-        <h3 className="pad" style={{ margin: 0 }}>
-          Firings
-        </h3>
-        {events.data?.length === 0 && <p className="muted pad">Nothing yet.</p>}
-        {events.data?.map((e) => (
-          <a key={e.id} className="run-row" href={e.run_id ? `#/activity/${e.run_id}` : undefined}>
-            <span className="pill" data-tone={e.status === 'started' ? 'ok' : e.status === 'skipped' ? 'warn' : 'bad'}>
-              {e.status}
-            </span>
-            <span>
-              {e.reason}
-              {e.error && <span className="muted small"> · {e.error}</span>}
-            </span>
-            <span className="muted small mono">{e.run_id ?? ''}</span>
-            <span />
-            <span className="muted small">{ago(e.fired_at)}</span>
-          </a>
-        ))}
-      </section>
+          )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Firings</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {events.data?.length === 0 && <p className="text-sm text-muted-foreground">Nothing yet.</p>}
+          <ItemGroup className="gap-1">
+            {events.data?.map((e) => {
+              const row = (
+                <>
+                  <ItemContent>
+                    <ItemTitle>
+                      <Badge variant={e.status === 'started' ? 'secondary' : e.status === 'skipped' ? 'outline' : 'destructive'}>
+                        {e.status}
+                      </Badge>
+                      {e.reason}
+                    </ItemTitle>
+                    {(e.error || e.run_id) && <ItemDescription className="font-mono">{e.error ?? e.run_id}</ItemDescription>}
+                  </ItemContent>
+                  <span className="text-sm text-muted-foreground">{ago(e.fired_at)}</span>
+                </>
+              );
+              return e.run_id ? (
+                <Item key={e.id} asChild size="xs">
+                  <a href={`#/activity/${e.run_id}`}>{row}</a>
+                </Item>
+              ) : (
+                <Item key={e.id} size="xs">
+                  {row}
+                </Item>
+              );
+            })}
+          </ItemGroup>
+        </CardContent>
+      </Card>
       <RunsOf trigger={t.name} />
-    </section>
+    </div>
   );
 }
 
 /** Runs this trigger started, with their status. */
 function RunsOf({ trigger }: { trigger: string }) {
-  const runs = useLoad(() => api.runs({ limit: 100 }).then((rs) => rs.filter((r) => r.metadata.trigger === trigger).slice(0, 10)), [trigger]);
+  const runs = useLoad(
+    () => api.runs({ limit: 100 }).then((rs) => rs.filter((r) => r.metadata.trigger === trigger).slice(0, 10)),
+    [trigger],
+  );
   if (!runs.data?.length) return null;
   return (
-    <section className="card flush">
-      <h3 className="pad" style={{ margin: 0 }}>
-        Recent runs
-      </h3>
-      {runs.data.map((r) => (
-        <a key={r.id} className="run-row" href={`#/activity/${r.id}`}>
-          <StatusPill status={r.status} />
-          <span>{r.agent}</span>
-          <span className="muted small">{r.steps} steps</span>
-          <span />
-          <span className="muted small">{ago(r.created_at)}</span>
-        </a>
-      ))}
-    </section>
+    <Card>
+      <CardHeader>
+        <CardTitle>Recent runs</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ItemGroup className="gap-1">
+          {runs.data.map((r) => (
+            <Item key={r.id} asChild size="xs">
+              <a href={`#/activity/${r.id}`}>
+                <StatusPill status={r.status} />
+                <ItemContent>
+                  <ItemTitle>{r.agent}</ItemTitle>
+                </ItemContent>
+                <span className="text-sm text-muted-foreground">
+                  {r.steps} steps · {ago(r.created_at)}
+                </span>
+              </a>
+            </Item>
+          ))}
+        </ItemGroup>
+      </CardContent>
+    </Card>
   );
 }

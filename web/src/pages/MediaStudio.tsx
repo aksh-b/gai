@@ -1,10 +1,16 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
-import { SelectField, TabBar } from '@/components/fields';
+import { ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { SelectField, TabBar } from '@/components/fields';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
+import { Field, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Item, ItemContent, ItemDescription } from '@/components/ui/item';
+import { Spinner } from '@/components/ui/spinner';
+import { Textarea } from '@/components/ui/textarea';
 import { api, type StoredBlob } from '../api';
-import { Empty, ErrorNote, PageHeader } from '../components';
+import { ConfirmAction, EmptyState, ErrorNote, Page, PageHeader } from '@/components/shared';
 import { IconMic, IconTrash } from '../icons';
 import { BlobView, blobToBase64, useRecorder } from '../Media';
 import { ago, money, useLoad } from '../util';
@@ -20,7 +26,7 @@ export function MediaStudio() {
   const d = defaults.data;
 
   return (
-    <div className="page">
+    <Page>
       <PageHeader
         title="Voice & images"
         subtitle="Make images, turn text into speech and speech into text. Assistants can do the same when you give them these abilities."
@@ -45,17 +51,27 @@ export function MediaStudio() {
       {tab === 'speech' && <SpeechPanel fallback={d?.speech ?? null} models={byKind('speech')} onMade={library.reload} />}
       {tab === 'transcribe' && <TranscribePanel fallback={d?.transcription ?? null} models={byKind('transcription')} />}
       {tab === 'library' && <Library blobs={library.data ?? []} error={library.error} onChange={library.reload} />}
-    </div>
+    </Page>
   );
 }
 
 /** A model picker: the configured default, or a catalog model. */
-function ModelPick({ fallback, models, value, onChange }: { fallback: string | null; models: string[]; value: string; onChange: (v: string) => void }) {
+function ModelPick({
+  fallback,
+  models,
+  value,
+  onChange,
+}: {
+  fallback: string | null;
+  models: string[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
   const options = [
     { value: '', label: fallback ? `Default (${fallback})` : 'Default (none set)' },
     ...models.filter((m) => m !== fallback).map((m) => ({ value: m, label: m })),
   ];
-  return <SelectField aria-label="Model" options={options} value={value} onValueChange={onChange} />;
+  return <SelectField aria-label="Model" className="w-64" options={options} value={value} onValueChange={onChange} />;
 }
 
 function ImagePanel({ fallback, models, onMade }: { fallback: string | null; models: string[]; onMade: () => void }) {
@@ -80,33 +96,47 @@ function ImagePanel({ fallback, models, onMade }: { fallback: string | null; mod
   }
 
   return (
-    <section className="card stack">
-      <textarea className="code-editor short" placeholder="A lighthouse at dusk, watercolor, wide shot" aria-label="Prompt" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
-      <div className="row gap wrap">
-        <ModelPick fallback={fallback} models={models} value={model} onChange={setModel} />
-        <SelectField
-          aria-label="Size"
-          options={['1024x1024', '1536x1024', '1024x1536', '512x512'].map((s) => ({ value: s, label: s }))}
-          value={size}
-          onValueChange={setSize}
+    <Card>
+      <CardContent className="flex flex-col gap-3">
+        <Textarea
+          placeholder="A lighthouse at dusk, watercolor, wide shot"
+          aria-label="Prompt"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
         />
-        <SelectField aria-label="How many" options={['1', '2', '3', '4'].map((x) => ({ value: x, label: `${x} image${x === '1' ? '' : 's'}` }))} value={n} onValueChange={setN} />
-        <Button onClick={go} disabled={busy || !prompt.trim() || (!fallback && !model)}>
-          {busy && <Spinner data-icon="inline-start" />}
-          Generate
-        </Button>
-      </div>
-      {made && (
-        <>
-          <p className="muted small">{made.note}</p>
-          <div className="media-grid">
-            {made.blobs.map((b) => (
-              <BlobView key={b.id} id={b.id} mediaType={b.media_type} />
-            ))}
-          </div>
-        </>
-      )}
-    </section>
+        <div className="flex flex-wrap items-center gap-2">
+          <ModelPick fallback={fallback} models={models} value={model} onChange={setModel} />
+          <SelectField
+            aria-label="Size"
+            className="w-36"
+            options={['1024x1024', '1536x1024', '1024x1536', '512x512'].map((s) => ({ value: s, label: s }))}
+            value={size}
+            onValueChange={setSize}
+          />
+          <SelectField
+            aria-label="How many"
+            className="w-32"
+            options={['1', '2', '3', '4'].map((x) => ({ value: x, label: `${x} image${x === '1' ? '' : 's'}` }))}
+            value={n}
+            onValueChange={setN}
+          />
+          <Button onClick={go} disabled={busy || !prompt.trim() || (!fallback && !model)}>
+            {busy && <Spinner data-icon="inline-start" />}
+            Generate
+          </Button>
+        </div>
+        {made && (
+          <>
+            <CardDescription>{made.note}</CardDescription>
+            <div className="flex flex-wrap gap-3">
+              {made.blobs.map((b) => (
+                <BlobView key={b.id} id={b.id} mediaType={b.media_type} />
+              ))}
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -131,23 +161,31 @@ function SpeechPanel({ fallback, models, onMade }: { fallback: string | null; mo
   }
 
   return (
-    <section className="card stack">
-      <textarea className="code-editor short" placeholder="Something to say" aria-label="Text" value={text} onChange={(e) => setText(e.target.value)} />
-      <div className="row gap wrap">
-        <ModelPick fallback={fallback} models={models} value={model} onChange={setModel} />
-        <input className="plain-input narrow" placeholder="Voice (optional)" aria-label="Voice" value={voice} onChange={(e) => setVoice(e.target.value)} />
-        <Button onClick={go} disabled={busy || !text.trim() || (!fallback && !model)}>
-          {busy && <Spinner data-icon="inline-start" />}
-          Speak
-        </Button>
-      </div>
-      {made && (
-        <>
-          <p className="muted small">{made.note}</p>
-          <BlobView id={made.blob.id} mediaType={made.blob.media_type} />
-        </>
-      )}
-    </section>
+    <Card>
+      <CardContent className="flex flex-col gap-3">
+        <Textarea placeholder="Something to say" aria-label="Text" value={text} onChange={(e) => setText(e.target.value)} />
+        <div className="flex flex-wrap items-center gap-2">
+          <ModelPick fallback={fallback} models={models} value={model} onChange={setModel} />
+          <Input
+            className="w-48"
+            placeholder="Voice (optional)"
+            aria-label="Voice"
+            value={voice}
+            onChange={(e) => setVoice(e.target.value)}
+          />
+          <Button onClick={go} disabled={busy || !text.trim() || (!fallback && !model)}>
+            {busy && <Spinner data-icon="inline-start" />}
+            Speak
+          </Button>
+        </div>
+        {made && (
+          <>
+            <CardDescription>{made.note}</CardDescription>
+            <BlobView id={made.blob.id} mediaType={made.blob.media_type} />
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -160,7 +198,11 @@ function TranscribePanel({ fallback, models }: { fallback: string | null; models
   async function transcribe(audio: Blob) {
     setBusy(true);
     try {
-      const t = await api.transcribe({ audio_base64: await blobToBase64(audio), media_type: audio.type || 'audio/webm', model: model || undefined });
+      const t = await api.transcribe({
+        audio_base64: await blobToBase64(audio),
+        media_type: audio.type || 'audio/webm',
+        model: model || undefined,
+      });
       setResult({
         text: t.text,
         note: `${t.model}${t.duration_secs ? ` · ${t.duration_secs.toFixed(1)}s` : ''}${t.cost ? ` · ${money(t.cost)}` : ''}`,
@@ -173,84 +215,101 @@ function TranscribePanel({ fallback, models }: { fallback: string | null; models
   }
 
   return (
-    <section className="card stack">
-      <div className="row gap wrap">
-        <ModelPick fallback={fallback} models={models} value={model} onChange={setModel} />
-        {recorder.supported && (
-          <Button
-            variant={recorder.recording ? 'destructive' : 'outline'}
-            onClick={async () => {
-              if (recorder.recording) transcribe(await recorder.stop());
-              else recorder.start().catch((e: Error) => toast.error(`Microphone: ${e.message}`));
-            }}
-            disabled={!fallback && !model}
-          >
-            <IconMic data-icon="inline-start" />
-            {recorder.recording ? `Stop (${recorder.seconds}s)` : 'Record'}
-          </Button>
+    <Card>
+      <CardContent className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-end gap-2">
+          <ModelPick fallback={fallback} models={models} value={model} onChange={setModel} />
+          {recorder.supported && (
+            <Button
+              variant={recorder.recording ? 'destructive' : 'outline'}
+              onClick={async () => {
+                if (recorder.recording) transcribe(await recorder.stop());
+                else recorder.start().catch((e: Error) => toast.error(`Microphone: ${e.message}`));
+              }}
+              disabled={!fallback && !model}
+            >
+              <IconMic data-icon="inline-start" />
+              {recorder.recording ? `Stop (${recorder.seconds}s)` : 'Record'}
+            </Button>
+          )}
+          <Field className="w-auto">
+            <FieldLabel htmlFor="audio-file">Or an audio file</FieldLabel>
+            <Input
+              id="audio-file"
+              type="file"
+              accept="audio/*,video/webm"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) transcribe(f);
+                e.target.value = '';
+              }}
+            />
+          </Field>
+        </div>
+        {busy && (
+          <p className="flex items-center gap-2 text-muted-foreground">
+            <Spinner /> Transcribing…
+          </p>
         )}
-        <label className="file-pick">
-          <input
-            type="file"
-            accept="audio/*,video/webm"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) transcribe(f);
-              e.target.value = '';
-            }}
-          />
-          <span>…or choose an audio file</span>
-        </label>
-      </div>
-      {busy && <p className="muted">Transcribing…</p>}
-      {result && (
-        <>
-          <p className="muted small">{result.note}</p>
-          <blockquote className="transcript-out">{result.text || '(no speech found)'}</blockquote>
-        </>
-      )}
-    </section>
+        {result && (
+          <Item variant="muted">
+            <ItemContent>
+              <p className="whitespace-pre-wrap">{result.text || '(no speech found)'}</p>
+              <ItemDescription>{result.note}</ItemDescription>
+            </ItemContent>
+          </Item>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
 function Library({ blobs, error, onChange }: { blobs: StoredBlob[]; error?: string; onChange: () => void }) {
   if (error) return <ErrorNote error={error} />;
   const shown = blobs.filter((b) => b.media_type.startsWith('image/') || b.media_type.startsWith('audio/'));
-  if (!shown.length) return <Empty title="Nothing here yet">Images and audio made here or by assistants show up in this list.</Empty>;
+  if (!shown.length)
+    return (
+      <EmptyState title="Nothing here yet" icon={<ImageIcon />}>
+        Images and audio made here or by assistants show up in this list.
+      </EmptyState>
+    );
   return (
-    <div className="media-library">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(15rem,100%),1fr))] gap-4">
       {shown.map((b) => {
         const meta = b.metadata as { prompt?: string; text?: string; model?: string };
         return (
-          <figure key={b.id} className="card media-card">
-            <BlobView id={b.id} mediaType={b.media_type} />
-            <figcaption className="stack tight">
-              <span className="small clamp">{meta.prompt ?? meta.text ?? b.name ?? b.media_type}</span>
-              <span className="muted small">
+          <Card key={b.id} size="sm">
+            <CardContent className="flex flex-col gap-2">
+              <BlobView id={b.id} mediaType={b.media_type} />
+              <p className="line-clamp-2 text-sm">{meta.prompt ?? meta.text ?? b.name ?? b.media_type}</p>
+              <CardDescription>
                 {b.source ?? 'stored'} · {meta.model ?? b.media_type} · {ago(b.created_at)}
-              </span>
-              <div className="row between">
-                {b.run_id ? (
-                  <a className="small" href={`#/activity/${b.run_id}`}>
-                    run
-                  </a>
-                ) : (
-                  <span />
-                )}
-                <button
-                  type="button"
-                  className="icon-btn"
-                  aria-label="Delete"
-                  onClick={async () => {
-                    await api.deleteBlob(b.id).catch((e: Error) => toast.error(e.message));
-                    onChange();
-                  }}
-                >
+              </CardDescription>
+            </CardContent>
+            <CardFooter className="justify-between">
+              {b.run_id ? (
+                <Button variant="link" size="sm" className="px-0" asChild>
+                  <a href={`#/activity/${b.run_id}`}>Open the run</a>
+                </Button>
+              ) : (
+                <span />
+              )}
+              <ConfirmAction
+                title="Delete this file?"
+                description="It is removed from the library and from any chat that shows it."
+                action="Delete"
+                destructive
+                onConfirm={async () => {
+                  await api.deleteBlob(b.id).catch((e: Error) => toast.error(e.message));
+                  onChange();
+                }}
+              >
+                <Button variant="ghost" size="icon-sm" aria-label="Delete">
                   <IconTrash />
-                </button>
-              </div>
-            </figcaption>
-          </figure>
+                </Button>
+              </ConfirmAction>
+            </CardFooter>
+          </Card>
         );
       })}
     </div>

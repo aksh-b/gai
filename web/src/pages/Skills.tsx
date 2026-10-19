@@ -1,10 +1,37 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
+import { FileTextIcon, GraduationCapIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
+  Attachment,
+  AttachmentAction,
+  AttachmentActions,
+  AttachmentContent,
+  AttachmentGroup,
+  AttachmentMedia,
+  AttachmentTitle,
+} from '@/components/ui/attachment';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
+import { Textarea } from '@/components/ui/textarea';
 import { api, type SkillView } from '../api';
-import { Disclosure, Empty, ErrorNote, Markdown, PageHeader } from '../components';
-import { IconPlus, IconTrash } from '../icons';
+import { Disclosure, EmptyState, ErrorNote, Markdown, Page, PageHeader } from '@/components/shared';
+import { IconPlus, IconTrash, IconX } from '../icons';
 import { useLoad } from '../util';
 
 const TEMPLATE = `---
@@ -19,31 +46,35 @@ Step-by-step instructions the agent follows once it loads this skill.
 export function Skills() {
   const list = useLoad(() => api.skills(), []);
   return (
-    <div className="page">
+    <Page>
       <PageHeader
         title="Skills"
         subtitle={
           <>
-            Step-by-step know-how an assistant reads only when a task needs it, like "how we write release notes". Upload one
-            below, then pick it in an assistant's settings.
+            Step-by-step know-how an assistant reads only when a task needs it, like "how we write release notes". Upload one below, then
+            pick it in an assistant's settings.
           </>
         }
       />
       <ErrorNote error={list.error} />
-      <div className="tool-list">
+      {list.data?.length === 0 && (
+        <EmptyState title="No skills yet" icon={<GraduationCapIcon />}>
+          Upload one below.
+        </EmptyState>
+      )}
+      <div className="grid gap-3 md:grid-cols-2">
         {list.data?.map((s) => (
           <SkillCard key={s.name} s={s} onChange={list.reload} />
         ))}
       </div>
-      {list.data?.length === 0 && (
-        <Empty title="No skills yet">Upload one below.</Empty>
-      )}
-      <section className="card">
-        <Disclosure summary={<strong>Upload a skill</strong>} open={list.data?.length === 0}>
-          <Upload onSaved={list.reload} />
-        </Disclosure>
-      </section>
-    </div>
+      <Card>
+        <CardContent>
+          <Disclosure summary="Upload a skill" open={list.data?.length === 0}>
+            <Upload onSaved={list.reload} />
+          </Disclosure>
+        </CardContent>
+      </Card>
+    </Page>
   );
 }
 
@@ -52,41 +83,64 @@ function SkillCard({ s, onChange }: { s: SkillView; onChange: () => void }) {
   const detail = useLoad(() => (open ? api.skill(s.name) : Promise.resolve(undefined)), [open, s.name]);
   const stored = s.source.kind === 'stored';
   async function remove() {
-    if (!confirm(`Delete the skill ${s.name}?`)) return;
     await api.deleteSkill(s.name).catch((e: Error) => toast.error(e.message));
     onChange();
   }
   return (
-    <section className="card stack tight">
-      <div className="row between">
-        <strong className="mono">{s.name}</strong>
-        <div className="row gap">
-          <span className="chip small">{s.source.kind === 'stored' ? `uploaded v${s.source.version}` : 'folder'}</span>
+    <Card>
+      <CardHeader>
+        <CardTitle className="font-mono">{s.name}</CardTitle>
+        <CardDescription>{s.description}</CardDescription>
+        <CardAction className="flex items-center gap-1">
+          <Badge variant="outline">{s.source.kind === 'stored' ? `Uploaded v${s.source.version}` : 'Folder'}</Badge>
           {stored && (
-            <button type="button" className="icon-btn" aria-label={`Delete ${s.name}`} onClick={remove}>
-              <IconTrash />
-            </button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="icon-sm" aria-label={`Delete ${s.name}`}>
+                  <IconTrash />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete the skill {s.name}?</AlertDialogTitle>
+                  <AlertDialogDescription>Assistants that use it lose it. Every uploaded version is removed.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction variant="destructive" onClick={remove}>
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
-        </div>
-      </div>
-      <p className="muted" style={{ margin: 0 }}>
-        {s.description}
-      </p>
-      {s.source.kind === 'dir' && <span className="muted small mono">{s.source.path}</span>}
-      {s.files.length > 0 && (
-        <div className="row gap wrap">
-          {s.files.map((f) => (
-            <span key={f} className="chip small mono">
-              {f}
-            </span>
-          ))}
-        </div>
+        </CardAction>
+      </CardHeader>
+      {(s.source.kind === 'dir' || s.files.length > 0) && (
+        <CardContent className="flex flex-col gap-2">
+          {s.source.kind === 'dir' && <p className="font-mono text-xs text-muted-foreground">{s.source.path}</p>}
+          {s.files.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {s.files.map((f) => (
+                <Badge key={f} variant="secondary" className="font-mono">
+                  {f}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </CardContent>
       )}
-      <button type="button" className="link small" style={{ alignSelf: 'flex-start' }} onClick={() => setOpen(!open)}>
-        {open ? 'Hide instructions' : 'Instructions'}
-      </button>
-      {open && detail.data && <Markdown text={detail.data.instructions} />}
-    </section>
+      <CardFooter className="flex-col items-start gap-3">
+        <Collapsible open={open} onOpenChange={setOpen} className="flex w-full flex-col gap-3">
+          <CollapsibleTrigger asChild>
+            <Button variant="link" size="sm" className="w-fit px-0">
+              {open ? 'Hide instructions' : 'Instructions'}
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>{detail.data ? <Markdown text={detail.data.instructions} /> : <Spinner />}</CollapsibleContent>
+        </Collapsible>
+      </CardFooter>
+    </Card>
   );
 }
 
@@ -121,36 +175,50 @@ function Upload({ onSaved }: { onSaved: () => void }) {
   }
 
   return (
-    <div className="stack" style={{ paddingTop: 8 }}>
-      <label className="label" htmlFor="skill-md">
-        SKILL.md
-      </label>
-      <textarea id="skill-md" className="code-editor" style={{ minHeight: 220 }} value={content} onChange={(e) => setContent(e.target.value)} />
-      <div className="row gap wrap">
-        <label className="dropzone inline">
-          <input type="file" multiple onChange={(e) => addFiles(e.target.files)} />
-          <span className="small">Add files (scripts, templates, references; a SKILL.md replaces the text above)</span>
-        </label>
-        {Object.keys(files).map((f) => (
-          <span key={f} className="chip small mono">
-            {f}
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label={`Remove ${f}`}
-              onClick={() => setFiles(Object.fromEntries(Object.entries(files).filter(([k]) => k !== f)))}
-            >
-              ×
-            </button>
-          </span>
-        ))}
-      </div>
-      <div>
-        <Button onClick={save} disabled={busy}>
-          {busy ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
-          Save skill
-        </Button>
-      </div>
+    <div className="flex flex-col gap-4 pt-2">
+      <Field>
+        <FieldLabel htmlFor="skill-md">SKILL.md</FieldLabel>
+        <Textarea id="skill-md" className="min-h-56 font-mono" value={content} onChange={(e) => setContent(e.target.value)} />
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="skill-files">Files</FieldLabel>
+        <Input
+          id="skill-files"
+          type="file"
+          multiple
+          onChange={(e) => {
+            addFiles(e.target.files);
+            e.target.value = '';
+          }}
+        />
+        <FieldDescription>Scripts, templates and references the skill uses. A SKILL.md here replaces the text above.</FieldDescription>
+      </Field>
+      {Object.keys(files).length > 0 && (
+        <AttachmentGroup>
+          {Object.keys(files).map((f) => (
+            <Attachment key={f} size="xs">
+              <AttachmentMedia variant="icon">
+                <FileTextIcon />
+              </AttachmentMedia>
+              <AttachmentContent>
+                <AttachmentTitle className="font-mono">{f}</AttachmentTitle>
+              </AttachmentContent>
+              <AttachmentActions>
+                <AttachmentAction
+                  aria-label={`Remove ${f}`}
+                  onClick={() => setFiles(Object.fromEntries(Object.entries(files).filter(([k]) => k !== f)))}
+                >
+                  <IconX />
+                </AttachmentAction>
+              </AttachmentActions>
+            </Attachment>
+          ))}
+        </AttachmentGroup>
+      )}
+      <Button className="w-fit" onClick={save} disabled={busy}>
+        {busy ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
+        Save skill
+      </Button>
     </div>
   );
 }

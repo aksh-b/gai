@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { TabBar } from '@/components/fields';
 import { DataTable, type Column } from '@/components/data-table';
 import { api, type Run } from '../api';
-import { ErrorNote, PageHeader, StatusPill } from '../components';
+import { ErrorNote, Page, PageHeader, StatusPill } from '@/components/shared';
 import { navigate } from '../router';
 import { ago, blocksText, money, tokens, totalIn, useLoad } from '../util';
 import { modelLabel } from '../labels';
@@ -19,10 +19,7 @@ const FILTERS = [
 export function Runs() {
   const [dev] = useDevMode();
   const [filter, setFilter] = useState('all');
-  const { data, error, reload } = useLoad(
-    () => api.runs({ status: filter === 'all' ? undefined : filter, limit: 500 }),
-    [filter],
-  );
+  const { data, error, reload } = useLoad(() => api.runs({ status: filter === 'all' ? undefined : filter, limit: 500 }), [filter]);
 
   // Refresh while anything is still in flight.
   useEffect(() => {
@@ -39,13 +36,25 @@ export function Runs() {
       key: 'model',
       header: 'Model',
       value: (r) => r.metadata.model ?? '',
-      cell: (r) => (dev ? <span className="mono small">{r.metadata.model}</span> : <span className="small">{r.metadata.model ? modelLabel(r.metadata.model) : ''}</span>),
+      cell: (r) =>
+        dev ? (
+          <span className="font-mono text-xs">{r.metadata.model}</span>
+        ) : (
+          <span className="text-xs">{r.metadata.model ? modelLabel(r.metadata.model) : ''}</span>
+        ),
       width: 220,
     },
     ...(dev
       ? ([
           { key: 'steps', header: 'Steps', value: (r) => r.steps, align: 'end', width: 70 },
-          { key: 'tokens', header: 'Tokens', value: (r) => totalIn(r.usage) + r.usage.output_tokens, cell: (r) => tokens(totalIn(r.usage) + r.usage.output_tokens), align: 'end', width: 90 },
+          {
+            key: 'tokens',
+            header: 'Tokens',
+            value: (r) => totalIn(r.usage) + r.usage.output_tokens,
+            cell: (r) => tokens(totalIn(r.usage) + r.usage.output_tokens),
+            align: 'end',
+            width: 90,
+          },
         ] as Column<Run>[])
       : []),
     { key: 'cost', header: 'Cost', value: (r) => r.cost, cell: (r) => money(r.cost), align: 'end', width: 80 },
@@ -53,25 +62,21 @@ export function Runs() {
   ];
 
   return (
-    <div className="page">
+    <Page wide>
       <PageHeader title="History" subtitle="Everything your assistants and workflows did: open one to see each step." />
-      <div className="row between">
-        <TabBar items={FILTERS} value={filter} onValueChange={setFilter} variant="pill" aria-label="Filter runs" />
-      </div>
+      <TabBar items={FILTERS} value={filter} onValueChange={setFilter} variant="pill" aria-label="Filter runs" />
       <ErrorNote error={error} />
-      <div className="card flush">
-        <DataTable
-          rows={data ?? []}
-          columns={columns}
-          getRowId={(r) => r.id}
-          height={Math.max(320, window.innerHeight - 260)}
-          onRowAction={(r) => navigate(`/activity/${r.id}`)}
-          defaultSort={[{ key: 'created', dir: 'desc' }]}
-          empty="No runs yet. Start one from the Playground."
-          aria-label="Runs"
-        />
-      </div>
-      <p className="muted small">Click a row (or press Enter) to open it.</p>
-    </div>
+      <DataTable
+        rows={data ?? []}
+        columns={columns}
+        getRowId={(r) => r.id}
+        height={Math.max(320, window.innerHeight - 260)}
+        onRowAction={(r) => navigate(`/activity/${r.id}`)}
+        defaultSort={[{ key: 'created', dir: 'desc' }]}
+        empty="No runs yet. Start one from the Playground."
+        aria-label="Runs"
+      />
+      <p className="text-sm text-muted-foreground">Click a row (or press Enter) to open it.</p>
+    </Page>
   );
 }
