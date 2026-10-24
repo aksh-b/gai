@@ -1,0 +1,29 @@
+[package]
+name = "gai-browser"
+description = "Browser tools for gai agents: headless Chrome through the DevTools protocol, with domain rules and approval for form submits."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = ["chrome"]
+# The Chrome backend (chromiumoxide). Without it the tools are not available.
+chrome = ["dep:chromiumoxide"]
+
+[dependencies]
+gai-core.workspace = true
+gai-tools.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+chromiumoxide = { workspace = true, optional = true }
+futures.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+axum.workspace = true

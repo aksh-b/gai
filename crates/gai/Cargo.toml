@@ -6,13 +6,17 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-default = ["sandbox"]
+default = ["sandbox", "browser"]
 # The container backend of the code sandbox (Docker/Podman via bollard).
 sandbox = ["gai-sandbox/container"]
+# The browser tools (headless Chrome via chromiumoxide). They are offered
+# only when a Chrome or Chromium is installed.
+browser = ["gai-browser/chrome"]
 
 [dependencies]
 async-trait.workspace = true
 gai-agent.workspace = true
+gai-browser.workspace = true
 gai-core.workspace = true
 gai-llm.workspace = true
 gai-memory.workspace = true

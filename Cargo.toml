@@ -22,12 +22,14 @@ gai-skills = { path = "crates/gai-skills" }
 gai-orchestra = { path = "crates/gai-orchestra" }
 gai-triggers = { path = "crates/gai-triggers" }
 gai-sandbox = { path = "crates/gai-sandbox", default-features = false }
+gai-browser = { path = "crates/gai-browser", default-features = false }
 
 anyhow = "1"
 base64 = "0.22"
 async-trait = "0.1"
 axum = "0.8"
 bollard = "0.21"
+chromiumoxide = { version = "0.9", default-features = false }
 chrono-tz = "0.10"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 crossterm = { version = "0.28", features = ["event-stream"] }
@@ -70,6 +72,7 @@ tokio-util = "0.7"
 tower-http = { version = "0.6", features = ["cors", "fs", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+url = "2"
 ulid = "1"
 wiremock = "0.6"
 

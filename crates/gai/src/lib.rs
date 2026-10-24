@@ -26,6 +26,7 @@ pub use config::{
     A2aServeSettings, AuthMode, Config, ConfigError, McpServeSettings, ServerSettings,
 };
 pub use gai_agent as agent;
+pub use gai_browser as browser;
 pub use gai_core as core;
 pub use gai_llm as llm;
 pub use gai_memory as memory;
@@ -323,10 +324,18 @@ impl Gai {
                     Ok(Some(sb)) => rt.register_tool(Arc::new(gai_sandbox::code_exec(
                         sb,
                         self.config.sandbox.clone(),
-                        Some(Arc::new(BlobArtifacts(store.clone()))),
+                        Some(Arc::new(BlobArtifacts(store.clone(), "code_exec"))),
                     ))),
                     Ok(None) => {}
                     Err(e) => tracing::warn!(error = %e, "no code sandbox"),
+                }
+                #[cfg(feature = "browser")]
+                if let Some(chrome) = gai_browser::chrome::Chrome::from_settings(&self.config.browser) {
+                    let images: Arc<dyn gai_browser::ImageSink> =
+                        Arc::new(BlobArtifacts(store.clone(), "browser"));
+                    for tool in gai_browser::tools(chrome, Some(images)) {
+                        rt.register_tool(tool);
+                    }
                 }
                 for (name, cfg) in &self.config.a2a_agents {
                     let agent = gai_tools::a2a::A2aAgent::new(name, cfg.clone(), rt.http().clone());
@@ -400,12 +409,12 @@ impl Gai {
     }
 }
 
-/// Files written by `code_exec`, kept as blobs of the run.
-struct BlobArtifacts(SharedStore);
+/// Files written by `code_exec` and browser screenshots, kept as blobs of
+/// the run. The second field is the blob's `source`.
+struct BlobArtifacts(SharedStore, &'static str);
 
-#[async_trait::async_trait]
-impl gai_sandbox::ArtifactSink for BlobArtifacts {
-    async fn save(
+impl BlobArtifacts {
+    async fn keep(
         &self,
         ctx: &gai_tools::ToolCtx,
         path: &str,
@@ -418,13 +427,40 @@ impl gai_sandbox::ArtifactSink for BlobArtifacts {
                 media_type: media_type.to_owned(),
                 name: Some(name),
                 run_id: (!ctx.run_id.is_empty()).then(|| ctx.run_id.clone()),
-                source: Some("code_exec".into()),
+                source: Some(self.1.into()),
                 metadata: serde_json::json!({"path": path}),
                 data,
             })
             .await
             .map(|b| b.id)
             .map_err(|e| e.to_string())
+    }
+}
+
+#[async_trait::async_trait]
+impl gai_sandbox::ArtifactSink for BlobArtifacts {
+    async fn save(
+        &self,
+        ctx: &gai_tools::ToolCtx,
+        path: &str,
+        media_type: &str,
+        data: Vec<u8>,
+    ) -> Result<String, String> {
+        self.keep(ctx, path, media_type, data).await
+    }
+}
+
+#[cfg(feature = "browser")]
+#[async_trait::async_trait]
+impl gai_browser::ImageSink for BlobArtifacts {
+    async fn save(
+        &self,
+        ctx: &gai_tools::ToolCtx,
+        name: &str,
+        media_type: &str,
+        data: Vec<u8>,
+    ) -> Result<String, String> {
+        self.keep(ctx, name, media_type, data).await
     }
 }
 

@@ -5,7 +5,7 @@
 gai is a self-hostable agentic AI platform in Rust: a model layer that works with any provider, agents with tools and MCP, a server with an OpenAI-compatible API, a CLI/TUI, and a React dashboard. The full 12-phase plan is in
 `C:\Users\akshbhati\.claude\plans\create-a-full-fledged-velvety-chipmunk.md`.
 
-**Done:** phases 1–8 and 10, the code-sandbox half of phase 9, plus the parts of phase 11 (dashboard) that those phases needed. **Not started:** the browser half of phase 9.
+**Done:** phases 1–10, plus the parts of phase 11 (dashboard) that those phases needed.
 
 Size: about 27k lines of Rust (tests included) in 12 crates, about 5k lines of hand-written TypeScript, and 171 tests, all passing; `clippy -D warnings` is clean.
 
@@ -120,6 +120,7 @@ The dashboard (`web/`) is React 19 + Vite, organised simple-first (see **Dashboa
   - **Workflows** have a step form (`web/src/WorkflowForm.tsx`: assistant / tool with schema-driven fields / ask a person / text, with "use the result of" chips, only-if, repeat-for-each, retries); workflows it can't show open as YAML. **Knowledge** takes files dropped anywhere on the page.
   - OpenAI-dialect tools: an object schema without `properties` now gets `"properties": {}` (Ollama refused `current_time` otherwise).
 
+- **Browser (`gai-browser`, 2026-10-24):** chromiumoxide 0.9 drives Chrome/Chromium (found via `[browser] executable`, `GAI_BROWSER_EXECUTABLE`, or `chromium`/`google-chrome` on PATH; the dev image now has Chromium). One Chrome per process, started on first use; one browser context + page per chat session (run id outside a session), closed after `idle_secs` (300), at most `max_contexts` (4, least recently used closed first); Chrome exits when no context is left. Chrome runs with request interception on, and every paused request (redirects, subresources) goes through `DomainRules` (`allow_domains`/`deny_domains`, a domain covers its subdomains; private/loopback refused unless `allow_private_network`, cached per host). `window.open` is disabled. Tools: `browser_navigate` (returns the outline), `browser_read` (`outline` with `[n]` refs kept as `data-gai-ref`, or `text`), `browser_click` (refuses submit buttons), `browser_type` (fields, and `<select>` by option text/value), `browser_submit` (policy `approve`), `browser_extract` (CSS selector + attributes, absolute href/src), `browser_screenshot` (PNG blob, `source = browser`). The outline JS lives in `crates/gai-browser/src/page.js`. Tests run against an axum fixture site and skip when no Chrome is installed. Template `web-browser`.
 - **Personas (2026-10-22):** `PersonaSpec` in `crates/gai-agent/src/persona.rs` (identity fields for the UI; style fields rendered by `render()` into a deterministic `<persona name="…">` block). Stored and versioned like workflows (migration `0011_personas.sql`, `PersonaStore`); `/v1/personas` (CRUD, versions, diff, rollback, labels, `/usage`, `/render`, `/defaults`), writes need `admin` except `/render`. A run picks `RunRequest.persona` (name, `name@v3`/`@label`, inline spec, or `"none"`), else the agent's `persona`, else the default (the `default_persona` setting as JSON, else `[persona]` in gai.toml). Placement: the agent's `persona_placement`, else the default's, else `prepend`; if the agent's template uses `{{ persona }}` (minijinja `undeclared_variables`) nothing is added. The resolved persona is snapshotted in `metadata.persona` and reused on resume; forks reuse it inline (or `"none"`). Deleting a persona in use by an agent or as the default is a 409. Dashboard: Assistants → Personas (`web/src/pages/Personas.tsx`, `PersonaForm.tsx`, `Persona.tsx`), with the default-persona card on that page rather than Settings, since it applies server-wide. "Draft it for me" for personas is client-side like the assistant one, and both builders run with `persona: "none"`.
 
 ## Deviations from the plan (intentional)
@@ -166,7 +167,6 @@ Seen but not changed:
 ## Next
 
 Remaining phases:
-- 9: the browser agent (`gai-browser`, chromiumoxide); the sandbox is done
 - 11: dashboard polish and embedding (UI built into the binary, CodeMirror, xyflow)
 - 12: SDK polish, bundles, templates, Dockerfile, Postgres
 

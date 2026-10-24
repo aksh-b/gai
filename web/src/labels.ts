@@ -15,6 +15,13 @@ const TOOLS: Record<string, { label: string; verb: (i: Record<string, unknown>) 
     label: 'Run code',
     verb: (i) => `Run ${({ node: 'JavaScript', javascript: 'JavaScript', js: 'JavaScript', bash: 'a script', sh: 'a script', shell: 'a script' } as Record<string, string>)[String(i.language)] ?? 'Python'} code`,
   },
+  browser_navigate: { label: 'Browse to a page', verb: (i) => `Open ${str(i.url, 'a web page')} in the browser` },
+  browser_read: { label: 'Read the page', verb: () => 'Read the page' },
+  browser_click: { label: 'Click on the page', verb: (i) => `Click ${target(i)}` },
+  browser_type: { label: 'Type on the page', verb: (i) => `Type ${str(i.text)} into ${target(i)}` },
+  browser_submit: { label: 'Submit a form', verb: (i) => `Submit the form at ${target(i)}` },
+  browser_extract: { label: 'Collect from the page', verb: (i) => `Collect ${str(i.selector, 'items')} from the page` },
+  browser_screenshot: { label: 'Screenshot the page', verb: () => 'Take a screenshot of the page' },
   rag_search: { label: 'Search your documents', verb: (i) => `Search documents for ${str(i.query)}` },
   memory_search: { label: 'Search memories', verb: (i) => `Search memories for ${str(i.query)}` },
   remember: { label: 'Remember something', verb: () => 'Remember this' },
@@ -32,6 +39,10 @@ function str(v: unknown, fallback = ''): string {
   const s = v.trim().replace(/\s+/g, ' ');
   return s.length > 70 ? `“${s.slice(0, 69)}…”` : `“${s}”`;
 }
+
+/** The element a browser tool acts on: `[3]` or its selector. */
+const target = (i: Record<string, unknown>) =>
+  i.ref != null && String(i.ref).trim() ? `element [${String(i.ref).replace(/[[\]]/g, '')}]` : str(i.selector, 'an element');
 
 const words = (s: string) => {
   const t = s.replace(/[_-]+/g, ' ').trim();

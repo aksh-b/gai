@@ -26,6 +26,18 @@ initial development and will ship as 0.1.0.
   approval), or `"off"` to turn the tool off.
 - A **Data analyst** template that answers questions about your data by
   running code and drawing charts.
+- **Browser tools.** Agents can use a real (headless) Chrome or Chromium:
+  `browser_navigate` opens a page and returns an outline in which every
+  link, button and field has a number, `browser_click`, `browser_type` and
+  `browser_submit` act on those numbers, `browser_read` gives the outline or
+  the readable text, `browser_extract` collects elements as JSON, and
+  `browser_screenshot` shows the page to the model and the user. Each chat
+  gets its own browser context, closed after 5 minutes unused. Every request
+  a page makes is checked against `allow_domains` and `deny_domains`, and
+  private addresses are refused unless `allow_private_network` is set.
+  Submitting a form asks for approval by default. The tools appear when
+  Chrome or Chromium is installed; configure them under `[browser]` in
+  `gai.toml`. A **Web browser** template uses them.
 - **Personas**: reusable voices (name, avatar, greeting, tone, formality,
   length, language, do/don't rules and example replies) that any assistant
   can speak in. Give an assistant a default persona with `persona:` (and
