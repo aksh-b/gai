@@ -39,9 +39,13 @@ enum Command {
         /// Address to listen on
         #[arg(long, default_value = "127.0.0.1:8484", env = "GAI_BIND")]
         bind: std::net::SocketAddr,
-        /// Built dashboard directory
-        #[arg(long, default_value = "web/dist", env = "GAI_UI_DIR")]
-        ui: PathBuf,
+        /// Serve the dashboard from this build folder (e.g. web/dist)
+        /// instead of the one built into the binary
+        #[arg(long, env = "GAI_UI_DIR", conflicts_with = "no_ui")]
+        ui: Option<PathBuf>,
+        /// Serve only the API, without the dashboard
+        #[arg(long)]
+        no_ui: bool,
         /// auto (open until the first API key exists, local only), required, or off
         #[arg(long, env = "GAI_AUTH")]
         auth: Option<gai::AuthMode>,
@@ -138,24 +142,32 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
         Command::Serve {
             bind,
             ui,
+            no_ui,
             auth,
             local,
         } => {
-            let has_ui = ui.join("index.html").is_file();
+            let dashboard = match ui {
+                _ if no_ui => gai_server::Dashboard::Off,
+                Some(dir) => gai_server::Dashboard::Dir(dir),
+                None => gai_server::Dashboard::Embedded,
+            };
             eprintln!(
                 "gai {} listening on http://{bind}{}",
                 env!("CARGO_PKG_VERSION"),
-                if has_ui {
-                    "  (dashboard at /)"
-                } else {
-                    "  (no dashboard build found; run `npm run build` in web/)"
+                match &dashboard {
+                    gai_server::Dashboard::Off => "",
+                    d if d.available() => "  (dashboard at /)",
+                    gai_server::Dashboard::Dir(_) => {
+                        "  (no dashboard build in that folder; run `npm run build` in web/)"
+                    }
+                    _ => "  (built without the dashboard; see / for how to add it)",
                 }
             );
             gai_server::serve(
                 std::sync::Arc::new(gai),
                 gai_server::ServeOptions {
                     bind,
-                    ui_dir: Some(ui),
+                    dashboard,
                     auth,
                     local,
                 },

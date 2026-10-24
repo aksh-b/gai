@@ -10,6 +10,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import YAML from 'yaml';
+
+import { CodeEditor } from '@/components/code-editor';
 import { ErrorNote } from '@/components/shared';
 import { useDevMode } from './prefs';
 
@@ -48,11 +50,14 @@ export function SpecEditor<T extends object>({
   onChange,
   children,
   label,
+  schema,
 }: {
   value: T;
   onChange: (v: T) => void;
   children: ReactNode;
   label: string;
+  /** The spec's schema in /openapi.json, to check the YAML against. */
+  schema?: string;
 }) {
   const [dev] = useDevMode();
   const [tab, setTab] = useState('form');
@@ -94,15 +99,16 @@ export function SpecEditor<T extends object>({
         <div className="flex flex-col gap-4">{children}</div>
       ) : (
         <>
-          <Textarea
-            className="min-h-96 font-mono"
-            spellCheck={false}
+          <CodeEditor
+            language="yaml"
+            schema={schema}
+            minHeight="24rem"
             value={text}
             aria-label={`${label} (YAML)`}
-            onChange={(e) => {
-              setText(e.target.value);
+            onChange={(t) => {
+              setText(t);
               try {
-                const v = YAML.parse(e.target.value);
+                const v = YAML.parse(t);
                 if (!v || typeof v !== 'object') throw new Error('The spec must be a YAML mapping.');
                 setError(undefined);
                 own.current = true;

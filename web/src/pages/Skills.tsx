@@ -28,7 +28,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
-import { Textarea } from '@/components/ui/textarea';
+import { CodeEditor } from '@/components/code-editor';
 import { api, type SkillView } from '../api';
 import { Disclosure, EmptyState, ErrorNote, Markdown, Page, PageHeader } from '@/components/shared';
 import { IconPlus, IconTrash, IconX } from '../icons';
@@ -177,8 +177,8 @@ function Upload({ onSaved }: { onSaved: () => void }) {
   return (
     <div className="flex flex-col gap-4 pt-2">
       <Field>
-        <FieldLabel htmlFor="skill-md">SKILL.md</FieldLabel>
-        <Textarea id="skill-md" className="min-h-56 font-mono" value={content} onChange={(e) => setContent(e.target.value)} />
+        <FieldLabel>SKILL.md</FieldLabel>
+        <CodeEditor language="markdown" minHeight="14rem" aria-label="SKILL.md" value={content} onChange={setContent} />
       </Field>
       <Field>
         <FieldLabel htmlFor="skill-files">Files</FieldLabel>

@@ -5,7 +5,7 @@
 gai is a self-hostable agentic AI platform in Rust: a model layer that works with any provider, agents with tools and MCP, a server with an OpenAI-compatible API, a CLI/TUI, and a React dashboard. The full 12-phase plan is in
 `C:\Users\akshbhati\.claude\plans\create-a-full-fledged-velvety-chipmunk.md`.
 
-**Done:** phases 1–10, plus the parts of phase 11 (dashboard) that those phases needed.
+**Done:** phases 1–11.
 
 Size: about 27k lines of Rust (tests included) in 12 crates, about 5k lines of hand-written TypeScript, and 171 tests, all passing; `clippy -D warnings` is clean.
 
@@ -120,15 +120,15 @@ The dashboard (`web/`) is React 19 + Vite, organised simple-first (see **Dashboa
   - **Workflows** have a step form (`web/src/WorkflowForm.tsx`: assistant / tool with schema-driven fields / ask a person / text, with "use the result of" chips, only-if, repeat-for-each, retries); workflows it can't show open as YAML. **Knowledge** takes files dropped anywhere on the page.
   - OpenAI-dialect tools: an object schema without `properties` now gets `"properties": {}` (Ollama refused `current_time` otherwise).
 
+- **Dashboard in the binary (2026-10-24):** `crates/gai-server/build.rs` points rust-embed at `web/dist` (or `GAI_UI_EMBED_DIR`), or at a generated placeholder page when there is no build, so the server always compiles. `gai serve` serves the embedded build by default (`Dashboard::Embedded` in `crates/gai-server/src/ui.rs`: SPA fallback to index.html, `assets/*` cached immutable, unknown `/v1/`, `/openai/`, `/mcp`, `/a2a/`, `/.well-known/` paths 404); `--ui <dir>` serves from disk (what `serve.sh` does, so a fresh `npm run build` shows without rebuilding), `--no-ui` serves none. Debug builds read the embedded folder from disk at runtime; release builds include the bytes. Dashboard: `components/code-editor.tsx` (CodeMirror 6, lazy-loaded; YAML lint from `yaml` parse errors plus ajv against `/openapi.json` `components.schemas.<Name>`, top-level key completion; Markdown for SKILL.md; colours from `--code-*` tokens) used by `SpecEditor` (agent/persona/trigger), the workflow YAML mode and the skill editor. `Dag.tsx` lazy-loads `DagFlow.tsx` (xyflow 12, same layered layout, pan/zoom/fit, status colours, animated edges into running steps).
 - **Browser (`gai-browser`, 2026-10-24):** chromiumoxide 0.9 drives Chrome/Chromium (found via `[browser] executable`, `GAI_BROWSER_EXECUTABLE`, or `chromium`/`google-chrome` on PATH; the dev image now has Chromium). One Chrome per process, started on first use; one browser context + page per chat session (run id outside a session), closed after `idle_secs` (300), at most `max_contexts` (4, least recently used closed first); Chrome exits when no context is left. Chrome runs with request interception on, and every paused request (redirects, subresources) goes through `DomainRules` (`allow_domains`/`deny_domains`, a domain covers its subdomains; private/loopback refused unless `allow_private_network`, cached per host). `window.open` is disabled. Tools: `browser_navigate` (returns the outline), `browser_read` (`outline` with `[n]` refs kept as `data-gai-ref`, or `text`), `browser_click` (refuses submit buttons), `browser_type` (fields, and `<select>` by option text/value), `browser_submit` (policy `approve`), `browser_extract` (CSS selector + attributes, absolute href/src), `browser_screenshot` (PNG blob, `source = browser`). The outline JS lives in `crates/gai-browser/src/page.js`. Tests run against an axum fixture site and skip when no Chrome is installed. Template `web-browser`.
 - **Personas (2026-10-22):** `PersonaSpec` in `crates/gai-agent/src/persona.rs` (identity fields for the UI; style fields rendered by `render()` into a deterministic `<persona name="…">` block). Stored and versioned like workflows (migration `0011_personas.sql`, `PersonaStore`); `/v1/personas` (CRUD, versions, diff, rollback, labels, `/usage`, `/render`, `/defaults`), writes need `admin` except `/render`. A run picks `RunRequest.persona` (name, `name@v3`/`@label`, inline spec, or `"none"`), else the agent's `persona`, else the default (the `default_persona` setting as JSON, else `[persona]` in gai.toml). Placement: the agent's `persona_placement`, else the default's, else `prepend`; if the agent's template uses `{{ persona }}` (minijinja `undeclared_variables`) nothing is added. The resolved persona is snapshotted in `metadata.persona` and reused on resume; forks reuse it inline (or `"none"`). Deleting a persona in use by an agent or as the default is a 409. Dashboard: Assistants → Personas (`web/src/pages/Personas.tsx`, `PersonaForm.tsx`, `Persona.tsx`), with the default-persona card on that page rather than Settings, since it applies server-wide. "Draft it for me" for personas is client-side like the assistant one, and both builders run with `persona: "none"`.
 
 ## Deviations from the plan (intentional)
 
 - OpenAPI comes from schemars + a route table, not utoipa. API keys are SHA-256 hashed, not argon2, because they're random 160-bit tokens.
-- The dashboard has no TanStack Router/Query, xyflow, or CodeMirror yet: it uses a simple router and textareas.
+- The dashboard has no TanStack Router/Query: it uses a simple hash router and plain fetch helpers.
 - OTLP trace export was skipped; traces are stored and served by `/v1/runs/{id}/trace`.
-- The dashboard is served from disk (`--ui web/dist`), not embedded with rust-embed yet.
 - MCP sign-in works only through the dashboard; the CLI can't receive the browser redirect from inside the container.
 - Phase 5: the planned `VectorStore` trait is the store's `KnowledgeStore` (vector + text search methods); fusion lives in `gai-memory`. Gemini embeddings come through the existing OpenAI-compatible `gemini` preset rather than a native dialect. Memory, knowledge and skill tools are built per run from the agent spec, not registered globally, so they don't appear in `/v1/tools`. Skill scripts run through the existing `shell` tool from the copied folder until the phase-9 sandbox exists.
 - Phase 8: webhooks live at `/v1/webhooks/{id}` (not `/v1/hooks/{id}`, which already lists run hooks). A2A follows protocol 0.3 (`agent-card.json`, `kind` fields); push notifications and `tasks/resubscribe` are not implemented, and a task cannot be continued with more input (send a new message in the same context instead). Remote A2A agents can be delegates and tools (so workflows reach them through agent or tool nodes), not workflow nodes of their own.
@@ -167,7 +167,6 @@ Seen but not changed:
 ## Next
 
 Remaining phases:
-- 11: dashboard polish and embedding (UI built into the binary, CodeMirror, xyflow)
 - 12: SDK polish, bundles, templates, Dockerfile, Postgres
 
 Follow-ups: no real speech/image model or cloud model has been tried yet (no keys); MCP was tested with gai's own client, rmcp's and a plain JSON-RPC client, not yet from Claude Code/Desktop themselves; A2A was tested gai-to-gai only.

@@ -223,7 +223,7 @@ export function Agents({ selected, creating = false }: { selected?: string; crea
                   </AlertDescription>
                 </Alert>
               )}
-              <SpecEditor label="Assistant" value={spec} onChange={setSpec}>
+              <SpecEditor label="Assistant" schema="AgentSpec" value={spec} onChange={setSpec}>
                 <AgentForm key={selected} spec={spec} onChange={setSpec} isNew={selected === 'new'} />
               </SpecEditor>
             </CardContent>

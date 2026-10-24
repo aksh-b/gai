@@ -10,7 +10,7 @@ import { FieldGroup } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Item, ItemContent, ItemDescription, ItemFooter, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item';
 import { Spinner } from '@/components/ui/spinner';
-import { Textarea } from '@/components/ui/textarea';
+import { CodeEditor } from '@/components/code-editor';
 import { parse, stringify } from 'yaml';
 import { api, followRun, type GraphNode, type Template, type WorkflowSpec, type WorkflowView } from '../api';
 import { ConfirmAction, EmptyState, ErrorNote, Json, LinkItem, Page, PageHeader, StatusPill } from '@/components/shared';
@@ -565,13 +565,7 @@ function Editor({ initial, isNew, onSaved }: { initial: string; isNew: boolean; 
       {mode === 'form' && formOk ? (
         <WorkflowForm spec={spec} onChange={fromForm} isNew={isNew} />
       ) : (
-        <Textarea
-          className="min-h-96 font-mono"
-          aria-label="Workflow YAML"
-          spellCheck={false}
-          value={text}
-          onChange={(e) => fromYaml(e.target.value)}
-        />
+        <CodeEditor language="yaml" schema="WorkflowSpec" minHeight="24rem" aria-label="Workflow YAML" value={text} onChange={fromYaml} />
       )}
       {graph.length > 0 && (
         <Card>

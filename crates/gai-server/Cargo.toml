@@ -11,9 +11,11 @@ axum.workspace = true
 chrono.workspace = true
 futures.workspace = true
 governor.workspace = true
+mime_guess.workspace = true
 base64.workspace = true
 reqwest.workspace = true
 rmcp = { workspace = true, features = ["server", "transport-streamable-http-server", "transport-io"] }
+rust-embed.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true

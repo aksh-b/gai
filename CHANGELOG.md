@@ -48,6 +48,17 @@ initial development and will ship as 0.1.0.
   "Draft it for me", a live "Try it" panel, and the persona's avatar,
   greeting and starters in chat. API: `/v1/personas` and a `persona` field
   on `POST /v1/runs`; gai.toml: `[persona] default`, `placement`.
+- **The dashboard is built into the `gai` binary.** `gai serve` shows it
+  without a `web/dist` folder next to it; build `web/` before building gai
+  to include it (a binary built without it shows how). `--ui <dir>` still
+  serves a build from disk, and `--no-ui` serves only the API.
+- **A code editor for YAML and SKILL.md** in the dashboard (CodeMirror),
+  with syntax colours, folding, search, and inline errors. Assistant,
+  workflow, persona and trigger YAML is checked against the server's
+  schemas as you type (unknown keys, wrong types, missing fields), and
+  top-level keys are suggested.
+- **Workflow graphs can be panned and zoomed** (xyflow), with live step
+  colours while a workflow runs.
 - **First-run setup** in the dashboard: connect a cloud provider by pasting a
   key, download a local model from the Ollama library, or try the demo. On a
   local server the dashboard signs itself in, with no API key to paste.

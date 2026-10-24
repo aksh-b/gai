@@ -14,11 +14,11 @@ mod openapi;
 mod personas;
 mod setup;
 mod triggers;
+mod ui;
 mod versions;
 mod workflows;
 
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::Router;
@@ -26,10 +26,10 @@ use axum::routing::get;
 use gai::agent::Runtime;
 use gai::{AuthMode, Gai};
 use tower_http::cors::CorsLayer;
-use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
 pub use auth::{AuthPolicy, Principal};
+pub use ui::Dashboard;
 pub use versions::{spec_yaml, unified_diff};
 
 #[derive(Clone)]
@@ -42,8 +42,8 @@ pub struct AppState {
 
 pub struct ServeOptions {
     pub bind: SocketAddr,
-    /// Built dashboard (`web/dist`). Served at `/` when present.
-    pub ui_dir: Option<PathBuf>,
+    /// The dashboard served at `/`.
+    pub dashboard: Dashboard,
     /// Overrides `server.auth` from config.
     pub auth: Option<AuthMode>,
     /// Treat the server as reachable only from this machine even though it
@@ -57,7 +57,7 @@ pub struct ServeOptions {
 pub async fn router(
     gai: Arc<Gai>,
     auth: AuthPolicy,
-    ui_dir: Option<PathBuf>,
+    dashboard: impl Into<Dashboard>,
 ) -> Result<Router, gai::Error> {
     let rt = gai.runtime().await?.clone();
     // Before recovery: the workflow engine must be registered to pick up
@@ -99,7 +99,7 @@ pub async fn router(
             mcp_server::GaiMcp::new(state.gai.clone(), state.rt.clone(), state.wf.clone());
         routes = routes.nest_service("/mcp", mcp_server::http_service(handler, &mcp));
     }
-    let mut app = routes
+    let app = routes
         .merge(knowledge::routes())
         .merge(workflows::routes())
         .merge(versions::routes())
@@ -118,12 +118,7 @@ pub async fn router(
         .with_state(state)
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive());
-    if let Some(dir) = ui_dir.filter(|d| d.join("index.html").is_file()) {
-        // Client-side routes fall back to index.html.
-        let spa = ServeDir::new(&dir).fallback(ServeFile::new(dir.join("index.html")));
-        app = app.fallback_service(spa);
-    }
-    Ok(app)
+    Ok(dashboard.into().mount(app))
 }
 
 pub async fn serve(
@@ -137,7 +132,7 @@ pub async fn serve(
         tracing::warn!(bind = %opts.bind, "authentication is off on a non-local address");
     }
     let policy = AuthPolicy::new(mode, local, settings.rate_limit_per_minute);
-    let app = router(gai, policy, opts.ui_dir).await?;
+    let app = router(gai, policy, opts.dashboard).await?;
     let listener = tokio::net::TcpListener::bind(opts.bind).await?;
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown())

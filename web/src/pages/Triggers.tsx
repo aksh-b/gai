@@ -136,7 +136,7 @@ function Editor({
         <CardTitle>{existing ? `Edit ${existing.name}` : 'New trigger'}</CardTitle>
       </CardHeader>
       <CardContent>
-        <SpecEditor label="Trigger" value={draft} onChange={setDraft}>
+        <SpecEditor label="Trigger" schema="TriggerSpec" value={draft} onChange={setDraft}>
           <TriggerForm draft={draft} onChange={setDraft} isNew={!existing} />
         </SpecEditor>
       </CardContent>

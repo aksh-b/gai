@@ -252,7 +252,7 @@ export function Personas({ selected, creating = false }: { selected?: string; cr
                   . Saving changes how they talk from their next message.
                 </FieldDescription>
               )}
-              <SpecEditor label="Persona" value={spec} onChange={setSpec}>
+              <SpecEditor label="Persona" schema="PersonaSpec" value={spec} onChange={setSpec}>
                 <PersonaForm key={selected} spec={spec} onChange={setSpec} isNew={selected === 'new'} />
               </SpecEditor>
             </CardContent>
