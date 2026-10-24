@@ -48,6 +48,16 @@ initial development and will ship as 0.1.0.
   "Draft it for me", a live "Try it" panel, and the persona's avatar,
   greeting and starters in chat. API: `/v1/personas` and a `persona` field
   on `POST /v1/runs`; gai.toml: `[persona] default`, `placement`.
+- **Rust SDK.** `Gai::builder()` sets the config file, data folder,
+  default model, store and extra tools in code. `gai.agent("name")` and
+  `gai.agent_spec(spec)` give an agent handle with `.run(text)`,
+  `.stream(text)` (events as they happen), `.session(id)`, `.persona(..)`
+  and `.model(..)`. `#[gai::tool]` turns a documented async function into
+  a tool: the doc comment is its description, the parameters its input
+  schema, and the return value (text, numbers, JSON or a `Result`) its
+  output. `gai::client::Client` talks to a running server over HTTP: run,
+  stream, follow, cancel and approve. **Breaking:** the old
+  `Gai::agent(reference)` lookup is now `Gai::find_agent`.
 - **The dashboard is built into the `gai` binary.** `gai serve` shows it
   without a `web/dist` folder next to it; build `web/` before building gai
   to include it (a binary built without it shows how). `--ui <dir>` still

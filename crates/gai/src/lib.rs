@@ -4,19 +4,33 @@
 //! subsystems; the individual crates are re-exported for direct use.
 //!
 //! ```no_run
-//! # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
-//! use gai::agent::{AgentSpec, RunRequest};
+//! # async fn demo() -> Result<(), gai::Error> {
+//! use gai::agent::AgentSpec;
 //!
-//! let gai = gai::Gai::load(None)?;
-//! let agent = AgentSpec::new("helper")
-//!     .model("anthropic/claude-opus-5-5")
-//!     .system("You are a careful assistant.")
-//!     .tools(["calculator", "http_fetch"]);
-//! let outcome = gai.runtime().await?.run(RunRequest::new(agent, "What is 17% of 2,340?")).await?;
-//! println!("{}", outcome.text);
+//! /// Add two numbers.
+//! #[gai::tool]
+//! async fn add(a: f64, b: f64) -> f64 {
+//!     a + b
+//! }
+//!
+//! let gai = gai::Gai::builder().default_model("mock/echo").tool(add_tool()).build()?;
+//!
+//! // An agent from gai.toml's agents_dirs or the store, by name...
+//! let reply = gai.find_agent("researcher").run("What changed in Rust 1.91?").await?;
+//! println!("{}", reply.text);
+//!
+//! // ...or one written in code, streaming its events.
+//! let spec = AgentSpec::new("helper").system("Be brief.").tools(["add", "calculator"]);
+//! let mut run = gai.agent_spec(spec).stream("What is 17% of 2,340?").await?;
+//! while let Some(event) = run.next_event().await {
+//!     println!("{:?}", event.event);
+//! }
 //! # Ok(()) }
 //! ```
+//!
+//! [`client::Client`] talks to a running `gai serve` over HTTP instead.
 
+pub mod client;
 mod config;
 
 use std::path::{Path, PathBuf};
@@ -29,6 +43,8 @@ pub use gai_agent as agent;
 pub use gai_browser as browser;
 pub use gai_core as core;
 pub use gai_llm as llm;
+/// Write a tool as an async function; see [`gai_macros::tool`].
+pub use gai_macros::tool;
 pub use gai_memory as memory;
 pub use gai_orchestra as orchestra;
 pub use gai_sandbox as sandbox;
@@ -37,10 +53,17 @@ pub use gai_store as store;
 pub use gai_tools as tools;
 pub use gai_triggers as triggers;
 
-use gai_agent::{AgentSpec, Runtime, RuntimeConfig};
+/// For code the macros generate. Not part of the API.
+#[doc(hidden)]
+pub mod __private {
+    pub use schemars;
+    pub use serde;
+}
+
+use gai_agent::{AgentSpec, RunHandle, RunOutcome, RunRequest, Runtime, RuntimeConfig};
 use gai_llm::{LlmError, ModelRegistry, SharedChatModel};
 use gai_store::{SharedStore, SqliteStore, StoreError};
-use gai_tools::ToolRegistry;
+use gai_tools::{SharedTool, ToolRegistry};
 use tokio::sync::OnceCell;
 
 #[derive(Debug, thiserror::Error)]
@@ -96,6 +119,8 @@ pub struct Gai {
     config_path: Option<PathBuf>,
     models: Arc<ModelRegistry>,
     store_override: Option<SharedStore>,
+    /// Tools added in code, registered when the runtime opens.
+    extra_tools: Vec<SharedTool>,
     runtime: OnceCell<Runtime>,
     workflows: OnceCell<gai_orchestra::Workflows>,
     triggers: OnceCell<gai_triggers::Triggers>,
@@ -116,15 +141,29 @@ impl Gai {
             config_path,
             models,
             store_override: None,
+            extra_tools: Vec::new(),
             runtime: OnceCell::new(),
             workflows: OnceCell::new(),
             triggers: OnceCell::new(),
         })
     }
 
+    /// Build a gai instance in code: config file, data folder, default
+    /// model, store and extra tools.
+    pub fn builder() -> GaiBuilder {
+        GaiBuilder::default()
+    }
+
     /// Use this store instead of the configured database.
     pub fn with_store(mut self, store: SharedStore) -> Self {
         self.store_override = Some(store);
+        self
+    }
+
+    /// Offer this tool to agents (they list it in `tools` by name). Takes
+    /// effect if the runtime has not opened yet.
+    pub fn with_tool(mut self, tool: SharedTool) -> Self {
+        self.extra_tools.push(tool);
         self
     }
 
@@ -337,6 +376,9 @@ impl Gai {
                         rt.register_tool(tool);
                     }
                 }
+                for tool in &self.extra_tools {
+                    rt.register_tool(tool.clone());
+                }
                 for (name, cfg) in &self.config.a2a_agents {
                     let agent = gai_tools::a2a::A2aAgent::new(name, cfg.clone(), rt.http().clone());
                     rt.register_tool(gai_tools::a2a::a2a_tool(agent, &format!("a2a__{name}")));
@@ -378,12 +420,23 @@ impl Gai {
     /// - a file named `<name>.yaml|.yml|.toml|.json` in an agents directory.
     ///
     /// Returns the spec and, for stored agents, its version.
-    pub async fn agent(&self, reference: &str) -> Result<(AgentSpec, Option<u32>), Error> {
+    pub async fn find_agent(&self, reference: &str) -> Result<(AgentSpec, Option<u32>), Error> {
         match self.runtime().await?.resolve_agent(reference).await {
             Ok(found) => Ok(found),
             Err(gai_agent::AgentError::NotFound(m)) => Err(Error::NotFound(m)),
             Err(e) => Err(e.into()),
         }
+    }
+
+    /// An agent to run, by reference (see [`find_agent`](Self::find_agent)
+    /// for the forms). Nothing is looked up until it runs.
+    pub fn agent(&self, reference: impl Into<String>) -> Agent<'_> {
+        Agent::new(self, AgentTarget::Ref(reference.into()))
+    }
+
+    /// An agent written in code.
+    pub fn agent_spec(&self, spec: AgentSpec) -> Agent<'_> {
+        Agent::new(self, AgentTarget::Spec(Box::new(spec)))
     }
 
     /// Workflows: stored and file workflows, and running them. Registers
@@ -406,6 +459,179 @@ impl Gai {
             .triggers
             .get_or_init(|| async { gai_triggers::Triggers::new(rt.clone(), wf.clone()) })
             .await)
+    }
+}
+
+/// Builds a [`Gai`]; see [`Gai::builder`].
+#[derive(Default)]
+pub struct GaiBuilder {
+    config_path: Option<PathBuf>,
+    config: Option<Config>,
+    data_dir: Option<PathBuf>,
+    default_model: Option<String>,
+    store: Option<SharedStore>,
+    tools: Vec<SharedTool>,
+}
+
+impl GaiBuilder {
+    /// Read this config file (instead of looking for `gai.toml` in the
+    /// usual places).
+    pub fn config(mut self, path: impl Into<PathBuf>) -> Self {
+        self.config_path = Some(path.into());
+        self
+    }
+
+    /// Use this config as is, reading no file.
+    pub fn with_config(mut self, config: Config) -> Self {
+        self.config = Some(config);
+        self
+    }
+
+    /// Where the database, workspaces and files live.
+    pub fn data_dir(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.data_dir = Some(dir.into());
+        self
+    }
+
+    /// The model agents use when they name none (`provider/model`).
+    pub fn default_model(mut self, model: impl Into<String>) -> Self {
+        self.default_model = Some(model.into());
+        self
+    }
+
+    /// Use this store instead of the configured SQLite database.
+    pub fn store(mut self, store: SharedStore) -> Self {
+        self.store = Some(store);
+        self
+    }
+
+    /// Offer a tool to agents, e.g. one made with [`tool`](macro@crate::tool).
+    pub fn tool(mut self, tool: SharedTool) -> Self {
+        self.tools.push(tool);
+        self
+    }
+
+    pub fn tools(mut self, tools: impl IntoIterator<Item = SharedTool>) -> Self {
+        self.tools.extend(tools);
+        self
+    }
+
+    pub fn build(self) -> Result<Gai, Error> {
+        let (mut config, path) = match self.config {
+            Some(c) => (c, None),
+            None => Config::load(self.config_path.as_deref())?,
+        };
+        if let Some(d) = self.data_dir {
+            config.data_dir = Some(d);
+        }
+        if let Some(m) = self.default_model {
+            config.default_model = Some(m);
+        }
+        let mut gai = Gai::from_config(config, path)?;
+        gai.store_override = self.store;
+        gai.extra_tools = self.tools;
+        Ok(gai)
+    }
+}
+
+enum AgentTarget {
+    Ref(String),
+    Spec(Box<AgentSpec>),
+}
+
+/// An agent ready to run; see [`Gai::agent`].
+pub struct Agent<'a> {
+    gai: &'a Gai,
+    target: AgentTarget,
+    session: Option<String>,
+    persona: Option<String>,
+    model: Option<String>,
+    auto_approve: bool,
+}
+
+impl<'a> Agent<'a> {
+    fn new(gai: &'a Gai, target: AgentTarget) -> Self {
+        Self {
+            gai,
+            target,
+            session: None,
+            persona: None,
+            model: None,
+            auto_approve: false,
+        }
+    }
+
+    /// Continue a conversation: runs in the same session see what came
+    /// before.
+    pub fn session(mut self, id: impl Into<String>) -> Self {
+        self.session = Some(id.into());
+        self
+    }
+
+    /// Speak as this persona (`name`, `name@v2`, or `"none"`).
+    pub fn persona(mut self, persona: impl Into<String>) -> Self {
+        self.persona = Some(persona.into());
+        self
+    }
+
+    /// Use this model instead of the agent's.
+    pub fn model(mut self, model: impl Into<String>) -> Self {
+        self.model = Some(model.into());
+        self
+    }
+
+    /// Run tools that need approval without asking. Without it such a run
+    /// waits for [`Runtime::resolve_approval`].
+    pub fn auto_approve(mut self) -> Self {
+        self.auto_approve = true;
+        self
+    }
+
+    /// The agent's spec, as it would run.
+    pub async fn spec(&self) -> Result<AgentSpec, Error> {
+        Ok(self.resolve().await?.0)
+    }
+
+    async fn resolve(&self) -> Result<(AgentSpec, Option<u32>), Error> {
+        let (mut spec, version) = match &self.target {
+            AgentTarget::Ref(r) => self.gai.find_agent(r).await?,
+            AgentTarget::Spec(s) => ((**s).clone(), None),
+        };
+        if let Some(m) = &self.model {
+            spec.model = Some(m.clone());
+        }
+        Ok((spec, version))
+    }
+
+    async fn request(&self, input: Vec<gai_core::ContentBlock>) -> Result<RunRequest, Error> {
+        let (spec, version) = self.resolve().await?;
+        let mut req = RunRequest::with_input(spec, input);
+        req.agent_version = version;
+        req.session_id = self.session.clone();
+        req.persona = self.persona.clone().map(gai_agent::PersonaRef::Name);
+        req.auto_approve = self.auto_approve;
+        Ok(req)
+    }
+
+    /// Run to the end and return the outcome.
+    pub async fn run(&self, text: impl Into<String>) -> Result<RunOutcome, Error> {
+        self.run_with(vec![gai_core::ContentBlock::text(text)])
+            .await
+    }
+
+    /// [`run`](Self::run) with any input: text, images, audio.
+    pub async fn run_with(&self, input: Vec<gai_core::ContentBlock>) -> Result<RunOutcome, Error> {
+        let req = self.request(input).await?;
+        Ok(self.gai.runtime().await?.run(req).await?)
+    }
+
+    /// Start the run and follow its events (text deltas, tool calls,
+    /// approvals) with [`RunHandle::next_event`]; `wait` gives the outcome.
+    pub async fn stream(&self, text: impl Into<String>) -> Result<RunHandle, Error> {
+        let req = self
+            .request(vec![gai_core::ContentBlock::text(text)])
+            .await?;
+        Ok(self.gai.runtime().await?.start(req).await?)
     }
 }
 
@@ -505,10 +731,10 @@ mod tests {
         };
         let gai = Gai::from_config(config, None).unwrap();
 
-        let (spec, v) = gai.agent("filer").await.unwrap();
+        let (spec, v) = gai.find_agent("filer").await.unwrap();
         assert_eq!((spec.name.as_str(), v), ("filer", None));
         let (spec, _) = gai
-            .agent(agents.join("filer.yaml").to_str().unwrap())
+            .find_agent(agents.join("filer.yaml").to_str().unwrap())
             .await
             .unwrap();
         assert_eq!(spec.tools, ["calculator"]);
@@ -524,14 +750,19 @@ mod tests {
             .set_agent_label("stored", "prod", Some(1))
             .await
             .unwrap();
-        assert_eq!(gai.agent("stored").await.unwrap().1, Some(2));
+        assert_eq!(gai.find_agent("stored").await.unwrap().1, Some(2));
         assert_eq!(
-            gai.agent("stored@v1").await.unwrap().0.model.as_deref(),
+            gai.find_agent("stored@v1")
+                .await
+                .unwrap()
+                .0
+                .model
+                .as_deref(),
             Some("mock/echo")
         );
-        assert_eq!(gai.agent("stored@prod").await.unwrap().1, Some(1));
-        assert!(gai.agent("stored@nope").await.is_err());
-        assert!(gai.agent("missing").await.is_err());
+        assert_eq!(gai.find_agent("stored@prod").await.unwrap().1, Some(1));
+        assert!(gai.find_agent("stored@nope").await.is_err());
+        assert!(gai.find_agent("missing").await.is_err());
         assert!(dir.path().join("gai.db").exists());
     }
 }

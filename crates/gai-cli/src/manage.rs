@@ -102,7 +102,7 @@ pub async fn agents(gai: &Gai, cmd: AgentsCmd) -> anyhow::Result<()> {
             }
         }
         AgentsCmd::Show { reference } => {
-            let (spec, version) = gai.agent(&reference).await?;
+            let (spec, version) = gai.find_agent(&reference).await?;
             if let Some(v) = version {
                 eprintln!("{}", dim(&format!("# {} v{v}", spec.name)));
             }

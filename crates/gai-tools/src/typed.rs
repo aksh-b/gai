@@ -104,6 +104,77 @@ impl<A: DeserializeOwned + Send + 'static> Tool for FnTool<A> {
     }
 }
 
+/// What a tool function may return: turned into the tool's output for the
+/// model. Errors (the `Err` of a `Result`) are reported to the model as a
+/// failed call.
+pub trait IntoToolOutput {
+    fn into_tool_output(self) -> Result<ToolOutput, ToolError>;
+}
+
+/// Return any serializable value as JSON from a tool function.
+pub struct Json<T>(pub T);
+
+impl IntoToolOutput for ToolOutput {
+    fn into_tool_output(self) -> Result<ToolOutput, ToolError> {
+        Ok(self)
+    }
+}
+
+impl IntoToolOutput for String {
+    fn into_tool_output(self) -> Result<ToolOutput, ToolError> {
+        Ok(ToolOutput::text(self))
+    }
+}
+
+impl IntoToolOutput for &str {
+    fn into_tool_output(self) -> Result<ToolOutput, ToolError> {
+        Ok(ToolOutput::text(self))
+    }
+}
+
+impl IntoToolOutput for () {
+    fn into_tool_output(self) -> Result<ToolOutput, ToolError> {
+        Ok(ToolOutput::text("done"))
+    }
+}
+
+impl IntoToolOutput for Value {
+    fn into_tool_output(self) -> Result<ToolOutput, ToolError> {
+        Ok(match self {
+            Value::String(s) => ToolOutput::text(s),
+            v => ToolOutput::json(&v),
+        })
+    }
+}
+
+impl<T: serde::Serialize> IntoToolOutput for Json<T> {
+    fn into_tool_output(self) -> Result<ToolOutput, ToolError> {
+        Ok(ToolOutput::json(&self.0))
+    }
+}
+
+macro_rules! display_output {
+    ($($t:ty),*) => {$(
+        impl IntoToolOutput for $t {
+            fn into_tool_output(self) -> Result<ToolOutput, ToolError> {
+                Ok(ToolOutput::text(self.to_string()))
+            }
+        }
+    )*};
+}
+display_output!(
+    bool, char, i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, f32, f64
+);
+
+impl<T: IntoToolOutput, E: std::fmt::Display> IntoToolOutput for Result<T, E> {
+    fn into_tool_output(self) -> Result<ToolOutput, ToolError> {
+        match self {
+            Ok(v) => v.into_tool_output(),
+            Err(e) => Err(ToolError::Failed(e.to_string())),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

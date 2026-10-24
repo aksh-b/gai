@@ -23,6 +23,7 @@ gai-orchestra = { path = "crates/gai-orchestra" }
 gai-triggers = { path = "crates/gai-triggers" }
 gai-sandbox = { path = "crates/gai-sandbox", default-features = false }
 gai-browser = { path = "crates/gai-browser", default-features = false }
+gai-macros = { path = "crates/gai-macros" }
 
 anyhow = "1"
 base64 = "0.22"

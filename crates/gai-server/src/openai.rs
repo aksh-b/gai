@@ -430,7 +430,7 @@ async fn agent_completion(
 ) -> ApiResult<Response> {
     let (spec, version) = match agent.as_str() {
         "" | "default" | "assistant" => (gai::default_agent(), None),
-        r => s.gai.agent(r).await?,
+        r => s.gai.find_agent(r).await?,
     };
     let (system, mut messages) = convert(&req.messages);
     let last = messages

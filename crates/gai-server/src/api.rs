@@ -474,7 +474,7 @@ async fn create_run(
     p.check_budget()?;
     let (mut spec, version) = match body.agent {
         None => (gai::default_agent(), None),
-        Some(AgentRef::Name(r)) => s.gai.agent(&r).await?,
+        Some(AgentRef::Name(r)) => s.gai.find_agent(&r).await?,
         Some(AgentRef::Spec(spec)) => (*spec, None),
     };
     if let Some(m) = body.model {

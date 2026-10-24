@@ -21,7 +21,7 @@ use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
 pub use registry::ToolRegistry;
-pub use typed::{FnTool, typed_tool};
+pub use typed::{FnTool, IntoToolOutput, Json, typed_tool};
 
 #[async_trait]
 pub trait Tool: Send + Sync {

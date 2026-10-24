@@ -59,7 +59,7 @@ pub async fn resolve_agent(
     args: &AgentArgs,
 ) -> anyhow::Result<(AgentSpec, Option<u32>)> {
     let (mut spec, version) = match &args.agent {
-        Some(r) => gai.agent(r).await?,
+        Some(r) => gai.find_agent(r).await?,
         None => (gai::default_agent(), None),
     };
     if let Some(m) = &args.model {

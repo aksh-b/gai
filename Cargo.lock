@@ -1289,11 +1289,14 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "dirs",
+ "eventsource-stream",
  "figment",
+ "futures",
  "gai-agent",
  "gai-browser",
  "gai-core",
  "gai-llm",
+ "gai-macros",
  "gai-memory",
  "gai-orchestra",
  "gai-sandbox",
@@ -1302,6 +1305,8 @@ dependencies = [
  "gai-tools",
  "gai-triggers",
  "regex",
+ "reqwest 0.12.28",
+ "schemars",
  "secrecy",
  "serde",
  "serde_json",
@@ -1409,6 +1414,15 @@ dependencies = [
  "tokio",
  "tracing",
  "wiremock",
+]
+
+[[package]]
+name = "gai-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
