@@ -10,6 +10,7 @@ Website: https://aksh-b.github.io/gai
 
 - **Any model.** Dialects for Anthropic, OpenAI-compatible APIs and ElevenLabs, plus presets for OpenAI, Gemini, Groq, OpenRouter, DeepSeek, Mistral, Together, Fireworks, xAI, Ollama, LM Studio and vLLM. Models are addressed as `provider/model`. Retry, fallback and cost metering are built in, and `router/<name>` picks the cheapest capable model per request.
 - **Agents.** A tool loop with parallel tool calls, approval policies, budgets, context compaction, and durable runs that resume after a restart.
+- **Personas.** Reusable, versioned voices (tone, style rules, examples, avatar and greeting) that any agent or chat can speak in.
 - **Tools and MCP.** Built-ins (calculator, time, files, HTTP fetch, shell) and an MCP client (stdio and streamable HTTP, with OAuth sign-in).
 - **Memory and RAG.** Self-editing memory blocks, archival memory, and knowledge collections with hybrid search (vector + FTS5, fused with RRF) over text, Markdown, HTML and PDF.
 - **Agent Skills.** `SKILL.md` folders or uploaded skills, loaded on demand.

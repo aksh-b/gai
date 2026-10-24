@@ -61,6 +61,9 @@ pub struct Config {
     pub media: gai_agent::MediaSettings,
     /// Where `code_exec` runs code: a container per call by default.
     pub sandbox: gai_sandbox::SandboxSettings,
+    /// The persona runs speak as when neither the run nor its agent picks
+    /// one, and where it goes in the prompt.
+    pub persona: gai_agent::PersonaDefaults,
     #[serde(flatten)]
     pub llm: LlmConfig,
 }

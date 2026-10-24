@@ -4,9 +4,11 @@
 
 use axum::Json;
 use axum::response::Html;
-use gai::agent::{AgentSpec, Decision, EventEnvelope, PendingApproval, RunOutcome};
+use gai::agent::{AgentSpec, Decision, EventEnvelope, PendingApproval, PersonaSpec, RunOutcome};
 use gai::llm::CatalogEntry;
-use gai::store::{AgentVersion, ApiKey, NewSession, Run, Session, Step, StoredMessage, UsageTotal};
+use gai::store::{
+    AgentVersion, ApiKey, NewSession, PersonaVersion, Run, Session, Step, StoredMessage, UsageTotal,
+};
 use schemars::generate::SchemaSettings;
 use schemars::{JsonSchema, SchemaGenerator};
 use serde_json::{Map, Value, json};
@@ -15,6 +17,7 @@ use crate::api::*;
 use crate::knowledge::*;
 use crate::media::*;
 use crate::openai::ChatCompletionRequest;
+use crate::personas::*;
 use crate::setup::*;
 use crate::triggers::*;
 use crate::versions::*;
@@ -695,6 +698,98 @@ pub fn document() -> Value {
             "Save a template (and the agents it uses)",
         )
         .ok(s::<Installed>(&mut g)),
+        op("get", "/v1/personas", "personas", "Stored personas").ok(list::<PersonaEntry>(&mut g)),
+        op(
+            "post",
+            "/v1/personas",
+            "personas",
+            "Save a persona as a new version",
+        )
+        .body(s::<PersonaSpec>(&mut g))
+        .ok(s::<Saved>(&mut g))
+        .query(&[("note", "Version note")]),
+        op(
+            "post",
+            "/v1/personas/render",
+            "personas",
+            "A persona as it goes into the system prompt",
+        )
+        .body(s::<PersonaSpec>(&mut g))
+        .ok(s::<RenderedPersona>(&mut g)),
+        op(
+            "get",
+            "/v1/personas/defaults",
+            "personas",
+            "The persona runs use when their agent names none",
+        )
+        .ok(s::<PersonaDefaultsView>(&mut g)),
+        op(
+            "put",
+            "/v1/personas/defaults",
+            "personas",
+            "Choose the default persona and where it goes in the prompt",
+        )
+        .body(s::<PutPersonaDefaults>(&mut g))
+        .ok(s::<PersonaDefaultsView>(&mut g)),
+        op(
+            "get",
+            "/v1/personas/{name}",
+            "personas",
+            "A persona (latest, or ?version=)",
+        )
+        .ok(s::<PersonaView>(&mut g))
+        .query(&[("version", "Version number")]),
+        op(
+            "delete",
+            "/v1/personas/{name}",
+            "personas",
+            "Delete a persona that nothing uses",
+        ),
+        op(
+            "get",
+            "/v1/personas/{name}/versions",
+            "personas",
+            "A persona's versions",
+        )
+        .ok(list::<PersonaVersion>(&mut g)),
+        op(
+            "get",
+            "/v1/personas/{name}/usage",
+            "personas",
+            "Agents that speak as this persona by default",
+        )
+        .ok(json!({"type": "array", "items": {"type": "string"}})),
+        op(
+            "get",
+            "/v1/personas/{name}/diff",
+            "personas",
+            "Diff two versions of a persona",
+        )
+        .ok(s::<VersionDiff>(&mut g))
+        .query(&[("from", "Older version"), ("to", "Newer version")]),
+        op(
+            "post",
+            "/v1/personas/{name}/rollback",
+            "personas",
+            "Save an old version again as the newest",
+        )
+        .body(s::<Rollback>(&mut g))
+        .ok(s::<Saved>(&mut g)),
+        op(
+            "post",
+            "/v1/personas/{name}/labels/{label}",
+            "personas",
+            "Point a label at a version",
+        )
+        .body(s::<LabelBody>(&mut g))
+        .ok(s::<Done>(&mut g)),
+        op(
+            "delete",
+            "/v1/personas/{name}/labels/{label}",
+            "personas",
+            "Remove a label",
+        )
+        .ok(s::<Done>(&mut g)),
     ];
 
     let mut paths = Map::new();
@@ -779,5 +874,7 @@ mod tests {
         }
         assert!(doc["paths"]["/v1/runs"]["post"]["requestBody"].is_object());
         assert!(schemas.contains_key("AgentSpec"));
+        assert!(schemas.contains_key("PersonaSpec"));
+        assert!(doc["paths"]["/v1/personas/{name}/rollback"]["post"].is_object());
     }
 }

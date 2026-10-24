@@ -392,6 +392,29 @@ pub struct WorkflowSummary {
     pub updated_at: DateTime<Utc>,
 }
 
+/// A stored persona version.
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct PersonaVersion {
+    pub name: String,
+    pub version: u32,
+    /// The persona spec as JSON. The agent crate owns its shape.
+    pub spec: Value,
+    pub note: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct PersonaSummary {
+    pub name: String,
+    pub latest_version: u32,
+    pub display_name: Option<String>,
+    pub description: Option<String>,
+    pub avatar: Option<String>,
+    pub labels: BTreeMap<String, u32>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 /// Stored media: everything but the bytes.
 #[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Blob {

@@ -30,9 +30,18 @@ pub struct AgentSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     /// System prompt, a minijinja template. Variables: `agent`, `model`,
-    /// `date`, `datetime`, `workspace`, and anything passed as run `vars`.
+    /// `date`, `datetime`, `workspace`, `persona`, and anything passed as
+    /// run `vars`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub system: Option<String>,
+    /// Persona the agent speaks as unless a run picks another: `name`,
+    /// `name@v3` or `name@<label>`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub persona: Option<String>,
+    /// Where the persona goes when `system` doesn't use `{{ persona }}`.
+    /// Defaults to the global setting, else `prepend`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub persona_placement: Option<crate::persona::Placement>,
     /// Tool names, or prefixes ending in `*`.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tools: Vec<String>,

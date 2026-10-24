@@ -326,7 +326,8 @@ function TemplatePicker({
     let text = '';
     let session: string | undefined;
     try {
-      await streamRun({ agent: BUILDER, input: `Design an assistant that: ${describe.trim()}` }, (e) => {
+      // `none`: the builder must not take on the default persona's voice.
+      await streamRun({ agent: BUILDER, persona: 'none', input: `Design an assistant that: ${describe.trim()}` }, (e) => {
         if (e.type === 'run_started') session = e.session_id;
         if (e.type === 'text_delta') text += e.text;
         if (e.type === 'run_finished' && e.status !== 'completed') throw new Error(e.error ?? `the model ${e.status}`);

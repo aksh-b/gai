@@ -17,6 +17,8 @@ use crate::*;
 mod blobs;
 #[path = "sqlite_memory.rs"]
 mod memory;
+#[path = "sqlite_personas.rs"]
+mod personas;
 #[path = "sqlite_triggers.rs"]
 mod triggers;
 #[path = "sqlite_workflows.rs"]

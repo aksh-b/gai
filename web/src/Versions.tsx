@@ -28,10 +28,11 @@ interface VersionRow {
   created_at: string;
 }
 
-/** What a version history works on: agent or workflow endpoints. */
+/** What a version history works on: agent, workflow or persona endpoints. */
 const ENDPOINTS = {
   agent: { diff: api.agentDiff, rollback: api.rollbackAgent, label: api.setAgentLabel },
   workflow: { diff: api.workflowDiff, rollback: api.rollbackWorkflow, label: api.setWorkflowLabel },
+  persona: { diff: api.personaDiff, rollback: api.rollbackPersona, label: api.setPersonaLabel },
 };
 
 /**
@@ -47,7 +48,7 @@ export function VersionHistory({
   onView,
   onChanged,
 }: {
-  kind: 'agent' | 'workflow';
+  kind: 'agent' | 'workflow' | 'persona';
   name: string;
   versions: VersionRow[];
   labels: Record<string, number>;

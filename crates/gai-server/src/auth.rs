@@ -116,6 +116,7 @@ pub fn required_scope(method: &Method, path: &str) -> Scope {
         && path != "/v1/workflows/run"
         && path != "/v1/workflows/validate";
     let admin_write = (path.starts_with("/v1/agents")
+        || (path.starts_with("/v1/personas") && path != "/v1/personas/render")
         || (path.starts_with("/v1/triggers") && path != "/v1/triggers/preview")
         || path.starts_with("/v1/mcp")
         || path.starts_with("/v1/skills")
@@ -233,6 +234,16 @@ mod tests {
         assert_eq!(required_scope(&Method::GET, "/v1/keys"), Scope::Admin);
         assert_eq!(required_scope(&Method::POST, "/v1/agents"), Scope::Admin);
         assert_eq!(required_scope(&Method::GET, "/v1/agents"), Scope::Read);
+        assert_eq!(required_scope(&Method::POST, "/v1/personas"), Scope::Admin);
+        assert_eq!(
+            required_scope(&Method::PUT, "/v1/personas/defaults"),
+            Scope::Admin
+        );
+        assert_eq!(required_scope(&Method::GET, "/v1/personas"), Scope::Read);
+        assert_eq!(
+            required_scope(&Method::POST, "/v1/personas/render"),
+            Scope::Run
+        );
         assert_eq!(required_scope(&Method::POST, "/v1/triggers"), Scope::Admin);
         assert_eq!(required_scope(&Method::GET, "/v1/triggers"), Scope::Read);
         assert_eq!(required_scope(&Method::POST, "/mcp"), Scope::Run);

@@ -20,6 +20,7 @@ use serde_json::{Map, Value, json};
 
 use crate::approval::Decision;
 use crate::multi::run_kind;
+use crate::persona::{NO_PERSONA, PersonaRef, ResolvedPersona};
 use crate::runtime::{AgentError, Mode, Resume, RunHandle, RunRequest, Runtime};
 use crate::spec::AgentSpec;
 
@@ -222,6 +223,16 @@ impl Runtime {
             .get("user_id")
             .and_then(Value::as_str)
             .map(str::to_owned);
+        // Fork with the persona the original spoke as, or none if it had none.
+        rr.persona = Some(
+            match meta
+                .get("persona")
+                .and_then(|p| serde_json::from_value::<ResolvedPersona>(p.clone()).ok())
+            {
+                Some(p) => PersonaRef::Inline(Box::new(p.spec)),
+                None => PersonaRef::Name(NO_PERSONA.into()),
+            },
+        );
         rr.auto_approve = o.auto_approve.unwrap_or_else(|| {
             meta.get("auto_approve")
                 .and_then(Value::as_bool)

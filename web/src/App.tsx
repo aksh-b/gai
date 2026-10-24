@@ -44,6 +44,7 @@ import { Keys } from './pages/Keys';
 import { Approvals } from './pages/Approvals';
 import { Knowledge } from './pages/Knowledge';
 import { Memory } from './pages/Memory';
+import { Personas } from './pages/Personas';
 import { Skills } from './pages/Skills';
 import { Workflows } from './pages/Workflows';
 import { Welcome, welcomeDone } from './pages/Welcome';
@@ -58,9 +59,10 @@ const NAV: { id: string; label: string; icon: Icon; routes: string[]; tabs?: { i
     id: 'assistants',
     label: 'Assistants',
     icon: IconAgent,
-    routes: ['assistants', 'agents', 'memory', 'skills'],
+    routes: ['assistants', 'agents', 'personas', 'memory', 'skills'],
     tabs: [
       { id: 'assistants', label: 'Assistants' },
+      { id: 'personas', label: 'Personas' },
       { id: 'memory', label: 'Memory' },
       { id: 'skills', label: 'Skills' },
     ],
@@ -214,6 +216,7 @@ export function App() {
     return [
       { id: 'new-chat', group: 'Do', label: 'New chat', onSelect: go('/chat'), keywords: ['message', 'talk'] },
       { id: 'new-assistant', group: 'Do', label: 'New assistant', onSelect: go('/assistants?new=1'), keywords: ['agent', 'create'] },
+      { id: 'new-persona', group: 'Do', label: 'New persona', onSelect: go('/personas?new=1'), keywords: ['voice', 'tone', 'character'] },
       {
         id: 'add-knowledge',
         group: 'Do',
@@ -278,6 +281,11 @@ export function App() {
         break;
       case 'knowledge':
         page = <Knowledge selected={route.parts[1] ? decodeURIComponent(route.parts[1]) : undefined} />;
+        break;
+      case 'personas':
+        page = (
+          <Personas selected={route.parts[1] ? decodeURIComponent(route.parts[1]) : undefined} creating={route.query.get('new') === '1'} />
+        );
         break;
       case 'memory':
         page = <Memory />;

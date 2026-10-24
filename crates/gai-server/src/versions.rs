@@ -86,7 +86,7 @@ pub fn unified_diff(a: &str, b: &str, a_name: &str, b_name: &str) -> String {
 }
 
 /// Which two versions to compare, given the latest.
-fn pick(q: &DiffQuery, latest: u32) -> ApiResult<(u32, u32)> {
+pub(crate) fn pick(q: &DiffQuery, latest: u32) -> ApiResult<(u32, u32)> {
     let to = q.to.unwrap_or(latest);
     let from = q.from.unwrap_or(to.saturating_sub(1).max(1));
     if from == 0 || to == 0 {
@@ -95,7 +95,7 @@ fn pick(q: &DiffQuery, latest: u32) -> ApiResult<(u32, u32)> {
     Ok((from, to))
 }
 
-fn diff_of(name: String, from: (u32, &Value), to: (u32, &Value)) -> VersionDiff {
+pub(crate) fn diff_of(name: String, from: (u32, &Value), to: (u32, &Value)) -> VersionDiff {
     let (a, b) = (spec_yaml(from.1), spec_yaml(to.1));
     VersionDiff {
         diff: unified_diff(

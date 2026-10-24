@@ -631,6 +631,163 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/personas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stored personas */
+        get: operations["get_v1_personas"];
+        put?: never;
+        /** Save a persona as a new version */
+        post: operations["post_v1_personas"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/personas/defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The persona runs use when their agent names none */
+        get: operations["get_v1_personas_defaults"];
+        /** Choose the default persona and where it goes in the prompt */
+        put: operations["put_v1_personas_defaults"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/personas/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A persona as it goes into the system prompt */
+        post: operations["post_v1_personas_render"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/personas/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A persona (latest, or ?version=) */
+        get: operations["get_v1_personas__name_"];
+        put?: never;
+        post?: never;
+        /** Delete a persona that nothing uses */
+        delete: operations["delete_v1_personas__name_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/personas/{name}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Diff two versions of a persona */
+        get: operations["get_v1_personas__name__diff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/personas/{name}/labels/{label}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Point a label at a version */
+        post: operations["post_v1_personas__name__labels__label_"];
+        /** Remove a label */
+        delete: operations["delete_v1_personas__name__labels__label_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/personas/{name}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save an old version again as the newest */
+        post: operations["post_v1_personas__name__rollback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/personas/{name}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Agents that speak as this persona by default */
+        get: operations["get_v1_personas__name__usage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/personas/{name}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A persona's versions */
+        get: operations["get_v1_personas__name__versions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/providers": {
         parameters: {
             query?: never;
@@ -1500,12 +1657,23 @@ export interface components {
             name: string;
             /** @description JSON Schema the final answer must follow. */
             output_schema?: unknown;
+            /**
+             * @description Persona the agent speaks as unless a run picks another: `name`,
+             *     `name@v3` or `name@<label>`.
+             */
+            persona?: string | null;
+            /**
+             * @description Where the persona goes when `system` doesn't use `{{ persona }}`.
+             *     Defaults to the global setting, else `prepend`.
+             */
+            persona_placement?: components["schemas"]["Placement"] | null;
             reasoning?: components["schemas"]["Reasoning"] | null;
             /** @description Skills the agent can load: names, or prefixes ending in `*`. */
             skills?: string[];
             /**
              * @description System prompt, a minijinja template. Variables: `agent`, `model`,
-             *     `date`, `datetime`, `workspace`, and anything passed as run `vars`.
+             *     `date`, `datetime`, `workspace`, `persona`, and anything passed as
+             *     run `vars`.
              */
             system?: string | null;
             /** Format: double */
@@ -1662,6 +1830,11 @@ export interface components {
              *     }
              */
             capabilities: components["schemas"]["Capabilities"];
+            /**
+             * @description For embedding models trained with task prefixes: what to put before
+             *     search queries and before documents.
+             */
+            embed_prefixes?: components["schemas"]["EmbedPrefixes"] | null;
             /** @description `provider/model`, the address used everywhere in gai. */
             id: string;
             key: components["schemas"]["KeyState"];
@@ -1856,6 +2029,12 @@ export interface components {
             mode?: components["schemas"]["Mode"];
             /** @description Override the agent's model. */
             model?: string | null;
+            /**
+             * @description Speak as this persona instead of the agent's or the global default:
+             *     a stored persona (`name`, `name@v3`, `name@prod`), an inline persona,
+             *     or `"none"`.
+             */
+            persona?: components["schemas"]["PersonaRef"] | null;
             /** @description Continue this session; a new one is created when omitted. */
             session_id?: string | null;
             /**
@@ -1950,6 +2129,10 @@ export interface components {
         };
         /** @enum {string} */
         Effort: "off" | "low" | "medium" | "high" | "xhigh" | "max";
+        EmbedPrefixes: {
+            document: string;
+            query: string;
+        };
         Error: {
             error?: {
                 message: string;
@@ -2103,6 +2286,8 @@ export interface components {
             /** @description `started`, `skipped` or `failed`. */
             status: string;
         };
+        /** @enum {string} */
+        Formality: "casual" | "neutral" | "formal";
         /** @description A node as the graph sees it. */
         GraphNode: {
             /** @description The nodes it waits for. */
@@ -2555,6 +2740,119 @@ export interface components {
             run_id: string;
             tool: string;
         };
+        /**
+         * @description The persona used when neither the run nor the agent picks one.
+         *
+         *     ```toml
+         *     [persona]
+         *     default = "friendly-tutor"   # name, name@v3 or name@<label>
+         *     placement = "prepend"        # or "append"
+         *     ```
+         */
+        PersonaDefaultsView: {
+            /**
+             * @description A persona reference, as for an agent's `persona`.
+             * @default null
+             */
+            persona: string | null;
+            /** @default prepend */
+            placement: components["schemas"]["Placement"];
+            /** @description `settings` (chosen in the dashboard) or `config` (gai.toml). */
+            source: string;
+        };
+        PersonaEntry: {
+            spec?: components["schemas"]["PersonaSpec"] | null;
+            summary: components["schemas"]["PersonaSummary"];
+            /** @description Stored agents that speak as this persona by default. */
+            used_by: string[];
+        };
+        PersonaExample: {
+            /** @default  */
+            assistant: string;
+            /** @default  */
+            user: string;
+        };
+        /** @description Which persona a run asks for. */
+        PersonaRef: string | components["schemas"]["PersonaSpec"];
+        /**
+         * @description A persona: identity for the UI, style for the prompt.
+         *
+         *     ```yaml
+         *     name: friendly-tutor
+         *     display_name: Friendly tutor
+         *     avatar: 🦉
+         *     greeting: Hi! What would you like to learn today?
+         *     tone: warm and encouraging
+         *     formality: casual
+         *     verbosity: balanced
+         *     dos: [Check understanding with a short question]
+         *     donts: [Hand over full solutions to exercises]
+         *     ```
+         */
+        PersonaSpec: {
+            /** @description An emoji or an image URL. */
+            avatar?: string | null;
+            description?: string | null;
+            /** @description Name shown in chat and used in the prompt; defaults to `name`. */
+            display_name?: string | null;
+            donts?: string[];
+            dos?: string[];
+            /** @description Sample exchanges showing the voice. */
+            examples?: components["schemas"]["PersonaExample"][];
+            formality?: components["schemas"]["Formality"] | null;
+            /** @description Shown when a chat with this persona starts. */
+            greeting?: string | null;
+            /** @description Anything else about the voice, in plain words. */
+            instructions?: string | null;
+            /** @description Language to answer in, e.g. "British English" or "fr". */
+            language?: string | null;
+            /** @description Free-form data for UIs and integrations. */
+            metadata?: unknown;
+            /** @default  */
+            name: string;
+            /** @description Suggested first messages. */
+            starters?: string[];
+            /** @description Free text, e.g. "warm and encouraging". */
+            tone?: string | null;
+            verbosity?: components["schemas"]["Verbosity"] | null;
+        };
+        PersonaSummary: {
+            avatar?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            description?: string | null;
+            display_name?: string | null;
+            labels: {
+                [key: string]: number;
+            };
+            /** Format: uint32 */
+            latest_version: number;
+            name: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description A stored persona version. */
+        PersonaVersion: {
+            /** Format: date-time */
+            created_at: string;
+            name: string;
+            note?: string | null;
+            /** @description The persona spec as JSON. The agent crate owns its shape. */
+            spec: unknown;
+            /** Format: uint32 */
+            version: number;
+        };
+        PersonaView: {
+            name: string;
+            spec: components["schemas"]["PersonaSpec"];
+            /** Format: uint32 */
+            version: number;
+        };
+        /**
+         * @description Where the persona goes when the agent's prompt doesn't place it with
+         *     `{{ persona }}`.
+         */
+        Placement: "prepend" | "append";
         /** @description USD per million tokens. */
         Pricing: {
             /**
@@ -2610,6 +2908,20 @@ export interface components {
         PullRequest: {
             model: string;
         };
+        PutPersonaDefaults: {
+            /** @description Persona for runs whose agent names none; `null` for none. */
+            persona?: string | null;
+            /**
+             * @description `prepend` (default) or `append`.
+             * @default prepend
+             */
+            placement: components["schemas"]["Placement"];
+            /**
+             * @description Forget the dashboard's choice and go back to gai.toml.
+             * @default false
+             */
+            reset: boolean;
+        };
         /**
          * @description How hard the model should think. Each dialect maps this onto whatever its
          *     provider offers (effort levels, thinking budgets, or nothing).
@@ -2639,6 +2951,10 @@ export interface components {
             };
             /** @description Tool name suffix: the tool becomes `ask_<name>`. */
             name: string;
+        };
+        RenderedPersona: {
+            /** @description The persona as it goes into the system prompt. */
+            text: string;
         };
         /** @description What the fork runs with instead of the original's settings. */
         ReplayOverrides: {
@@ -3006,9 +3322,9 @@ export interface components {
         TemplateView: {
             description: string;
             id: string;
-            /** @description An agent or workflow with this name is already stored. */
+            /** @description An agent, workflow or persona with this name is already stored. */
             installed: boolean;
-            /** @description `agent` or `workflow`. */
+            /** @description `agent`, `workflow` or `persona`. */
             kind: string;
             needs: string[];
             title: string;
@@ -3252,6 +3568,8 @@ export interface components {
             graph: components["schemas"]["GraphNode"][];
             ok: boolean;
         };
+        /** @enum {string} */
+        Verbosity: "terse" | "balanced" | "detailed";
         /** @description Two versions of a spec and a unified diff between them (as YAML). */
         VersionDiff: {
             /** @description Unified diff from `from_yaml` to `to_yaml`; empty when they match. */
@@ -4963,6 +5281,430 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CatalogEntry"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_personas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaEntry"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_personas: {
+        parameters: {
+            query?: {
+                /** @description Version note */
+                note?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonaSpec"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Saved"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_personas_defaults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaDefaultsView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put_v1_personas_defaults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutPersonaDefaults"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaDefaultsView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_personas_render: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonaSpec"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenderedPersona"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_personas__name_: {
+        parameters: {
+            query?: {
+                /** @description Version number */
+                version?: string;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_personas__name_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_personas__name__diff: {
+        parameters: {
+            query?: {
+                /** @description Older version */
+                from?: string;
+                /** @description Newer version */
+                to?: string;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionDiff"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_personas__name__labels__label_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                label: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabelBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Done"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_personas__name__labels__label_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                label: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Done"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_personas__name__rollback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Rollback"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Saved"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_personas__name__usage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_personas__name__versions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaVersion"][];
                 };
             };
             /** @description Error */

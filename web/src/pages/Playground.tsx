@@ -23,7 +23,7 @@ import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } fro
 import { Item as ListItem, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item';
 import { Kbd } from '@/components/ui/kbd';
 import { Marker, MarkerContent } from '@/components/ui/marker';
-import { Message, MessageContent, MessageFooter } from '@/components/ui/message';
+import { Message, MessageAvatar, MessageContent, MessageFooter, MessageHeader } from '@/components/ui/message';
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -53,6 +53,7 @@ import {
   type ContentBlock,
   type EventEnvelope,
   type MediaDefaults,
+  type PersonaSpec,
   type Session,
   type StoredMessage,
   type Usage,
@@ -76,6 +77,7 @@ import {
 import { modelLabel, toolLabel, toolSentence } from '../labels';
 import { blobToBase64, blobUrl, MediaView, mediaBlocks, useRecorder } from '../Media';
 import { modelOptions, useModelGroups } from '../models';
+import { PersonaAvatar, activePersona, personaName, usePersonas } from '../Persona';
 import { useDevMode } from '../prefs';
 import { navigate, type Route } from '../router';
 import { ago, blocksText, money, tokens, totalIn } from '../util';
@@ -196,6 +198,7 @@ export function Playground({ route }: { route: Route }) {
   const [dev] = useDevMode();
   const sessionParam = route.query.get('session');
   const agentParam = route.query.get('agent') ?? '';
+  const personaParam = route.query.get('persona') ?? '';
 
   const [agents, setAgents] = useState<{ name: string; spec: AgentSpec | null }[]>([]);
   const [defaultSpec, setDefaultSpec] = useState<AgentSpec | null>(null);
@@ -203,6 +206,9 @@ export function Playground({ route }: { route: Route }) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [agent, setAgent] = useState(agentParam);
   const [model, setModel] = useState('');
+  // '' follows the assistant (then the default); 'none' turns it off.
+  const [persona, setPersona] = useState(personaParam);
+  const personas = usePersonas();
   const [autoApprove, setAutoApprove] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
   const [input, setInput] = useState('');
@@ -244,6 +250,9 @@ export function Playground({ route }: { route: Route }) {
   }, [loadSessions]);
 
   useEffect(() => setAgent(agentParam), [agentParam]);
+  useEffect(() => {
+    if (personaParam) setPersona(personaParam);
+  }, [personaParam]);
 
   // Load the transcript when the session in the URL changes.
   useEffect(() => {
@@ -265,6 +274,7 @@ export function Playground({ route }: { route: Route }) {
     () => (agent ? agents.find((a) => a.name === agent)?.spec : defaultSpec) ?? null,
     [agent, agents, defaultSpec],
   );
+  const voice = activePersona(persona, activeSpec, personas.list, personas.defaults);
   const effectiveModel = model || activeSpec?.model || groups.defaultModel || '';
   const modelInfo = [...groups.cloud, ...groups.local, ...groups.automatic, ...groups.demo].find((m) => m.id === effectiveModel);
   const canUseTools = modelInfo?.tools ?? true;
@@ -435,6 +445,7 @@ export function Playground({ route }: { route: Route }) {
           input: blocks.length ? [{ type: 'text', text: message }, ...blocks] : message,
           session_id: sessionRef.current ?? undefined,
           model: model || undefined,
+          persona: persona || undefined,
           auto_approve: autoApprove,
         },
         onEvent,
@@ -501,6 +512,7 @@ export function Playground({ route }: { route: Route }) {
       description: base.description,
       model: model || base.model,
       system: base.system,
+      persona: persona || base.persona,
       tools: base.tools,
     });
     navigate('/assistants/new');
@@ -510,6 +522,21 @@ export function Playground({ route }: { route: Route }) {
     { value: '', label: 'General assistant', description: 'Built in: files, web pages, calculator' },
     ...agents.map((a) => ({ value: a.name, label: a.name, description: a.spec?.description ?? '', group: 'Your assistants' })),
   ];
+  const followed = activePersona('', activeSpec, personas.list, personas.defaults);
+  const personaOptions: PickerOption[] = [
+    {
+      value: '',
+      label: followed ? `${followed.avatar ? `${followed.avatar} ` : ''}${personaName(followed)}` : 'No persona',
+      description: activeSpec?.persona ? `${agent || 'The assistant'}'s persona` : 'The default persona',
+    },
+    { value: 'none', label: 'No persona', description: 'Plain voice for this chat' },
+    ...personas.list.map((p) => ({
+      value: p.summary.name,
+      label: `${p.summary.avatar ? `${p.summary.avatar} ` : ''}${p.summary.display_name || p.summary.name}`,
+      description: p.summary.description ?? '',
+      group: 'Personas',
+    })),
+  ];
   const defaultLabel = activeSpec?.model
     ? `${agent || 'Assistant'}'s model (${dev ? activeSpec.model : modelLabel(activeSpec.model)})`
     : `Default (${dev ? (groups.defaultModel ?? 'none') : modelLabel(groups.defaultModel)})`;
@@ -518,7 +545,11 @@ export function Playground({ route }: { route: Route }) {
     ...modelOptions(groups, dev),
   ];
   const nothingConnected = groups.loaded && !groups.cloud.length && !groups.local.length;
-  const suggestions = canUseTools && (activeSpec?.tools?.length ?? 0) > 0 ? SUGGESTIONS_TOOLS : SUGGESTIONS_CHAT;
+  const suggestions = voice?.starters?.length
+    ? voice.starters
+    : canUseTools && (activeSpec?.tools?.length ?? 0) > 0
+      ? SUGGESTIONS_TOOLS
+      : SUGGESTIONS_CHAT;
   const blocks = groupItems(items);
 
   return (
@@ -581,6 +612,9 @@ export function Playground({ route }: { route: Route }) {
         <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
           <PickerMenu aria-label="Assistant" options={agentOptions} value={agent} onValueChange={setAgent} className="max-w-48" />
           <PickerMenu aria-label="Model" options={options} value={model} onValueChange={setModel} className="max-w-72" />
+          {(personas.list.length > 0 || persona) && (
+            <PickerMenu aria-label="Persona" options={personaOptions} value={persona} onValueChange={setPersona} className="max-w-48" />
+          )}
           <Button variant="link" size="sm" asChild>
             <a href="#/settings">Connect models</a>
           </Button>
@@ -615,10 +649,16 @@ export function Playground({ route }: { route: Route }) {
         {items.length === 0 ? (
           <Empty className="self-start pt-[10vh]">
             <EmptyHeader className="max-w-xl">
-              <EmptyMedia variant="icon">
-                <IconSpark />
-              </EmptyMedia>
-              <EmptyTitle>How can {agent || 'I'} help?</EmptyTitle>
+              {voice ? (
+                <EmptyMedia>
+                  <PersonaAvatar persona={voice} className="size-12" />
+                </EmptyMedia>
+              ) : (
+                <EmptyMedia variant="icon">
+                  <IconSpark />
+                </EmptyMedia>
+              )}
+              <EmptyTitle>{voice?.greeting?.trim() || `How can ${voice ? personaName(voice) : agent || 'I'} help?`}</EmptyTitle>
               <EmptyDescription>
                 {effectiveModel ? (
                   <>Using {dev ? <code>{effectiveModel}</code> : modelLabel(effectiveModel)}.</>
@@ -673,7 +713,7 @@ export function Playground({ route }: { route: Route }) {
                           )}
                         </Trace>
                       ) : (
-                        <TranscriptItem item={b.item} onDecide={decide} canSpeak={!!media?.speech} />
+                        <TranscriptItem item={b.item} onDecide={decide} canSpeak={!!media?.speech} persona={voice} />
                       )}
                     </MessageScrollerItem>
                   ))}
@@ -920,10 +960,13 @@ function TranscriptItem({
   item,
   onDecide,
   canSpeak,
+  persona,
 }: {
   item: Item;
   onDecide: (runId: string | undefined, id: string, approved: boolean, name?: string, always?: boolean) => void;
   canSpeak: boolean;
+  /** Who is talking, when the chat has a persona. */
+  persona?: PersonaSpec | null;
 }) {
   switch (item.kind) {
     case 'user':
@@ -958,7 +1001,13 @@ function TranscriptItem({
     case 'assistant':
       return (
         <Message align="start">
+          {persona && (
+            <MessageAvatar>
+              <PersonaAvatar persona={persona} />
+            </MessageAvatar>
+          )}
           <MessageContent>
+            {persona && <MessageHeader>{personaName(persona)}</MessageHeader>}
             <Markdown text={item.text} />
             {canSpeak && item.text.trim() && (
               <MessageFooter>

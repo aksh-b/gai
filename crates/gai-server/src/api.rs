@@ -7,7 +7,9 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post};
 use axum::{Extension, Json, Router};
 use futures::Stream;
-use gai::agent::{AgentSpec, Decision, EventEnvelope, PendingApproval, RunEvent, RunRequest};
+use gai::agent::{
+    AgentSpec, Decision, EventEnvelope, PendingApproval, PersonaRef, RunEvent, RunRequest,
+};
 use gai::core::ContentBlock;
 use gai::llm::{CatalogEntry, KeyState};
 use gai::store::{
@@ -198,6 +200,10 @@ pub struct CreateRun {
     pub mode: Mode,
     /// Override the agent's model.
     pub model: Option<String>,
+    /// Speak as this persona instead of the agent's or the global default:
+    /// a stored persona (`name`, `name@v3`, `name@prod`), an inline persona,
+    /// or `"none"`.
+    pub persona: Option<PersonaRef>,
     /// Run `approve`-policy tools without asking.
     #[serde(default)]
     pub auto_approve: bool,
@@ -485,6 +491,7 @@ async fn create_run(
     req.auto_approve = body.auto_approve;
     req.user_id = body.user_id;
     req.callback_url = body.callback_url;
+    req.persona = body.persona;
     if let Some(id) = p.key_id() {
         req.metadata.insert("key_id".into(), json!(id));
     }
@@ -518,10 +525,14 @@ fn status_filter(s: Option<String>) -> ApiResult<Option<RunStatus>> {
     .transpose()
 }
 
-/// Runs carry a snapshot of their agent spec; lists leave it out.
+/// Runs carry a snapshot of their agent spec and persona; lists leave
+/// them out but keep which persona it was.
 fn slim(mut r: Run) -> Run {
     if let Some(m) = r.metadata.as_object_mut() {
         m.remove("spec");
+        if let Some(p) = m.get_mut("persona").and_then(Value::as_object_mut) {
+            p.remove("spec");
+        }
     }
     r
 }

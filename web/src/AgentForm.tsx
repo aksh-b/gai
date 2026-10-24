@@ -37,6 +37,13 @@ const PROMPT_VARS = [
   { name: 'datetime', hint: 'The current date and time' },
   { name: 'model', hint: 'The model the run uses' },
   { name: 'workspace', hint: "The run's working folder" },
+  { name: 'persona', hint: 'The persona, placed here instead of before or after the instructions' },
+];
+
+const PLACEMENTS = [
+  { value: '', label: 'Same as the default', description: 'set on the Personas page' },
+  { value: 'prepend', label: 'Before the instructions' },
+  { value: 'append', label: 'After the instructions' },
 ];
 
 /** Tools the runtime builds per agent rather than keeping in the registry. */
@@ -74,6 +81,7 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
   const agents = useLoad(() => api.agents(), []);
   const collections = useLoad(() => api.collections(), []);
   const skills = useLoad(() => api.skills(), []);
+  const personas = useLoad(() => api.personas(), []);
   const health = useLoad(() => api.health(), []);
   const prompt = useRef<HTMLTextAreaElement>(null);
   const [typing, setTyping] = useState(false);
@@ -194,6 +202,40 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
           textareaRef={prompt}
         />
         <TemplateVars vars={PROMPT_VARS} onInsert={(t) => set(['system'], insertAt(prompt.current, spec.system ?? '', t))} />
+        <SelectField
+          label="Persona"
+          description={
+            <>
+              The voice it speaks in. A chat can still pick another. <a href="#/personas">Manage personas</a>
+            </>
+          }
+          options={[
+            { value: '', label: 'Same as the default', description: 'set on the Personas page' },
+            { value: 'none', label: 'No persona' },
+            ...(personas.data ?? []).map((p) => ({
+              value: p.summary.name,
+              label: `${p.summary.avatar ? `${p.summary.avatar} ` : ''}${p.summary.display_name || p.summary.name}`,
+            })),
+            ...(spec.persona && spec.persona !== 'none' && !(personas.data ?? []).some((p) => p.summary.name === spec.persona)
+              ? [{ value: spec.persona, label: spec.persona, description: 'a version or label, kept as written' }]
+              : []),
+          ]}
+          value={spec.persona ?? ''}
+          onValueChange={(v) => set(['persona'], v)}
+        />
+        {spec.persona !== 'none' && (
+          <SelectField
+            label="Where the persona goes"
+            description={
+              /\{\{-?\s*persona\b/.test(spec.system ?? '')
+                ? 'Your instructions place it with {{ persona }}, so this is not used.'
+                : 'Before keeps answers faster with models that cache prompts.'
+            }
+            options={PLACEMENTS}
+            value={spec.persona_placement ?? ''}
+            onValueChange={(v) => set(['persona_placement'], v)}
+          />
+        )}
       </Section>
 
       <Section title="Abilities" hint="What the assistant can do. For each one, choose whether it acts on its own or asks you first.">

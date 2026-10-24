@@ -30,6 +30,9 @@ use crate::event::{Emitter, EventEnvelope, RunEvent};
 use crate::hooks::{Blocked, HookCtx, RunHook, ToolCall};
 use crate::media::{MEDIA_TOOLS, MediaResolver, media_tools};
 use crate::multi::{RunLauncher, run_kind};
+use crate::persona::{
+    PersonaDefaults, PersonaRef, ResolvedPersona, compose, template_places_persona,
+};
 use crate::replay::{ForkInfo, RecordedStep, RecordedTool, Replay};
 use crate::spec::AgentSpec;
 
@@ -68,6 +71,8 @@ pub struct RuntimeConfig {
     pub record_requests: bool,
     /// Default models for the media tools (agents can override them).
     pub media: crate::media::MediaSettings,
+    /// Persona for runs whose agent and request pick none.
+    pub persona: PersonaDefaults,
 }
 
 impl Default for RuntimeConfig {
@@ -81,6 +86,7 @@ impl Default for RuntimeConfig {
             agents_dirs: Vec::new(),
             record_requests: true,
             media: Default::default(),
+            persona: PersonaDefaults::default(),
         }
     }
 }
@@ -122,6 +128,9 @@ pub struct RunRequest {
     pub metadata: Map<String, Value>,
     /// POST the outcome here (JSON [`RunOutcome`]) when the run ends.
     pub callback_url: Option<String>,
+    /// Speak as this persona instead of the agent's or the global default;
+    /// `"none"` for no persona.
+    pub persona: Option<PersonaRef>,
 }
 
 impl RunRequest {
@@ -141,6 +150,7 @@ impl RunRequest {
             auto_approve: false,
             metadata: Map::new(),
             callback_url: None,
+            persona: None,
         }
     }
 
@@ -212,6 +222,8 @@ struct Inner {
     config: RuntimeConfig,
     /// Set at runtime (from the dashboard); wins over `config.default_model`.
     default_model: RwLock<Option<String>>,
+    /// Set at runtime (from the dashboard); wins over `config.persona`.
+    default_persona: RwLock<Option<PersonaDefaults>>,
     http: reqwest::Client,
     approvals: ApprovalHub,
     active: Mutex<HashMap<String, Active>>,
@@ -253,6 +265,7 @@ impl Runtime {
                 store,
                 config,
                 default_model: RwLock::new(None),
+                default_persona: RwLock::new(None),
                 knowledge,
                 skills,
                 queue: Notify::new(),
@@ -377,6 +390,27 @@ impl Runtime {
             .default_model
             .write()
             .expect("default model lock") = model;
+    }
+
+    /// The persona used when neither a run nor its agent picks one: the
+    /// one set with [`Runtime::set_default_persona`], else the configured
+    /// one.
+    pub fn default_persona(&self) -> PersonaDefaults {
+        self.inner
+            .default_persona
+            .read()
+            .expect("default persona lock")
+            .clone()
+            .unwrap_or_else(|| self.inner.config.persona.clone())
+    }
+
+    /// Override the configured persona defaults; `None` goes back to them.
+    pub fn set_default_persona(&self, defaults: Option<PersonaDefaults>) {
+        *self
+            .inner
+            .default_persona
+            .write()
+            .expect("default persona lock") = defaults;
     }
 
     pub fn approvals(&self) -> &ApprovalHub {
@@ -812,6 +846,7 @@ impl Runtime {
             .or_else(|| existing.as_ref().and_then(|s| s.user_id.clone()))
             .unwrap_or_else(|| "default".to_owned());
         let extras = self.agent_extras(&spec, &user).await?;
+        let persona = self.pick_persona(req.persona.as_ref(), &spec).await?;
         let session = match existing {
             Some(s) => s,
             None => {
@@ -838,11 +873,23 @@ impl Runtime {
         std::fs::create_dir_all(&workspace)
             .map_err(|e| AgentError::Invalid(format!("workspace {}: {e}", workspace.display())))?;
         let system = join_prompt(
-            render_system(&spec, &model.info().id, &workspace, &req.vars)?,
+            system_with_persona(
+                &spec,
+                &model.info().id,
+                &workspace,
+                &req.vars,
+                persona.as_ref(),
+            )?,
             &extras.prompt,
         );
 
         let mut metadata = req.metadata.clone();
+        if let Some(p) = &persona {
+            metadata.insert(
+                "persona".into(),
+                serde_json::to_value(p).expect("serializable persona"),
+            );
+        }
         metadata.insert(
             "spec".into(),
             serde_json::to_value(&spec).expect("serializable spec"),
@@ -1135,8 +1182,12 @@ impl Runtime {
             });
         std::fs::create_dir_all(&workspace)
             .map_err(|e| AgentError::Invalid(format!("workspace {}: {e}", workspace.display())))?;
+        // The persona the run started with, even if it has changed since.
+        let persona: Option<ResolvedPersona> = meta
+            .get("persona")
+            .and_then(|p| serde_json::from_value(p.clone()).ok());
         let system = join_prompt(
-            render_system(&spec, &model.info().id, &workspace, &vars)?,
+            system_with_persona(&spec, &model.info().id, &workspace, &vars, persona.as_ref())?,
             &extras.prompt,
         );
 
@@ -1383,11 +1434,29 @@ impl Resume {
     }
 }
 
+/// The agent's rendered prompt with the persona put in its place.
+fn system_with_persona(
+    spec: &AgentSpec,
+    model: &str,
+    workspace: &std::path::Path,
+    vars: &Map<String, Value>,
+    persona: Option<&ResolvedPersona>,
+) -> Result<String, AgentError> {
+    let Some(p) = persona else {
+        return render_system(spec, model, workspace, vars, "");
+    };
+    let text = p.spec.render();
+    let placed = spec.system.as_deref().is_some_and(template_places_persona);
+    let system = render_system(spec, model, workspace, vars, &text)?;
+    Ok(compose(system, &text, p.placement, placed))
+}
+
 fn render_system(
     spec: &AgentSpec,
     model: &str,
     workspace: &std::path::Path,
     vars: &Map<String, Value>,
+    persona: &str,
 ) -> Result<String, AgentError> {
     let Some(template) = spec.system.as_deref() else {
         return Ok(String::new());
@@ -1402,6 +1471,7 @@ fn render_system(
         json!(now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
     );
     ctx.insert("workspace".into(), json!(workspace.display().to_string()));
+    ctx.insert("persona".into(), json!(persona));
     ctx.insert("vars".into(), Value::Object(vars.clone()));
     for (k, v) in vars {
         ctx.entry(k.clone()).or_insert_with(|| v.clone());

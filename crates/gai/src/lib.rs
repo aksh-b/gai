@@ -70,6 +70,7 @@ pub enum Error {
 const SETTING_DEFAULT_MODEL: &str = "default_model";
 const SETTING_PROVIDER_KEY: &str = "provider_key:";
 const SETTING_MODEL: &str = "model:";
+const SETTING_DEFAULT_PERSONA: &str = "default_persona";
 
 /// The general assistant used when no agent is named.
 pub fn default_agent() -> AgentSpec {
@@ -176,6 +177,50 @@ impl Gai {
         Ok(())
     }
 
+    /// The persona defaults and where they came from: `settings` (chosen at
+    /// runtime) or `config` (gai.toml).
+    pub async fn persona_defaults(
+        &self,
+    ) -> Result<(gai_agent::PersonaDefaults, &'static str), Error> {
+        let rt = self.runtime().await?;
+        let source = if rt
+            .store()
+            .get_setting(SETTING_DEFAULT_PERSONA)
+            .await?
+            .is_some()
+        {
+            "settings"
+        } else {
+            "config"
+        };
+        Ok((rt.default_persona(), source))
+    }
+
+    /// Choose the persona defaults, kept in the database across restarts.
+    /// `None` goes back to the configured ones. A named persona must exist.
+    pub async fn set_persona_defaults(
+        &self,
+        defaults: Option<gai_agent::PersonaDefaults>,
+    ) -> Result<(), Error> {
+        let rt = self.runtime().await?;
+        match &defaults {
+            Some(d) => {
+                if let Some(p) = d.persona.as_deref().filter(|p| *p != gai_agent::NO_PERSONA) {
+                    rt.resolve_persona(p).await?;
+                }
+                let value = serde_json::to_string(d).expect("serializable defaults");
+                rt.store()
+                    .put_setting(SETTING_DEFAULT_PERSONA, &value)
+                    .await?;
+            }
+            None => {
+                rt.store().delete_setting(SETTING_DEFAULT_PERSONA).await?;
+            }
+        }
+        rt.set_default_persona(defaults);
+        Ok(())
+    }
+
     /// Add a model to a provider's catalog (say, one just pulled into
     /// Ollama), kept in the database across restarts.
     pub async fn add_model(
@@ -235,6 +280,7 @@ impl Gai {
                     agents_dirs: self.config.agents_dirs(),
                     record_requests: self.config.record_requests.unwrap_or(true),
                     media: self.config.media.clone(),
+                    persona: self.config.persona.clone(),
                 };
                 for (name, key) in store.list_settings(SETTING_PROVIDER_KEY).await? {
                     let provider = &name[SETTING_PROVIDER_KEY.len()..];
@@ -266,6 +312,12 @@ impl Gai {
                 );
                 if let Some(m) = store.get_setting(SETTING_DEFAULT_MODEL).await? {
                     rt.set_default_model(Some(m));
+                }
+                if let Some(p) = store.get_setting(SETTING_DEFAULT_PERSONA).await? {
+                    match serde_json::from_str(&p) {
+                        Ok(d) => rt.set_default_persona(Some(d)),
+                        Err(e) => tracing::warn!(error = %e, "ignoring the stored persona defaults"),
+                    }
                 }
                 match gai_sandbox::from_settings(&self.config.sandbox) {
                     Ok(Some(sb)) => rt.register_tool(Arc::new(gai_sandbox::code_exec(

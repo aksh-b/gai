@@ -26,6 +26,16 @@ initial development and will ship as 0.1.0.
   approval), or `"off"` to turn the tool off.
 - A **Data analyst** template that answers questions about your data by
   running code and drawing charts.
+- **Personas**: reusable voices (name, avatar, greeting, tone, formality,
+  length, language, do/don't rules and example replies) that any assistant
+  can speak in. Give an assistant a default persona with `persona:` (and
+  `persona_placement: prepend | append`, or put `{{ persona }}` in its
+  instructions), pick one for a single chat, or set a default for every chat
+  that has none. Personas are versioned like assistants, with diffs, labels
+  and rollback. The dashboard has a Personas tab with four templates,
+  "Draft it for me", a live "Try it" panel, and the persona's avatar,
+  greeting and starters in chat. API: `/v1/personas` and a `persona` field
+  on `POST /v1/runs`; gai.toml: `[persona] default`, `placement`.
 - **First-run setup** in the dashboard: connect a cloud provider by pasting a
   key, download a local model from the Ollama library, or try the demo. On a
   local server the dashboard signs itself in, with no API key to paste.

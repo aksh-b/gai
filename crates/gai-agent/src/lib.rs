@@ -12,6 +12,7 @@ mod event;
 pub mod hooks;
 mod media;
 mod multi;
+mod persona;
 mod replay;
 mod runtime;
 mod spec;
@@ -23,6 +24,10 @@ pub use media::MediaSettings;
 pub use multi::{
     DelegateRef, DelegateSpec, ExternalRun, MAX_DEPTH, RemoteDelegate, RunLauncher,
     delegate_tool_name, outcome_of, run_kind,
+};
+pub use persona::{
+    Formality, NO_PERSONA, PersonaDefaults, PersonaExample, PersonaRef, PersonaSpec, Placement,
+    ResolvedPersona, Verbosity,
 };
 pub use replay::{ForkInfo, ReplayOverrides, ReplayRequest, StepEdit};
 pub use runtime::{

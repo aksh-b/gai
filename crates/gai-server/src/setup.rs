@@ -11,7 +11,7 @@ use axum::http::{HeaderMap, StatusCode, header};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use futures::StreamExt;
-use gai::agent::AgentSpec;
+use gai::agent::{AgentSpec, PersonaSpec};
 use gai::llm::{Capabilities, ChatRequest, KeyStatus, ModelConfig, ModelKind};
 use gai::orchestra::WorkflowSpec;
 use gai::store::{Scope, keys};
@@ -890,18 +890,46 @@ const TEMPLATES: &[Template] = &[
         needs: &[],
         yaml: include_str!("../../../examples/workflows/hello.yaml"),
     },
+    Template {
+        id: "concise-engineer",
+        kind: "persona",
+        title: "Concise engineer",
+        needs: &[],
+        yaml: include_str!("../../../examples/personas/concise-engineer.yaml"),
+    },
+    Template {
+        id: "friendly-tutor",
+        kind: "persona",
+        title: "Friendly tutor",
+        needs: &[],
+        yaml: include_str!("../../../examples/personas/friendly-tutor.yaml"),
+    },
+    Template {
+        id: "formal-analyst",
+        kind: "persona",
+        title: "Formal analyst",
+        needs: &[],
+        yaml: include_str!("../../../examples/personas/formal-analyst.yaml"),
+    },
+    Template {
+        id: "playful-companion",
+        kind: "persona",
+        title: "Playful companion",
+        needs: &[],
+        yaml: include_str!("../../../examples/personas/playful-companion.yaml"),
+    },
 ];
 
 #[derive(Serialize, JsonSchema)]
 pub struct TemplateView {
     pub id: String,
-    /// `agent` or `workflow`.
+    /// `agent`, `workflow` or `persona`.
     pub kind: String,
     pub title: String,
     pub description: String,
     pub needs: Vec<String>,
     pub yaml: String,
-    /// An agent or workflow with this name is already stored.
+    /// An agent, workflow or persona with this name is already stored.
     pub installed: bool,
 }
 
@@ -926,10 +954,15 @@ fn template_workflow(t: &Template) -> Result<WorkflowSpec, String> {
     WorkflowSpec::parse(&named(t), "yaml")
 }
 
+fn template_persona(t: &Template) -> Result<PersonaSpec, String> {
+    PersonaSpec::parse(&named(t), "yaml")
+}
+
 async fn exists(s: &AppState, kind: &str, name: &str) -> bool {
     let store = s.rt.store();
     match kind {
         "agent" => matches!(store.get_agent(name, None).await, Ok(Some(_))),
+        "persona" => matches!(store.get_persona(name, None).await, Ok(Some(_))),
         _ => matches!(store.get_workflow(name, None).await, Ok(Some(_))),
     }
 }
@@ -939,6 +972,7 @@ async fn list_templates(State(s): State<AppState>) -> Json<Vec<TemplateView>> {
     for t in TEMPLATES {
         let description = match t.kind {
             "agent" => template_agent(t).ok().and_then(|a| a.description),
+            "persona" => template_persona(t).ok().and_then(|p| p.description),
             _ => template_workflow(t).ok().and_then(|w| w.description),
         }
         .unwrap_or_default();
@@ -991,6 +1025,10 @@ async fn install_template(
                 let spec = template_agent(t).map_err(ApiError::bad_request)?;
                 s.rt.save_agent(&spec, Some("from template")).await?;
             }
+            "persona" => {
+                let spec = template_persona(t).map_err(ApiError::bad_request)?;
+                s.rt.save_persona(&spec, Some("from template")).await?;
+            }
             _ => {
                 let spec = template_workflow(t).map_err(ApiError::bad_request)?;
                 s.wf.save(&spec, Some("from template")).await?;
@@ -1038,6 +1076,9 @@ mod tests {
             match t.kind {
                 "agent" => {
                     template_agent(t).unwrap();
+                }
+                "persona" => {
+                    template_persona(t).unwrap();
                 }
                 _ => {
                     template_workflow(t).unwrap();

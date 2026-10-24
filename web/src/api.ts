@@ -39,6 +39,12 @@ export type MediaDefaults = Schemas['MediaDefaults'];
 export type TriggerView = Schemas['TriggerView'];
 export type TriggerEvent = Schemas['TriggerEvent'];
 export type Fired = Schemas['Fired'];
+export type PersonaSpec = Schemas['PersonaSpec'];
+export type PersonaSummary = Schemas['PersonaSummary'];
+export type PersonaEntry = Schemas['PersonaEntry'];
+export type PersonaVersion = Schemas['PersonaVersion'];
+export type PersonaDefaults = Schemas['PersonaDefaultsView'];
+export type Placement = Schemas['Placement'];
 
 export type Role = 'user' | 'assistant';
 
@@ -91,7 +97,13 @@ export interface Run {
   usage: Usage;
   cost: number;
   steps: number;
-  metadata: { model?: string; spec?: AgentSpec; [k: string]: unknown };
+  metadata: {
+    model?: string;
+    spec?: AgentSpec;
+    /** The persona the run spoke as (lists leave out its spec). */
+    persona?: { name: string; version?: number; placement: Placement; spec?: PersonaSpec };
+    [k: string]: unknown;
+  };
   created_at: string;
   updated_at: string;
   finished_at: string | null;
@@ -114,6 +126,9 @@ export interface AgentSpec {
   description?: string;
   model?: string;
   system?: string;
+  /** Persona it speaks as unless a chat picks another; `none` for none. */
+  persona?: string;
+  persona_placement?: Placement;
   tools?: string[];
   tool_policy?: Record<string, ToolPolicy>;
   reasoning?: { effort: string; budget_tokens?: number; expose?: boolean };
@@ -284,7 +299,7 @@ export interface PullProgress {
 
 export interface Template {
   id: string;
-  kind: 'agent' | 'workflow';
+  kind: 'agent' | 'workflow' | 'persona';
   title: string;
   description: string;
   needs: string[];
@@ -415,6 +430,23 @@ export const api = {
     version === null
       ? request<unknown>('DELETE', `/v1/agents/${encodeURIComponent(name)}/labels/${encodeURIComponent(label)}`)
       : request<unknown>('POST', `/v1/agents/${encodeURIComponent(name)}/labels/${encodeURIComponent(label)}`, { version }),
+  personas: () => get<PersonaEntry[]>('/v1/personas'),
+  savePersona: (spec: PersonaSpec, note?: string) =>
+    request<{ name: string; version: number }>('POST', `/v1/personas${note ? `?note=${encodeURIComponent(note)}` : ''}`, spec),
+  deletePersona: (name: string) => request<void>('DELETE', `/v1/personas/${encodeURIComponent(name)}`),
+  personaVersions: (name: string) => get<PersonaVersion[]>(`/v1/personas/${encodeURIComponent(name)}/versions`),
+  personaDiff: (name: string, from?: number, to?: number) =>
+    get<VersionDiff>(`/v1/personas/${encodeURIComponent(name)}/diff?${versionPair(from, to)}`),
+  rollbackPersona: (name: string, version: number) =>
+    request<{ name: string; version: number }>('POST', `/v1/personas/${encodeURIComponent(name)}/rollback`, { version }),
+  setPersonaLabel: (name: string, label: string, version: number | null) =>
+    version === null
+      ? request<unknown>('DELETE', `/v1/personas/${encodeURIComponent(name)}/labels/${encodeURIComponent(label)}`)
+      : request<unknown>('POST', `/v1/personas/${encodeURIComponent(name)}/labels/${encodeURIComponent(label)}`, { version }),
+  renderPersona: (spec: PersonaSpec) => request<{ text: string }>('POST', '/v1/personas/render', spec),
+  personaDefaults: () => get<PersonaDefaults>('/v1/personas/defaults'),
+  setPersonaDefaults: (body: { persona: string | null; placement?: Placement } | { reset: true }) =>
+    request<PersonaDefaults>('PUT', '/v1/personas/defaults', body),
   sessions: (limit = 100) => get<Session[]>(`/v1/sessions?limit=${limit}`),
   messages: (id: string) => get<StoredMessage[]>(`/v1/sessions/${id}/messages`),
   deleteSession: (id: string) => request<void>('DELETE', `/v1/sessions/${id}`),
@@ -555,6 +587,8 @@ export interface StartRun {
   input: string | ContentBlock[];
   session_id?: string;
   model?: string;
+  /** A stored persona, an unsaved one to try, or `none`. */
+  persona?: string | PersonaSpec;
   auto_approve?: boolean;
 }
 

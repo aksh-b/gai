@@ -296,6 +296,21 @@ pub trait WorkflowStore: Send + Sync {
     async fn delete_workflow(&self, name: &str) -> Result<bool>;
 }
 
+/// Versioned personas: reusable voices agents and chats can take on.
+#[async_trait]
+pub trait PersonaStore: Send + Sync {
+    /// Save a spec as the persona's next version (or return the latest
+    /// version when nothing changed).
+    async fn put_persona(&self, name: &str, spec: &Value, note: Option<&str>) -> Result<u32>;
+    async fn get_persona(&self, name: &str, version: Option<u32>)
+    -> Result<Option<PersonaVersion>>;
+    async fn list_personas(&self) -> Result<Vec<PersonaSummary>>;
+    async fn list_persona_versions(&self, name: &str) -> Result<Vec<PersonaVersion>>;
+    /// Point `label` at a version; `None` removes the label.
+    async fn set_persona_label(&self, name: &str, label: &str, version: Option<u32>) -> Result<()>;
+    async fn delete_persona(&self, name: &str) -> Result<bool>;
+}
+
 /// Media bytes (images, audio, uploads) with their metadata.
 #[async_trait]
 pub trait BlobStore: Send + Sync {
@@ -363,6 +378,7 @@ pub trait Store:
     + KnowledgeStore
     + SkillStore
     + WorkflowStore
+    + PersonaStore
     + BlobStore
     + TriggerStore
 {
@@ -378,6 +394,7 @@ impl<T> Store for T where
         + KnowledgeStore
         + SkillStore
         + WorkflowStore
+        + PersonaStore
         + BlobStore
         + TriggerStore
 {

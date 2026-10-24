@@ -11,6 +11,7 @@ pub mod mcp_server;
 mod media;
 mod openai;
 mod openapi;
+mod personas;
 mod setup;
 mod triggers;
 mod versions;
@@ -102,6 +103,7 @@ pub async fn router(
         .merge(knowledge::routes())
         .merge(workflows::routes())
         .merge(versions::routes())
+        .merge(personas::routes())
         .merge(media::routes())
         .merge(triggers::routes())
         .merge(setup::routes())
