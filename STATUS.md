@@ -40,13 +40,13 @@ If podman says "Cannot connect", run `podman machine stop`, then `podman machine
 
 **Local state (not in git):**
 - `.admin-key` holds the user's admin API key. The server has auth on, because keys exist.
-- `gai.toml` (repo root) sets `default_model = "router/auto"` and declares `ollama/gemma3:1b` (no tools), `qwen3:4b-instruct` and `qwen3:4b` (tools; the latter thinks), and `nomic-embed-text` (embeddings, the knowledge default). Contexts are 12288 tokens to match `scripts/ollama.sh`.
+- `gai.toml` (repo root) sets `default_model = "router/auto"` and points the `ollama` provider at the spare machine on the LAN (`base_url = "http://192.168.29.223:11434/v1"`, since 2026-10-19). It declares `ollama/qwen3.5:latest` (9B, tools, thinks, vision), `glm-4.7-flash:latest` (30B, tools, thinks) and `deepseek-coder:6.7b` (no tools), with 32768-token contexts (16384 for deepseek-coder). That Ollama should run with `OLLAMA_CONTEXT_LENGTH=32768`, since gai can't set it. `nomic-embed-text` (the knowledge default) is still declared but must be pulled there. Remove `base_url` to go back to the podman Ollama from `scripts/ollama.sh`.
 - MCP servers added through the API live in the database: **Atlassian** (signed in, 21 tools) and **PDFParse** (signed in, 29 tools; confirmed connecting on 2026-10-14).
 - Phase-6 demo data: stored workflow `hello` (from examples/workflows/hello.yaml) and a few of its runs.
 - Phase-5 demo data from the end-to-end check: collection `gai-docs` (STATUS.md), memory block `agent:librarian/notes`, archival collection `memory:agent:librarian`, uploaded skill `release-notes`. All safe to delete.
 - Stored agents: `researcher`, `gemma` (plain chat on gemma3:1b), and possibly `atlassian`.
 - No cloud API keys are set. Settings saved from the dashboard (default model, provider keys, pulled Ollama models) live in the `settings` table and win over gai.toml.
-- `gai.toml` also has `[routers.auto]`: `ollama/gemma3:1b` (easy) and `ollama/qwen3:4b-instruct` (hard, anything needing tools). `[media]` is commented out, so `serve.sh` passes `GAI_MEDIA__*=mock/image|voice|ears`.
+- `gai.toml` also has `[routers.auto]`: `ollama/qwen3.5:latest` (easy) and `ollama/glm-4.7-flash:latest` (hard). `[media]` is commented out, so `serve.sh` passes `GAI_MEDIA__*=mock/image|voice|ears`.
 - Phase-10 demo data: a few blobs (mock SVG images, WAV speech) and runs of agents `artist`, `router-demo`, `r2`.
 
 ---

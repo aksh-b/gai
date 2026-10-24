@@ -56,6 +56,10 @@ initial development and will ship as 0.1.0.
   Technical details (IDs, YAML, raw events) are behind **Developer details**
   in Settings → Preferences. Old page links still work.
 - Ollama models get a 12k-token context window by default.
+- `scripts/serve.sh` keeps the Ollama address from `base_url` under
+  `[providers.ollama]` in `gai.toml`, so gai can use Ollama on another
+  machine. Before, the script always replaced it with an Ollama it found
+  itself. `GAI_PROVIDERS__OLLAMA__BASE_URL` still overrides both.
 
 ### Fixed
 

@@ -17,16 +17,27 @@ if [ -z "$default_model" ] && [ -z "${ANTHROPIC_API_KEY:-}" ] \
   && ! grep -q '^default_model' "$here/../gai.toml" 2>/dev/null; then
   default_model="mock/echo"
 fi
-# Ollama: prefer the one scripts/ollama.sh runs next to gai (reached over
-# the gai-net network, no Windows changes needed). Otherwise try model
-# servers on Windows (Ollama, LM Studio) at the podman VM's gateway; those
-# must listen beyond 127.0.0.1 and be allowed through the Windows firewall.
+# Ollama: a base_url under [providers.ollama] in gai.toml wins. Otherwise
+# prefer the one scripts/ollama.sh runs next to gai (reached over the
+# gai-net network, no Windows changes needed), then model servers on
+# Windows (Ollama, LM Studio) at the podman VM's gateway; those must listen
+# beyond 127.0.0.1 and be allowed through the Windows firewall.
 host_ip="$(podman machine ssh "ip route" 2>/dev/null | awk '/^default/ {print $3; exit}' | tr -d '\r')"
 extra=""
+ollama_url=""
 if [ "$(podman inspect -f '{{.State.Running}}' gai-ollama 2>/dev/null)" = "true" ]; then
-  extra="--network gai-net -e GAI_PROVIDERS__OLLAMA__BASE_URL=${GAI_PROVIDERS__OLLAMA__BASE_URL:-http://gai-ollama:11434/v1}"
+  extra="--network gai-net"
+  ollama_url="http://gai-ollama:11434/v1"
 elif [ -n "$host_ip" ]; then
-  extra="-e GAI_PROVIDERS__OLLAMA__BASE_URL=${GAI_PROVIDERS__OLLAMA__BASE_URL:-http://$host_ip:11434/v1}"
+  ollama_url="http://$host_ip:11434/v1"
+fi
+if awk '/^\[/ { s = ($0 == "[providers.ollama]") } s && /^base_url/ { found = 1 } END { exit !found }' \
+  "$here/../gai.toml" 2>/dev/null; then
+  ollama_url=""
+fi
+ollama_url="${GAI_PROVIDERS__OLLAMA__BASE_URL:-$ollama_url}"
+if [ -n "$ollama_url" ]; then
+  extra="$extra -e GAI_PROVIDERS__OLLAMA__BASE_URL=$ollama_url"
 fi
 if [ -n "$host_ip" ]; then
   extra="$extra -e GAI_PROVIDERS__LMSTUDIO__BASE_URL=${GAI_PROVIDERS__LMSTUDIO__BASE_URL:-http://$host_ip:1234/v1}"
