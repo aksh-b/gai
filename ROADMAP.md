@@ -7,9 +7,11 @@ are ordered so each builds on the ones before: quality and safety first,
 because they make everything after them measurable and safe to open up;
 Postgres before multi-user, because tenants need a real database.
 
-## 13. Quality loop
+## 13. Quality loop (done, 2026-10-25)
 
-Know whether agents are good, and catch regressions.
+Know whether agents are good, and catch regressions. Built as described,
+except that citations are checked by the `cites` scorer but not yet shown
+as links in chat.
 
 - **Feedback and ratings** [74]: thumbs up/down and comments on any reply, stored per run and step, shown in run history.
 - **Regenerate** [10]: one click in chat, built on fork-from-step.

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircleIcon } from 'lucide-react';
+import { AlertCircleIcon, RefreshCwIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { SwitchField } from '@/components/fields';
 import { PickerMenu, type PickerOption } from '@/components/picker-menu';
@@ -48,6 +48,7 @@ import {
 import {
   api,
   fileToBase64,
+  followRun,
   streamRun,
   type AgentSpec,
   type ContentBlock,
@@ -82,10 +83,11 @@ import { useDevMode } from '../prefs';
 import { navigate, type Route } from '../router';
 import { ago, blocksText, money, tokens, totalIn } from '../util';
 import { stashDraft } from './Agents';
+import { ReplyRating } from '../Feedback';
 
 type Item =
   | { kind: 'user'; text: string; media?: ContentBlock[]; files?: string[] }
-  | { kind: 'assistant'; text: string }
+  | { kind: 'assistant'; text: string; runId?: string }
   | { kind: 'reasoning'; text: string }
   | {
       kind: 'tool';
@@ -129,14 +131,17 @@ const TEXT_EXT = /\.(txt|md|markdown|csv|json|ya?ml|xml|html?|js|ts|tsx|py|rs|go
 
 function itemsFromHistory(messages: StoredMessage[]): Item[] {
   const items: Item[] = [];
-  for (const { message } of messages) {
+  for (const { message, run_id } of messages) {
     if (message.role === 'user') {
       const media = mediaBlocks(message.content);
       if (media.length) items.push({ kind: 'user', text: blocksText(message.content), media });
       if (media.length) continue;
     }
     for (const b of message.content) {
-      if (b.type === 'text' && b.text.trim()) items.push({ kind: message.role === 'user' ? 'user' : 'assistant', text: b.text });
+      if (b.type === 'text' && b.text.trim())
+        items.push(
+          message.role === 'user' ? { kind: 'user', text: b.text } : { kind: 'assistant', text: b.text, runId: run_id ?? undefined },
+        );
       else if (b.type === 'thinking' && b.text.trim()) items.push({ kind: 'reasoning', text: b.text });
       else if (b.type === 'tool_use') items.push({ kind: 'tool', id: b.id, name: b.name, input: b.input });
       else if (b.type === 'tool_result') {
@@ -176,7 +181,7 @@ function explain(error: string): { text: string; action?: { label: string; to: s
 }
 
 type TraceItem = Extract<Item, { kind: 'tool' | 'reasoning' }>;
-type Block = { kind: 'trace'; key: string; items: TraceItem[] } | { kind: 'item'; key: string; item: Item };
+type Block = { kind: 'trace'; key: string; items: TraceItem[] } | { kind: 'item'; key: string; item: Item; index: number };
 
 /**
  * Consecutive thinking and tool calls share one Trace; a text turn, a note
@@ -189,7 +194,7 @@ function groupItems(items: Item[]): Block[] {
     const last = out[out.length - 1];
     if (traced && last?.kind === 'trace') last.items.push(item as TraceItem);
     else if (traced) out.push({ kind: 'trace', key: `t${i}`, items: [item as TraceItem] });
-    else out.push({ kind: 'item', key: `i${i}`, item });
+    else out.push({ kind: 'item', key: `i${i}`, item, index: i });
   });
   return out;
 }
@@ -305,8 +310,8 @@ export function Playground({ route }: { route: Route }) {
         case 'text_delta':
           update((it) => {
             const last = it[it.length - 1];
-            if (last?.kind === 'assistant') it[it.length - 1] = { ...last, text: last.text + e.text };
-            else it.push({ kind: 'assistant', text: e.text });
+            if (last?.kind === 'assistant') it[it.length - 1] = { ...last, text: last.text + e.text, runId: e.run_id };
+            else it.push({ kind: 'assistant', text: e.text, runId: e.run_id });
             return it;
           });
           break;
@@ -484,6 +489,29 @@ export function Playground({ route }: { route: Route }) {
     }
   }
 
+  /** Run the last turn again, as a fork from its first step: the old reply stays in its own history. */
+  async function regenerate(runId: string) {
+    if (running) return;
+    const lastUser = items.map((i) => i.kind).lastIndexOf('user');
+    const abort = new AbortController();
+    try {
+      const fork = await api.replay(runId, 1, {});
+      setItems(items.slice(0, lastUser + 1));
+      sessionRef.current = fork.session_id;
+      navigate(`/chat?session=${fork.session_id}${agent ? `&agent=${encodeURIComponent(agent)}` : ''}`);
+      setRunning({ runId: fork.run_id, abort });
+      await followRun(fork.run_id, onEvent, abort.signal);
+      // Stored events leave out text deltas, so a quick run can finish
+      // before its reply streams: show the fork as saved.
+      setItems(itemsFromHistory(await api.messages(fork.session_id)));
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') toast.error((e as Error).message);
+    } finally {
+      setRunning(null);
+      loadSessions();
+    }
+  }
+
   async function stop() {
     if (running?.runId) await api.cancel(running.runId).catch(() => {});
     else running?.abort.abort();
@@ -551,6 +579,10 @@ export function Playground({ route }: { route: Route }) {
       ? SUGGESTIONS_TOOLS
       : SUGGESTIONS_CHAT;
   const blocks = groupItems(items);
+  // Ratings go on each run's final reply; regenerating only on the last one.
+  const finalReply = new Map<string, number>();
+  items.forEach((it, i) => it.kind === 'assistant' && it.runId && finalReply.set(it.runId, i));
+  const lastReply = items.map((i) => i.kind).lastIndexOf('assistant');
 
   return (
     <div className="grid h-svh min-h-0 md:grid-cols-[16rem_minmax(0,1fr)]">
@@ -713,7 +745,20 @@ export function Playground({ route }: { route: Route }) {
                           )}
                         </Trace>
                       ) : (
-                        <TranscriptItem item={b.item} onDecide={decide} canSpeak={!!media?.speech} persona={voice} />
+                        <TranscriptItem
+                          item={b.item}
+                          onDecide={decide}
+                          canSpeak={!!media?.speech}
+                          persona={voice}
+                          rate={
+                            b.item.kind === 'assistant' && b.item.runId && finalReply.get(b.item.runId) === b.index ? b.item.runId : undefined
+                          }
+                          onRegenerate={
+                            b.item.kind === 'assistant' && b.item.runId && b.index === lastReply && !running
+                              ? () => regenerate((b.item as { runId: string }).runId)
+                              : undefined
+                          }
+                        />
                       )}
                     </MessageScrollerItem>
                   ))}
@@ -961,10 +1006,15 @@ function TranscriptItem({
   onDecide,
   canSpeak,
   persona,
+  rate,
+  onRegenerate,
 }: {
   item: Item;
   onDecide: (runId: string | undefined, id: string, approved: boolean, name?: string, always?: boolean) => void;
   canSpeak: boolean;
+  /** Show rating buttons for this run. */
+  rate?: string;
+  onRegenerate?: () => void;
   /** Who is talking, when the chat has a persona. */
   persona?: PersonaSpec | null;
 }) {
@@ -1009,9 +1059,15 @@ function TranscriptItem({
           <MessageContent>
             {persona && <MessageHeader>{personaName(persona)}</MessageHeader>}
             <Markdown text={item.text} />
-            {canSpeak && item.text.trim() && (
+            {((canSpeak && item.text.trim()) || rate || onRegenerate) && (
               <MessageFooter>
-                <SpeakButton text={item.text} />
+                {canSpeak && item.text.trim() && <SpeakButton text={item.text} />}
+                {rate && <ReplyRating runId={rate} />}
+                {onRegenerate && (
+                  <Button variant="ghost" size="icon-sm" title="Regenerate" aria-label="Regenerate this reply" onClick={onRegenerate}>
+                    <RefreshCwIcon />
+                  </Button>
+                )}
               </MessageFooter>
             )}
           </MessageContent>

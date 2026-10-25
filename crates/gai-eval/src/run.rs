@@ -402,7 +402,27 @@ impl Evaluator {
             .get_eval_run(eval_run_id)
             .await?
             .ok_or_else(|| EvalError::NotFound(format!("evaluation {eval_run_id}")))?;
-        let results = store.list_eval_results(eval_run_id).await?;
+        let mut results = store.list_eval_results(eval_run_id).await?;
+        // Results are stored as cases finish; show them in the set's order.
+        if let Some(v) = store
+            .get_eval_set(&run.eval_set, Some(run.eval_version))
+            .await?
+        {
+            let order: Vec<String> = v.spec["cases"]
+                .as_array()
+                .map(|cs| {
+                    cs.iter()
+                        .filter_map(|c| c["id"].as_str().map(str::to_owned))
+                        .collect()
+                })
+                .unwrap_or_default();
+            results.sort_by_key(|r| {
+                order
+                    .iter()
+                    .position(|id| *id == r.case_id)
+                    .unwrap_or(usize::MAX)
+            });
+        }
         // A running evaluation has no stored totals yet: count what is done.
         let summary = match serde_json::from_value::<Summary>(run.summary.clone()) {
             Ok(s) if run.status != "running" => s,

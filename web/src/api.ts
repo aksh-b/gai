@@ -30,6 +30,17 @@ export type WorkflowEntry = Schemas['WorkflowEntry'];
 export type WorkflowView = Schemas['WorkflowView'];
 export type WorkflowSpec = Schemas['WorkflowSpec'];
 export type BundleReport = Schemas['ImportReport'];
+export type Feedback = Schemas['Feedback'];
+export type FeedbackSummary = Schemas['FeedbackSummary'];
+export type EvalSet = Schemas['EvalSet'];
+export type EvalSetSummary = Schemas['EvalSetSummary'];
+export type EvalSetView = Schemas['EvalSetView'];
+export type EvalRun = Schemas['EvalRun'];
+export type EvalResult = Schemas['EvalResult'];
+export type EvalReport = Schemas['EvalReport'];
+export type EvalSummary = Schemas['Summary'];
+export type EvalCompare = Schemas['CompareView'];
+export type StartEval = Schemas['StartEval'];
 export type BundleExport = Schemas['ExportOptions'];
 export type Validation = Schemas['Validation'];
 export type Trace = Schemas['Trace'];
@@ -566,6 +577,28 @@ export const api = {
     if (!res.ok) throw new ApiError(res.status, await res.text());
     return res.json();
   },
+  rate: (runId: string, rating: 1 | -1, comment?: string, tags: string[] = []) =>
+    request<Feedback>('POST', `/v1/runs/${runId}/feedback`, { rating, comment, tags }),
+  unrate: (runId: string) => request<{ ok: boolean }>('DELETE', `/v1/runs/${runId}/feedback`),
+  runFeedback: (runId: string) => get<Feedback[]>(`/v1/runs/${runId}/feedback`),
+  feedback: (q: { agent?: string; rating?: 1 | -1; limit?: number } = {}) => {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(q)) if (v !== undefined) p.set(k, String(v));
+    return get<Feedback[]>(`/v1/feedback?${p}`);
+  },
+  feedbackSummary: (agent?: string) => get<FeedbackSummary[]>(`/v1/feedback/summary${agent ? `?agent=${encodeURIComponent(agent)}` : ''}`),
+  evalSets: () => get<EvalSetSummary[]>('/v1/evals'),
+  evalSet: (name: string) => get<EvalSetView>(`/v1/evals/${encodeURIComponent(name)}`),
+  saveEvalSet: (yaml: string, note?: string) =>
+    request<{ name: string; version: number }>('POST', `/v1/evals${note ? `?note=${encodeURIComponent(note)}` : ''}`, { yaml }),
+  deleteEvalSet: (name: string) => request<{ ok: boolean }>('DELETE', `/v1/evals/${encodeURIComponent(name)}`),
+  startEval: (name: string, body: Partial<StartEval>) =>
+    request<{ eval_run_ids: string[] }>('POST', `/v1/evals/${encodeURIComponent(name)}/runs`, body),
+  evalRuns: (set?: string) => get<EvalRun[]>(`/v1/eval-runs${set ? `?set=${encodeURIComponent(set)}` : ''}`),
+  evalReport: (id: string) => get<EvalReport>(`/v1/eval-runs/${id}`),
+  deleteEvalRun: (id: string) => request<{ ok: boolean }>('DELETE', `/v1/eval-runs/${id}`),
+  compareEvals: (baseline: string, candidate: string) =>
+    get<EvalCompare>(`/v1/eval-runs/compare?baseline=${baseline}&candidate=${candidate}`),
   /** A .gaibundle (zip) of the chosen items and what they use. */
   exportBundle: async (opts: Partial<BundleExport>): Promise<Blob> => {
     const res = await fetch('/v1/bundles/export', { method: 'POST', headers: headers(true), body: JSON.stringify(opts) });

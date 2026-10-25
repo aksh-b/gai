@@ -27,9 +27,15 @@ initial development and will ship as 0.1.0.
   latency). Also `gai eval list|show|save|runs|report|compare`, and
   `/v1/evals`, `/v1/eval-runs`. `mock/judge` grades offline for trying it
   out; see `examples/evals/calc.yaml`.
-- **Feedback on replies:** `POST /v1/runs/{id}/feedback` with a rating (1
-  or -1), a comment and tags; `/v1/feedback` lists them and
-  `/v1/feedback/summary` counts them per agent version.
+- **Feedback on replies.** Thumbs up and down under every chat reply; a
+  thumbs down asks what went wrong. `POST /v1/runs/{id}/feedback`,
+  `/v1/feedback` and `/v1/feedback/summary` (per agent version). **Add
+  thumbs-down replies** turns disliked replies into eval cases.
+- **Regenerate** under the last chat reply runs the turn again as a fork,
+  keeping the old reply in its own history.
+- **Tests** in the dashboard (Assistants › Tests): write eval sets, run them
+  on an assistant and up to three models, read per-case results, and
+  compare two evaluations.
 - **Code sandbox.** Agents can run Python, JavaScript or bash with the new
   `code_exec` tool. Each call runs in a fresh Docker or Podman container with
   no network access, capped memory and CPU, and a time limit. The container

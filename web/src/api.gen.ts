@@ -404,6 +404,163 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/eval-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Evaluations, newest first */
+        get: operations["get_v1_eval-runs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/eval-runs/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Two evaluations case by case, with a pass/fail verdict */
+        get: operations["get_v1_eval-runs_compare"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/eval-runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An evaluation with its per-case results (partial while it runs) */
+        get: operations["get_v1_eval-runs__id_"];
+        put?: never;
+        post?: never;
+        /** Delete an evaluation */
+        delete: operations["delete_v1_eval-runs__id_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/evals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Eval sets */
+        get: operations["get_v1_evals"];
+        put?: never;
+        /** Save an eval set (JSON, or {"yaml": "..."}) as a new version */
+        post: operations["post_v1_evals"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/evals/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An eval set (name or name@v2) */
+        get: operations["get_v1_evals__name_"];
+        put?: never;
+        post?: never;
+        /** Delete an eval set and its versions */
+        delete: operations["delete_v1_evals__name_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/evals/{name}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Evaluations of one set, newest first */
+        get: operations["get_v1_evals__name__runs"];
+        put?: never;
+        /** Evaluate an agent (and optionally several models) on the set, in the background */
+        post: operations["post_v1_evals__name__runs"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/evals/{name}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every version of an eval set */
+        get: operations["get_v1_evals__name__versions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ratings, newest first */
+        get: operations["get_v1_feedback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feedback/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Good and bad counts per agent version */
+        get: operations["get_v1_feedback_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/health": {
         parameters: {
             query?: never;
@@ -1023,6 +1180,25 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{id}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ratings of one run */
+        get: operations["get_v1_runs__id__feedback"];
+        put?: never;
+        /** Rate a reply: 1 good, -1 bad, with an optional comment and tags. Rating again replaces your rating */
+        post: operations["post_v1_runs__id__feedback"];
+        /** Take back your rating of a run */
+        delete: operations["delete_v1_runs__id__feedback"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1868,6 +2044,42 @@ export interface components {
             /** @default false */
             vision: boolean;
         };
+        /** @description One input and how to judge the answer. */
+        Case: {
+            /**
+             * @description The answer, or a phrase it must contain. With no scorers this case
+             *     is scored with `contains: [expected]`; a `judge` sees it too.
+             */
+            expected?: string | null;
+            /**
+             * @description Unique within the set; defaults to the case's position (`1`, `2`, ...).
+             * @default
+             */
+            id: string;
+            /** @default  */
+            input: string;
+            scorers?: components["schemas"]["Scorer"][];
+            tags?: string[];
+            /** @description Template variables for the agent's instructions. */
+            vars?: {
+                [key: string]: unknown;
+            };
+        };
+        /** @description One case in both evaluations. */
+        CaseDelta: {
+            /** Format: double */
+            baseline?: number | null;
+            baseline_passed: boolean;
+            /** Format: double */
+            candidate?: number | null;
+            candidate_passed: boolean;
+            case_id: string;
+            /**
+             * Format: double
+             * @description Candidate minus baseline (0 when a side is missing).
+             */
+            delta: number;
+        };
         /** @description A resolved model: its address, what it can do and what it costs. */
         CatalogEntry: {
             /**
@@ -1973,6 +2185,26 @@ export interface components {
             name: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        CompareView: {
+            baseline: components["schemas"]["Summary"];
+            baseline_id: string;
+            candidate: components["schemas"]["Summary"];
+            candidate_id: string;
+            cases: components["schemas"]["CaseDelta"][];
+            /** Format: double */
+            cost_delta: number;
+            /** @description Cases that failed in the baseline and pass now. */
+            fixes: string[];
+            /** Format: int64 */
+            latency_delta_ms: number;
+            /** Format: double */
+            pass_rate_delta: number;
+            /** @description Cases that passed in the baseline and fail now. */
+            regressions: string[];
+            /** Format: double */
+            score_delta: number;
+            verdict: components["schemas"]["Verdict"];
         };
         /**
          * @description One piece of message content.
@@ -2213,6 +2445,107 @@ export interface components {
                 message: string;
             };
         };
+        /** @description An evaluation with its results. */
+        EvalReport: {
+            results: components["schemas"]["EvalResult"][];
+            run: components["schemas"]["EvalRun"];
+            summary: components["schemas"]["Summary"];
+        };
+        /** @description How one case did in an evaluation. */
+        EvalResult: {
+            case_id: string;
+            /** Format: double */
+            cost: number;
+            error?: string | null;
+            eval_run_id: string;
+            /** Format: uint64 */
+            latency_ms: number;
+            output?: string | null;
+            passed: boolean;
+            run_id?: string | null;
+            /**
+             * Format: double
+             * @description 0 to 1.
+             */
+            score: number;
+            /** @description Each scorer's result: `{scorer, score, passed, reason}`. */
+            scores: unknown;
+        };
+        /** @description One evaluation of an eval set against a target. */
+        EvalRun: {
+            /** Format: date-time */
+            created_at: string;
+            error?: string | null;
+            eval_set: string;
+            /** Format: uint32 */
+            eval_version: number;
+            /** Format: date-time */
+            finished_at?: string | null;
+            id: string;
+            /** @description `running`, `completed` or `failed`. */
+            status: string;
+            /** @description Totals once finished: score, passed, total, cost, latency. */
+            summary: unknown;
+            /** @description What was evaluated: `{agent, agent_version, model}`. */
+            target: unknown;
+        };
+        /** @description A named list of cases. */
+        EvalSet: {
+            /**
+             * @description The agent evaluated when the run names none (`name`, `name@v3`,
+             *     `name@prod`).
+             */
+            agent?: string | null;
+            /** @default [] */
+            cases: components["schemas"]["Case"][];
+            description?: string | null;
+            /**
+             * @description Model for `judge` and `grounded` scorers; defaults to the default
+             *     model.
+             */
+            judge_model?: string | null;
+            /** @default  */
+            name: string;
+            /** @description Scorers applied to every case, before the case's own. */
+            scorers?: components["schemas"]["Scorer"][];
+            /**
+             * Format: double
+             * @description Share of cases (0 to 1) that must pass for the evaluation to pass.
+             */
+            threshold?: number | null;
+        };
+        EvalSetSummary: {
+            /** Format: uint32 */
+            cases: number;
+            /** Format: date-time */
+            created_at: string;
+            description?: string | null;
+            labels: {
+                [key: string]: number;
+            };
+            /** Format: uint32 */
+            latest_version: number;
+            name: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description A stored eval set version. */
+        EvalSetVersion: {
+            /** Format: date-time */
+            created_at: string;
+            name: string;
+            note?: string | null;
+            /** @description The eval set spec as JSON. The eval crate owns its shape. */
+            spec: unknown;
+            /** Format: uint32 */
+            version: number;
+        };
+        EvalSetView: {
+            name: string;
+            set: components["schemas"]["EvalSet"];
+            /** Format: uint32 */
+            version: number;
+        };
         /**
          * @description Something that happened during a run. The SSE endpoint, the TUI, the
          *     trace store and SDK callers all consume this one stream.
@@ -2398,6 +2731,39 @@ export interface components {
             /** @default [] */
             workflows: string[];
         };
+        /** @description A person's rating of a reply (one run). */
+        Feedback: {
+            agent: string;
+            /** Format: uint32 */
+            agent_version?: number | null;
+            comment?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            id: string;
+            /**
+             * Format: int8
+             * @description 1 for good, -1 for bad.
+             */
+            rating: number;
+            run_id: string;
+            session_id: string;
+            /** @description Short reasons, e.g. `wrong`, `too long`, `unsafe`. */
+            tags: string[];
+            /** Format: date-time */
+            updated_at: string;
+            /** @description Who rated it (empty when unknown). */
+            user_id: string;
+        };
+        /** @description Ratings counted for an agent (or one of its versions). */
+        FeedbackSummary: {
+            agent: string;
+            /** Format: uint32 */
+            agent_version?: number | null;
+            /** Format: uint64 */
+            bad: number;
+            /** Format: uint64 */
+            good: number;
+        };
         /** @description What one firing did. */
         Fired: {
             error?: string | null;
@@ -2417,6 +2783,15 @@ export interface components {
             id: string;
             kind: components["schemas"]["NodeKind"];
             map: boolean;
+        };
+        /** @description `grounded: true` or `grounded: {model, min}`. */
+        Grounded: boolean | {
+            /**
+             * Format: double
+             * @description Lowest share of supported claims that passes (default 0.8).
+             */
+            min?: number | null;
+            model?: string | null;
         };
         Health: {
             /** @description `open` when requests without a key are accepted, else `keys`. */
@@ -2472,6 +2847,22 @@ export interface components {
             also: string[];
             kind: string;
             name: string;
+        };
+        JsonCheck: {
+            /** @default {} */
+            fields: {
+                [key: string]: unknown;
+            };
+        };
+        /** @description `judge: <rubric>` or `judge: {rubric, model, pass}`. */
+        Judge: string | {
+            model?: string | null;
+            /**
+             * Format: double
+             * @description Lowest passing grade, 0 to 1 (default 0.7).
+             */
+            pass?: number | null;
+            rubric: string;
         };
         KeyState: {
             /** @constant */
@@ -3086,6 +3477,16 @@ export interface components {
              */
             reset: boolean;
         };
+        Rate: {
+            comment?: string | null;
+            /**
+             * Format: int8
+             * @description 1 for good, -1 for bad.
+             */
+            rating: number;
+            /** @default [] */
+            tags: string[];
+        };
         /**
          * @description How hard the model should think. Each dialect maps this onto whatever its
          *     provider offers (effort levels, thinking budgets, or nothing).
@@ -3315,6 +3716,42 @@ export interface components {
          * @enum {string}
          */
         Scope: "admin" | "run" | "read";
+        /**
+         * @description How one aspect of an answer is judged. Written as a one-key map in YAML:
+         *     `- contains: [30 days]`, `- judge: Is polite`, `- max_steps: 4`.
+         */
+        Scorer: {
+            equals: string;
+        } | {
+            contains: string[];
+        } | {
+            contains_any: string[];
+        } | {
+            not_contains: string[];
+        } | {
+            regex: string;
+        } | {
+            json: components["schemas"]["JsonCheck"];
+        } | {
+            tool_called: string;
+        } | {
+            tool_not_called: string;
+        } | {
+            /** Format: uint32 */
+            max_steps: number;
+        } | {
+            /** Format: double */
+            max_cost_usd: number;
+        } | {
+            /** Format: uint64 */
+            max_latency_ms: number;
+        } | {
+            judge: components["schemas"]["Judge"];
+        } | {
+            grounded: components["schemas"]["Grounded"];
+        } | {
+            cites: boolean;
+        };
         SearchHit: {
             /** Format: int64 */
             chunk_id: number;
@@ -3440,6 +3877,36 @@ export interface components {
             /** @description A provider voice name or id (`alloy`, an ElevenLabs voice id...). */
             voice?: string | null;
         };
+        /** @description What to evaluate. */
+        StartEval: {
+            /**
+             * @description An agent reference (`name`, `name@v3`, `name@prod`, a file);
+             *     defaults to the set's `agent`.
+             */
+            agent?: string | null;
+            /** @default [] */
+            cases: string[];
+            /**
+             * Format: uint
+             * @default null
+             */
+            concurrency: number | null;
+            /** @default null */
+            judge_model: string | null;
+            /** @description Run the agent on this model instead of its own. */
+            model?: string | null;
+            /**
+             * @description Several models to compare: one evaluation per model.
+             * @default []
+             */
+            models: string[];
+            /** @default [] */
+            tags: string[];
+        };
+        StartedEvals: {
+            /** @description One per model, in the order given. */
+            eval_run_ids: string[];
+        };
         Step: {
             /** Format: double */
             cost?: number | null;
@@ -3488,6 +3955,43 @@ export interface components {
         StreamOptions: {
             /** @default false */
             include_usage: boolean;
+        };
+        /** @description Totals for an evaluation, stored as its `summary`. */
+        Summary: {
+            /**
+             * Format: double
+             * @description What the agent runs cost (judging not included).
+             */
+            cost: number;
+            /**
+             * Format: uint32
+             * @description Cases that could not run (the agent failed).
+             */
+            errors: number;
+            /** Format: uint64 */
+            mean_latency_ms: number;
+            ok: boolean;
+            /** Format: uint64 */
+            p95_latency_ms: number;
+            /**
+             * Format: double
+             * @description Share of cases that passed.
+             */
+            pass_rate: number;
+            /** Format: uint32 */
+            passed: number;
+            /**
+             * Format: double
+             * @description Mean case score, 0 to 1.
+             */
+            score: number;
+            /**
+             * Format: double
+             * @description The pass share needed, and whether it was reached.
+             */
+            threshold: number;
+            /** Format: uint32 */
+            total: number;
         };
         /** @description What a trigger starts. */
         Target: {
@@ -3746,6 +4250,11 @@ export interface components {
         };
         /** @enum {string} */
         Verbosity: "terse" | "balanced" | "detailed";
+        /** @description Whether an evaluation is good enough to ship. */
+        Verdict: {
+            ok: boolean;
+            reasons: string[];
+        };
         /** @description Two versions of a spec and a unified diff between them (as YAML). */
         VersionDiff: {
             /** @description Unified diff from `from_yaml` to `to_yaml`; empty when they match. */
@@ -4874,6 +5383,426 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SearchHit"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "get_v1_eval-runs": {
+        parameters: {
+            query?: {
+                /** @description One eval set */
+                set?: string;
+                /** @description Max rows */
+                limit?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalRun"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "get_v1_eval-runs_compare": {
+        parameters: {
+            query?: {
+                /** @description Evaluation id */
+                baseline?: string;
+                /** @description Evaluation id */
+                candidate?: string;
+                /** @description Largest score drop that passes (0.05) */
+                max_drop?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompareView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "get_v1_eval-runs__id_": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalReport"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "delete_v1_eval-runs__id_": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_evals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalSetSummary"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_evals: {
+        parameters: {
+            query?: {
+                /** @description Why it changed */
+                note?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvalSet"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Saved"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_evals__name_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalSetView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_evals__name_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_evals__name__runs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalRun"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_evals__name__runs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartEval"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartedEvals"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_evals__name__versions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalSetVersion"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_feedback: {
+        parameters: {
+            query?: {
+                /** @description One agent */
+                agent?: string;
+                /** @description 1 or -1 */
+                rating?: string;
+                /** @description Max rows */
+                limit?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Feedback"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_feedback_summary: {
+        parameters: {
+            query?: {
+                /** @description One agent */
+                agent?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackSummary"][];
                 };
             };
             /** @description Error */
@@ -6400,6 +7329,101 @@ export interface operations {
                 content: {
                     "text/event-stream": components["schemas"]["EventEnvelope"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_runs__id__feedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Feedback"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_runs__id__feedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Rate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Feedback"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_runs__id__feedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

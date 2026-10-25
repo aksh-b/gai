@@ -45,6 +45,7 @@ import { Approvals } from './pages/Approvals';
 import { Knowledge } from './pages/Knowledge';
 import { Memory } from './pages/Memory';
 import { Personas } from './pages/Personas';
+import { Evals } from './pages/Evals';
 import { Skills } from './pages/Skills';
 import { Workflows } from './pages/Workflows';
 import { Welcome, welcomeDone } from './pages/Welcome';
@@ -59,12 +60,13 @@ const NAV: { id: string; label: string; icon: Icon; routes: string[]; tabs?: { i
     id: 'assistants',
     label: 'Assistants',
     icon: IconAgent,
-    routes: ['assistants', 'agents', 'personas', 'memory', 'skills'],
+    routes: ['assistants', 'agents', 'personas', 'memory', 'skills', 'evals'],
     tabs: [
       { id: 'assistants', label: 'Assistants' },
       { id: 'personas', label: 'Personas' },
       { id: 'memory', label: 'Memory' },
       { id: 'skills', label: 'Skills' },
+      { id: 'evals', label: 'Tests' },
     ],
   },
   {
@@ -292,6 +294,9 @@ export function App() {
         break;
       case 'skills':
         page = <Skills />;
+        break;
+      case 'evals':
+        page = <Evals parts={route.parts.slice(1)} />;
         break;
       case 'media':
         page = <MediaStudio />;
