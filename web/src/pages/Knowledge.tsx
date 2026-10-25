@@ -19,6 +19,7 @@ import { IconPlus, IconSearch, IconTrash, IconUpload } from '../icons';
 import { navigate } from '../router';
 import { ago, useLoad } from '../util';
 import { useDevMode } from '../prefs';
+import { ExtractPanel, GraphPanel } from './KnowledgeExtras';
 
 /** Where dropped files go when no folder is open. */
 const DEFAULT_FOLDER = 'my-documents';
@@ -274,6 +275,8 @@ function CollectionView({ c, onChange }: { c: Collection; onChange: () => void }
         items={[
           { id: 'documents', label: 'Documents', badge: <Badge variant="secondary">{c.documents}</Badge> },
           { id: 'search', label: 'Search' },
+          { id: 'table', label: 'Table' },
+          { id: 'graph', label: 'Graph' },
         ]}
         value={tab}
         onValueChange={setTab}
@@ -294,6 +297,10 @@ function CollectionView({ c, onChange }: { c: Collection; onChange: () => void }
             </ItemGroup>
           )}
         </>
+      ) : tab === 'table' ? (
+        <ExtractPanel collection={c.name} />
+      ) : tab === 'graph' ? (
+        <GraphPanel collection={c.name} />
       ) : (
         <SearchPanel collection={c.name} />
       )}
@@ -505,6 +512,7 @@ const MODES: { id: SearchMode; label: string }[] = [
   { id: 'hybrid', label: 'Hybrid' },
   { id: 'vector', label: 'Meaning' },
   { id: 'text', label: 'Keywords' },
+  { id: 'graph', label: 'With the graph' },
 ];
 
 function SearchPanel({ collection }: { collection: string }) {

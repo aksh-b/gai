@@ -18,6 +18,7 @@ gai-tools.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
 pdf-extract = { workspace = true, optional = true }
+lopdf.workspace = true
 reqwest.workspace = true
 base64.workspace = true
 regex.workspace = true
@@ -28,6 +29,7 @@ serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+futures.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]

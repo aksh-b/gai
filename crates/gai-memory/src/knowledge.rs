@@ -14,7 +14,8 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 use crate::chunk::chunk_text;
-use crate::load::{Loaded, is_supported, load_bytes, load_path};
+use crate::load::{Format, Loaded, is_supported_with, load_bytes};
+use crate::ocr::{OcrSettings, looks_scanned};
 use crate::{MemoryError, Result};
 
 /// Used when neither the collection nor the config names an embedding
@@ -49,6 +50,10 @@ pub struct KnowledgeSettings {
     pub vector_index: VectorIndexSettings,
     /// Rerank the best fused results with a rerank API or a chat model.
     pub rerank: crate::rerank::RerankSettings,
+    /// Read images and scanned PDFs.
+    pub ocr: OcrSettings,
+    /// Knowledge graphs built from collections.
+    pub graph: crate::graph::GraphSettings,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -86,6 +91,8 @@ impl Default for KnowledgeSettings {
             max_file_bytes: 50 * 1024 * 1024,
             vector_index: VectorIndexSettings::default(),
             rerank: Default::default(),
+            ocr: OcrSettings::default(),
+            graph: Default::default(),
         }
     }
 }
@@ -131,6 +138,9 @@ pub enum SearchMode {
     Hybrid,
     Vector,
     Text,
+    /// Hybrid, joined with the passages about the entities the question
+    /// names (and their neighbours) in the collection's knowledge graph.
+    Graph,
 }
 
 /// Who is searching, for documents that say who may find them (an `acl`
@@ -199,12 +209,14 @@ pub struct SearchHit {
 /// Collections, ingestion and search over the store.
 pub struct Knowledge {
     store: SharedStore,
-    models: Arc<ModelRegistry>,
+    pub(crate) models: Arc<ModelRegistry>,
     settings: KnowledgeSettings,
     /// A separate vector index, when configured.
     index: RwLock<Option<SharedVectorIndex>>,
     /// For rerank APIs.
     http: reqwest::Client,
+    /// Collections whose graph is being built.
+    pub(crate) graph_lock: std::sync::Mutex<std::collections::HashSet<String>>,
 }
 
 /// Rank constant for reciprocal rank fusion; 60 is the usual choice.
@@ -242,6 +254,7 @@ impl Knowledge {
             settings,
             index: RwLock::new(index),
             http: reqwest::Client::new(),
+            graph_lock: Default::default(),
         }
     }
 
@@ -283,6 +296,7 @@ impl Knowledge {
     /// Delete a collection with its documents, from the store and the
     /// vector index.
     pub async fn delete_collection(&self, name: &str) -> Result<bool> {
+        self.store.graph_clear(name).await?;
         if let Some(index) = self.index() {
             index.drop_collection(name).await?;
         }
@@ -498,6 +512,75 @@ impl Knowledge {
         })
     }
 
+    /// Whether images and scanned PDFs can be read here.
+    pub fn ocr_available(&self) -> bool {
+        self.settings.ocr.engine().is_some()
+    }
+
+    /// Turn a file into text: text, Markdown, HTML and PDF as they are;
+    /// images and PDFs without a text layer through OCR when it is set up.
+    pub async fn load(
+        &self,
+        name: &str,
+        content_type: Option<&str>,
+        bytes: Vec<u8>,
+    ) -> Result<Loaded> {
+        let format = crate::load::detect(name, content_type, &bytes);
+        let (n, ct) = (name.to_owned(), content_type.map(str::to_owned));
+        let copy = matches!(format, Format::Pdf | Format::Image).then(|| bytes.clone());
+        let loaded = tokio::task::spawn_blocking(move || load_bytes(&n, ct.as_deref(), &bytes))
+            .await
+            .map_err(|e| MemoryError::Invalid(format!("loader crashed: {e}")))?;
+        let Some(bytes) = copy else {
+            return loaded;
+        };
+        // Text PDFs read as they are; scans and pictures need OCR.
+        if let Ok(l) = &loaded
+            && !looks_scanned(&l.text)
+        {
+            return loaded;
+        }
+        let Some(engine) = self.settings.ocr.engine() else {
+            return match (loaded, format) {
+                (Ok(l), _) => Ok(l),
+                (Err(_), Format::Pdf) => Err(MemoryError::Invalid(format!(
+                    "{name} has no text layer (a scan?): set [knowledge.ocr] to read it"
+                ))),
+                (Err(e), _) => Err(e),
+            };
+        };
+        let s = &self.settings.ocr;
+        let read = match format {
+            Format::Image => {
+                let ty = crate::ocr::image_type(&bytes).unwrap_or("image/png");
+                crate::ocr::read_image(&engine, s, &self.models, &bytes, ty).await
+            }
+            _ => crate::ocr::read_pdf(&engine, s, &self.models, &bytes).await,
+        };
+        let text = match (read, loaded) {
+            (Ok(t), _) => t,
+            // A short PDF with a text layer keeps it when OCR can't help.
+            (Err(e), Ok(l)) => {
+                tracing::warn!(file = name, error = %e, "OCR failed; keeping the PDF's own text");
+                return Ok(l);
+            }
+            (Err(e), Err(_)) => return Err(e),
+        };
+        let text = text.replace("\r\n", "\n");
+        if text.trim().is_empty() {
+            return Err(MemoryError::Invalid(format!("OCR found no text in {name}")));
+        }
+        Ok(Loaded {
+            title: std::path::Path::new(name)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .map(str::to_owned),
+            text,
+            format,
+            ocr: Some(engine.label()),
+        })
+    }
+
     /// Ingest uploaded bytes (text, Markdown, HTML or PDF). The source
     /// defaults to the file name.
     pub async fn ingest_bytes(
@@ -509,10 +592,7 @@ impl Knowledge {
         source: Option<String>,
         metadata: Value,
     ) -> Result<Ingested> {
-        let (n, ct) = (name.to_owned(), content_type.map(str::to_owned));
-        let loaded = tokio::task::spawn_blocking(move || load_bytes(&n, ct.as_deref(), &bytes))
-            .await
-            .map_err(|e| MemoryError::Invalid(format!("loader crashed: {e}")))??;
+        let loaded = self.load(name, content_type, bytes).await?;
         self.ingest_loaded(
             collection,
             source.unwrap_or_else(|| name.to_owned()),
@@ -534,6 +614,9 @@ impl Knowledge {
             _ => Default::default(),
         };
         metadata.insert("format".into(), json!(loaded.format));
+        if let Some(o) = &loaded.ocr {
+            metadata.insert("ocr".into(), json!(o));
+        }
         self.ingest(
             collection,
             DocumentInput {
@@ -556,7 +639,7 @@ impl Knowledge {
         self.collection(collection).await?;
         let files = if path.is_dir() {
             let mut files = Vec::new();
-            walk(path, &mut files);
+            walk(path, &mut files, self.ocr_available());
             files.sort();
             files
         } else if path.is_file() {
@@ -574,15 +657,21 @@ impl Knowledge {
                     self.settings.max_file_bytes
                 )))
             } else {
-                let p = f.clone();
-                match tokio::task::spawn_blocking(move || load_path(&p)).await {
-                    Ok(Ok(loaded)) => {
-                        let source = f.to_string_lossy().replace('\\', "/");
-                        self.ingest_loaded(collection, source, loaded, json!({}))
-                            .await
-                    }
-                    Ok(Err(e)) => Err(e),
-                    Err(e) => Err(MemoryError::Invalid(format!("loader crashed: {e}"))),
+                let name = f
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("file")
+                    .to_owned();
+                match std::fs::read(&f) {
+                    Ok(bytes) => match self.load(&name, None, bytes).await {
+                        Ok(loaded) => {
+                            let source = f.to_string_lossy().replace('\\', "/");
+                            self.ingest_loaded(collection, source, loaded, json!({}))
+                                .await
+                        }
+                        Err(e) => Err(e),
+                    },
+                    Err(e) => Err(MemoryError::Invalid(format!("{}: {e}", f.display()))),
                 }
             };
             out.push((f, r));
@@ -660,6 +749,11 @@ impl Knowledge {
         mode: SearchMode,
         access: Option<&Access>,
     ) -> Result<Vec<SearchHit>> {
+        if mode == SearchMode::Graph {
+            return Box::pin(self.search_graph(collections, query, k, access))
+                .await
+                .map(|g| g.hits);
+        }
         let k = k.clamp(1, 100);
         if query.trim().is_empty() {
             return Err(MemoryError::Invalid("the search query is empty".into()));
@@ -733,7 +827,7 @@ impl Knowledge {
             .into_values()
             .map(|mut h| {
                 h.score = match mode {
-                    SearchMode::Hybrid => fused[&h.chunk_id],
+                    SearchMode::Hybrid | SearchMode::Graph => fused[&h.chunk_id],
                     SearchMode::Vector => h.vector_score.unwrap_or_default(),
                     SearchMode::Text => h.text_score.unwrap_or_default(),
                 };
@@ -770,7 +864,7 @@ impl Knowledge {
     }
 }
 
-fn to_hit(h: gai_store::ChunkHit) -> SearchHit {
+pub(crate) fn to_hit(h: gai_store::ChunkHit) -> SearchHit {
     SearchHit {
         heading: h.chunk.metadata["heading"].as_str().map(str::to_owned),
         collection: h.chunk.collection,
@@ -791,17 +885,17 @@ fn chrono_now() -> chrono::DateTime<chrono::Utc> {
     chrono::Utc::now()
 }
 
-/// Supported files under `dir`, sorted.
-pub(crate) fn supported_files(dir: &Path) -> Vec<PathBuf> {
+/// Supported files under `dir`, sorted; images too when `images`.
+pub(crate) fn supported_files(dir: &Path, images: bool) -> Vec<PathBuf> {
     let mut out = Vec::new();
-    walk(dir, &mut out);
+    walk(dir, &mut out, images);
     out.sort();
     out
 }
 
 /// Supported files under `dir`, skipping hidden directories and build or
 /// dependency folders.
-fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+fn walk(dir: &Path, out: &mut Vec<PathBuf>, images: bool) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
@@ -815,9 +909,9 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
                     "node_modules" | "target" | "dist" | "build" | "__pycache__" | "venv"
                 )
             {
-                walk(&p, out);
+                walk(&p, out, images);
             }
-        } else if is_supported(&p) {
+        } else if is_supported_with(&p, images) {
             out.push(p);
         }
     }

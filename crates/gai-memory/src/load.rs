@@ -12,6 +12,8 @@ pub enum Format {
     Markdown,
     Html,
     Pdf,
+    /// A picture of text, read by OCR.
+    Image,
 }
 
 #[derive(Clone, Debug)]
@@ -19,6 +21,8 @@ pub struct Loaded {
     pub title: Option<String>,
     pub text: String,
     pub format: Format,
+    /// What read the text by OCR (`tesseract`, `model:<id>`), when OCR did.
+    pub ocr: Option<String>,
 }
 
 /// Extensions read when ingesting a directory. Anything else is skipped.
@@ -82,6 +86,23 @@ const TEXT_EXTENSIONS: &[&str] = &[
     "dockerfile",
 ];
 
+/// Whether a directory walk should pick this file up; images too when
+/// `images` (OCR is available).
+pub fn is_supported_with(path: &Path, images: bool) -> bool {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    is_supported(path)
+        || (images
+            && crate::ocr::IMAGE_EXTENSIONS.contains(&ext.as_str())
+            && !path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with('.')))
+}
+
 /// Whether a directory walk should pick this file up.
 pub fn is_supported(path: &Path) -> bool {
     let name = path
@@ -114,6 +135,8 @@ pub fn detect(name: &str, content_type: Option<&str>, bytes: &[u8]) -> Format {
         .to_ascii_lowercase();
     if bytes.starts_with(b"%PDF") || ct.contains("pdf") || ext == "pdf" {
         Format::Pdf
+    } else if crate::ocr::image_type(bytes).is_some() {
+        Format::Image
     } else if ct.contains("html") || matches!(ext.as_str(), "html" | "htm" | "xhtml") {
         Format::Html
     } else if ct.contains("markdown") || matches!(ext.as_str(), "md" | "markdown" | "mdx") {
@@ -146,6 +169,11 @@ pub fn load_bytes(
         .map(str::to_owned);
     let (title, text) = match format {
         Format::Pdf => (stem, pdf_text(bytes)?),
+        Format::Image => {
+            return Err(MemoryError::Invalid(format!(
+                "{name} is an image: set [knowledge.ocr] (Tesseract or a vision model) to read it"
+            )));
+        }
         _ => {
             if bytes.iter().take(8000).any(|b| *b == 0) {
                 return Err(MemoryError::Invalid(format!(
@@ -172,6 +200,7 @@ pub fn load_bytes(
         title,
         text,
         format,
+        ocr: None,
     })
 }
 

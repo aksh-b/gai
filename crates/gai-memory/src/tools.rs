@@ -273,14 +273,26 @@ pub fn rag_tool(knowledge: Arc<Knowledge>, collections: Vec<String>) -> SharedTo
                     if targets.is_empty() {
                         return Ok(ToolOutput::text("There are no knowledge collections yet."));
                     }
+                    let n = a.k.unwrap_or(5).min(20);
+                    // Collections with a knowledge graph also answer with
+                    // the passages and connections it knows about.
+                    let mut graph = false;
+                    for c in &targets {
+                        if k.store().graph_stats(c).await.map_err(MemoryError::from)?.nodes > 0 {
+                            graph = true;
+                            break;
+                        }
+                    }
+                    if graph {
+                        let g = k.search_graph(&targets, &a.query, n, access.as_ref()).await?;
+                        return Ok(ToolOutput::text(format!(
+                            "{}{}",
+                            format_hits(&g.hits),
+                            crate::graph::format_facts(&g.facts)
+                        )));
+                    }
                     let hits = k
-                        .search_as(
-                            &targets,
-                            &a.query,
-                            a.k.unwrap_or(5).min(20),
-                            SearchMode::Hybrid,
-                            access.as_ref(),
-                        )
+                        .search_as(&targets, &a.query, n, SearchMode::Hybrid, access.as_ref())
                         .await?;
                     Ok(ToolOutput::text(format_hits(&hits)))
                 }

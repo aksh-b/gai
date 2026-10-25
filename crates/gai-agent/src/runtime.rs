@@ -99,7 +99,11 @@ pub type FinishHook = Arc<dyn Fn(RunOutcome) -> BoxFuture<'static, ()> + Send + 
 
 /// Tools the runtime builds for each run from the agent's `memory`,
 /// `knowledge` and `skills` settings, rather than taking from the registry.
-const AGENT_TOOLS: [&str; 10] = [
+const AGENT_TOOLS: [&str; 14] = [
+    "summarize_document",
+    "compare_documents",
+    "extract_fields",
+    "write_document",
     "image_gen",
     "speak",
     "transcribe",
@@ -769,6 +773,23 @@ impl Runtime {
             extras
                 .tools
                 .extend(self.delegate_tools(&spec.delegates).await?);
+        }
+        let docs: Vec<&str> = crate::documents::DOCUMENT_TOOLS
+            .into_iter()
+            .filter(|t| spec.tools.iter().any(|x| x == t))
+            .collect();
+        if !docs.is_empty() {
+            extras.tools.extend(
+                crate::documents::document_tools(
+                    k.clone(),
+                    self.inner.models.clone(),
+                    self.inner.store.clone(),
+                    spec.model.clone().or_else(|| self.default_model()),
+                    spec.knowledge.clone(),
+                    &docs,
+                )
+                .map_err(AgentError::Invalid)?,
+            );
         }
         let wanted: Vec<&str> = MEDIA_TOOLS
             .into_iter()

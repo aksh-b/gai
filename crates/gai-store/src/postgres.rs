@@ -23,6 +23,8 @@ mod blobs;
 mod directory;
 #[path = "pg_governance.rs"]
 mod governance;
+#[path = "pg_graph.rs"]
+mod graph;
 #[path = "pg_memory.rs"]
 mod memory;
 #[path = "pg_personas.rs"]

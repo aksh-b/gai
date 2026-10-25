@@ -506,6 +506,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/collections/{name}/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read the same fields out of every document (or the ones named) into a table, with the default model or `model`; ?format=csv for a download */
+        post: operations["post_v1_collections__name__extract"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/collections/{name}/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The collection's knowledge graph: its most mentioned entities and the relations among them */
+        get: operations["get_v1_collections__name__graph"];
+        put?: never;
+        /** Read the collection's unread chunks into its graph with a model: 202 in the background, ?wait=true for what was found */
+        post: operations["post_v1_collections__name__graph"];
+        /** Forget the collection's graph (the next build reads everything again) */
+        delete: operations["delete_v1_collections__name__graph"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/collections/{name}/graph/nodes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One entity: its relations and the passages that mention it */
+        get: operations["get_v1_collections__name__graph_nodes__id_"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/collections/{name}/search": {
         parameters: {
             query?: never;
@@ -2539,6 +2592,13 @@ export interface components {
              */
             product_name: string | null;
         };
+        BuildGraph: {
+            /**
+             * @description The model that reads the chunks (default: `[knowledge.graph] model`,
+             *     else the default model).
+             */
+            model?: string | null;
+        };
         /**
          * @description What a model can do. Unknown fields default to what most chat models
          *     support today.
@@ -2987,6 +3047,30 @@ export interface components {
             document: string;
             query: string;
         };
+        Entity: {
+            description?: string | null;
+            /** Format: int64 */
+            id: number;
+            kind: string;
+            /**
+             * Format: uint64
+             * @description Chunks that mention it.
+             */
+            mentions: number;
+            name: string;
+        };
+        EntityRelation: {
+            relation: string;
+            /** Format: int64 */
+            source: number;
+            /** Format: int64 */
+            target: number;
+            /**
+             * Format: uint64
+             * @description Chunks that say so.
+             */
+            weight: number;
+        };
         EnvVar: {
             name: string;
             /** @description What needs it. */
@@ -3289,6 +3373,35 @@ export interface components {
             /** @default [] */
             workflows: string[];
         };
+        ExtractRequest: {
+            /**
+             * @description Only these documents (ids, sources or titles); default: every
+             *     document, up to 500.
+             * @default []
+             */
+            documents: string[];
+            /** @description `{"field": "what it is"}`, or a JSON Schema with `properties`. */
+            fields: unknown;
+            /** @description The model that reads them (default: the default model). */
+            model?: string | null;
+        };
+        Extracted: {
+            /** Format: double */
+            cost_usd: number;
+            rows: components["schemas"]["ExtractedRow"][];
+            /** @description The fields, as a JSON Schema. */
+            schema: unknown;
+        };
+        /** @description One document's extracted fields (`null` where the document doesn't say). */
+        ExtractedRow: {
+            document_id: string;
+            error?: string | null;
+            fields: {
+                [key: string]: unknown;
+            };
+            source: string;
+            title?: string | null;
+        };
         /** @description A person's rating of a reply (one run). */
         Feedback: {
             agent: string;
@@ -3334,6 +3447,22 @@ export interface components {
         };
         /** @enum {string} */
         Formality: "casual" | "neutral" | "formal";
+        /** @description What a build did. */
+        GraphBuild: {
+            /** Format: uint64 */
+            chunks: number;
+            /** Format: double */
+            cost_usd: number;
+            /** Format: uint64 */
+            entities: number;
+            /**
+             * Format: uint64
+             * @description Batches the model answered badly (skipped, marked read).
+             */
+            failed: number;
+            /** Format: uint64 */
+            relations: number;
+        };
         /** @description A node as the graph sees it. */
         GraphNode: {
             /** @description The nodes it waits for. */
@@ -3341,6 +3470,42 @@ export interface components {
             id: string;
             kind: components["schemas"]["NodeKind"];
             map: boolean;
+        };
+        /** @description One entity: its relations, and the passages that mention it. */
+        GraphNodeView: {
+            node: components["schemas"]["Entity"];
+            passages: components["schemas"]["SearchHit"][];
+            relations: components["schemas"]["GraphRelationView"][];
+        };
+        GraphRelationView: {
+            /** @description `out` when this entity is the subject. */
+            direction: string;
+            other: components["schemas"]["Entity"];
+            relation: string;
+            /** Format: uint64 */
+            weight: number;
+        };
+        GraphStats: {
+            /**
+             * Format: uint64
+             * @description Chunks read into the graph, and still to read.
+             */
+            chunks_done: number;
+            /** Format: uint64 */
+            chunks_pending: number;
+            /** Format: uint64 */
+            edges: number;
+            /** Format: uint64 */
+            nodes: number;
+        };
+        /**
+         * @description A collection's graph, for a picture: its most mentioned entities and
+         *     the relations among them.
+         */
+        GraphView: {
+            edges: components["schemas"]["EntityRelation"][];
+            nodes: components["schemas"]["Entity"][];
+            stats: components["schemas"]["GraphStats"];
         };
         /** @description `grounded: true` or `grounded: {model, min}`. */
         Grounded: boolean | {
@@ -4531,7 +4696,7 @@ export interface components {
             /** Format: float */
             vector_score?: number | null;
         };
-        SearchMode: ("vector" | "text") | "hybrid";
+        SearchMode: ("vector" | "text") | "hybrid" | "graph";
         SearchRequest: {
             /**
              * Format: uint
@@ -6503,6 +6668,179 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_collections__name__extract: {
+        parameters: {
+            query?: {
+                /** @description csv for a download */
+                format?: string;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExtractRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Extracted"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_collections__name__graph: {
+        parameters: {
+            query?: {
+                /** @description Entities whose name contains this */
+                q?: string;
+                /** @description Max entities (80) */
+                limit?: string;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_collections__name__graph: {
+        parameters: {
+            query?: {
+                /** @description Answer when done */
+                wait?: string;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BuildGraph"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphBuild"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_collections__name__graph: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_collections__name__graph_nodes__id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphNodeView"];
+                };
             };
             /** @description Error */
             default: {

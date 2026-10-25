@@ -16,6 +16,20 @@ initial development and will ship as 0.1.0.
 
 ### Added
 
+- **Knowledge graphs.** A model reads a collection for entities and the
+  relations between them (`gai collections graph`, the **Graph** tab,
+  `/v1/collections/{name}/graph`); graph search (`mode: graph`, and
+  `rag_search` when a collection has a graph) also finds passages through
+  those connections and lists them. **Table** tab for extraction.
+- **OCR.** Images and scanned PDFs are read when they are added, with
+  Tesseract (in the Docker image; `--build-arg OCR=0` leaves it out) or a
+  vision model (`[knowledge.ocr]`).
+- **Whole-document tools.** `summarize_document`, `compare_documents`,
+  `extract_fields` (a collection's documents into a table and a CSV) and
+  `write_document` (Markdown, Word or PDF files), plus a **Contract
+  reviewer** template that uses them. `POST /v1/collections/{name}/extract`
+  returns the table as JSON or CSV. `mock/fields` fills fields offline from
+  `Name: value` lines.
 - **Organizations.** One server can host several organizations that never
   see each other's data: each gets its own database (a SQLite file, or a
   Postgres schema) and files, and is confined (no `shell`, no private

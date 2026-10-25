@@ -10,13 +10,16 @@ use crate::Result;
 pub struct Folder {
     root: PathBuf,
     recursive: bool,
+    /// Pick up images too (OCR is available).
+    images: bool,
 }
 
 impl Folder {
-    pub fn new(path: &str, recursive: bool) -> Self {
+    pub fn new(path: &str, recursive: bool, images: bool) -> Self {
         Self {
             root: PathBuf::from(path),
             recursive,
+            images,
         }
     }
 }
@@ -24,12 +27,12 @@ impl Folder {
 #[async_trait]
 impl Connector for Folder {
     async fn list(&self) -> Result<Vec<Item>> {
-        let (root, recursive) = (self.root.clone(), self.recursive);
+        let (root, recursive, images) = (self.root.clone(), self.recursive, self.images);
         tokio::task::spawn_blocking(move || {
             if !root.is_dir() {
                 return Err(invalid(format!("{} is not a folder", root.display())));
             }
-            let mut files = crate::knowledge::supported_files(&root);
+            let mut files = crate::knowledge::supported_files(&root, images);
             if !recursive {
                 files.retain(|p| p.parent() == Some(root.as_path()));
             }

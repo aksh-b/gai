@@ -22,6 +22,10 @@ export type AuthConfig = Schemas['AuthConfig'];
 export type AgentStats = Schemas['AgentStats'];
 export type MessageHit = Schemas['MessageHit'];
 export type Change = Schemas['Change'];
+export type Extracted = Schemas['Extracted'];
+export type GraphView = Schemas['GraphView'];
+export type GraphNodeView = Schemas['GraphNodeView'];
+export type GraphBuild = Schemas['GraphBuild'];
 export type AgentSummary = Schemas['AgentSummary'];
 export type PendingApproval = Schemas['PendingApproval'];
 export type McpServerInfo = Schemas['McpServerInfo'];
@@ -433,6 +437,14 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 const get = <T,>(path: string) => request<T>('GET', path);
 
+/** A request whose answer is a file. */
+async function download(method: string, path: string, body?: unknown): Promise<Blob> {
+  const res = await fetch(path, { method, headers: headers(body !== undefined), body: body === undefined ? undefined : JSON.stringify(body) });
+  unauthorized(res);
+  if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`);
+  return res.blob();
+}
+
 function versionPair(from?: number, to?: number) {
   const p = new URLSearchParams();
   if (from !== undefined) p.set('from', String(from));
@@ -572,6 +584,14 @@ export const api = {
   ) => request<Ingested>('POST', `/v1/collections/${encodeURIComponent(name)}/documents`, body),
   deleteDocument: (name: string, id: string) =>
     request<void>('DELETE', `/v1/collections/${encodeURIComponent(name)}/documents/${id}`),
+  extract: (name: string, fields: Record<string, string>) =>
+    request<Extracted>('POST', `/v1/collections/${encodeURIComponent(name)}/extract`, { fields }),
+  extractCsv: (name: string, fields: Record<string, string>) =>
+    download('POST', `/v1/collections/${encodeURIComponent(name)}/extract?format=csv`, { fields }),
+  graph: (name: string, q?: string) =>
+    get<GraphView>(`/v1/collections/${encodeURIComponent(name)}/graph${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+  graphNode: (name: string, id: number) => get<GraphNodeView>(`/v1/collections/${encodeURIComponent(name)}/graph/nodes/${id}`),
+  buildGraph: (name: string) => request<GraphBuild | null>('POST', `/v1/collections/${encodeURIComponent(name)}/graph?wait=true`, {}),
   search: (name: string, query: string, mode: SearchMode, k = 8) =>
     request<SearchHit[]>('POST', `/v1/collections/${encodeURIComponent(name)}/search`, { query, mode, k }),
 

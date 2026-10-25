@@ -8,11 +8,13 @@
 
 mod approval;
 mod context;
+mod documents;
 mod event;
 pub mod hooks;
 mod media;
 mod multi;
 mod persona;
+mod render;
 mod replay;
 mod runtime;
 pub mod safety;

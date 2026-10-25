@@ -919,6 +919,148 @@ pub async fn workflows_are_versioned(s: SharedStore) {
     assert!(s.get_workflow("w", None).await.unwrap().is_none());
 }
 
+pub async fn knowledge_graph(s: SharedStore) {
+    s.create_collection(&coll("kb")).await.unwrap();
+    let doc = |source: &str, texts: &[&str]| {
+        let s = s.clone();
+        let source = source.to_owned();
+        let texts: Vec<String> = texts.iter().map(|t| t.to_string()).collect();
+        async move {
+            s.put_document(
+                NewDocument {
+                    collection: "kb".into(),
+                    source,
+                    title: None,
+                    content_hash: "h".into(),
+                    chars: 10,
+                    metadata: json!({}),
+                },
+                texts
+                    .into_iter()
+                    .map(|t| NewChunk {
+                        text: t,
+                        embedding: None,
+                        metadata: json!({}),
+                    })
+                    .collect(),
+            )
+            .await
+            .unwrap()
+        }
+    };
+    doc(
+        "a.md",
+        &["Acme signed with Globex.", "Ada Lovelace runs Acme."],
+    )
+    .await;
+    let pending = s.graph_pending("kb", 10).await.unwrap();
+    assert_eq!(pending.len(), 2);
+    let (c1, c2) = (pending[0].id, pending[1].id);
+    let ent = |name: &str, kind: &str, chunks: &[i64]| NewEntity {
+        name: name.into(),
+        kind: kind.into(),
+        description: None,
+        chunk_ids: chunks.to_vec(),
+    };
+    let rel = |a: &str, b: &str, r: &str, c: i64| NewRelation {
+        source: a.into(),
+        target: b.into(),
+        relation: r.into(),
+        chunk_id: c,
+    };
+    s.graph_add(
+        "kb",
+        &[c1],
+        &[
+            ent("Acme", "organization", &[c1]),
+            ent("Globex", "organization", &[c1]),
+        ],
+        &[
+            rel("Acme", "Globex", "Signed with", c1),
+            rel("Acme", "acme", "is", c1),
+        ],
+    )
+    .await
+    .unwrap();
+    s.graph_add(
+        "kb",
+        &[c2],
+        &[
+            ent("ada  lovelace", "person", &[c2]),
+            ent("ACME", "other", &[c2]),
+        ],
+        &[
+            rel("Ada Lovelace", "Acme", "runs", c2),
+            rel("Ada Lovelace", "Analytical Engine", "built", c2),
+        ],
+    )
+    .await
+    .unwrap();
+    assert!(s.graph_pending("kb", 10).await.unwrap().is_empty());
+
+    let nodes = s.graph_nodes("kb", "", 50).await.unwrap();
+    let names: Vec<&str> = nodes.iter().map(|n| n.name.as_str()).collect();
+    assert_eq!(nodes.len(), 4, "{names:?}");
+    // Merged by name; the first kind that isn't `other` wins.
+    let acme = nodes.iter().find(|n| n.name == "Acme").unwrap();
+    assert_eq!((acme.kind.as_str(), acme.mentions), ("organization", 2));
+    assert_eq!(nodes[0].id, acme.id, "most mentioned first");
+    assert_eq!(
+        s.graph_nodes("kb", "LOVE", 10).await.unwrap()[0].kind,
+        "person"
+    );
+    let engine = nodes
+        .iter()
+        .find(|n| n.name == "Analytical Engine")
+        .unwrap();
+    assert_eq!(engine.kind, "other");
+
+    let edges = s.graph_edges("kb", &[], 50).await.unwrap();
+    assert_eq!(edges.len(), 3, "self-relations are dropped: {edges:?}");
+    assert!(
+        edges
+            .iter()
+            .any(|e| e.relation == "signed with" && e.source == acme.id)
+    );
+    let around = s.graph_edges("kb", &[engine.id], 50).await.unwrap();
+    assert_eq!(around.len(), 1);
+    let chunks = s.graph_chunks(&[acme.id], 10).await.unwrap();
+    assert_eq!(chunks.len(), 2);
+    assert_eq!(s.graph_chunk_nodes(&[c1]).await.unwrap().len(), 2);
+    assert_eq!(
+        s.graph_nodes_by_id(&[engine.id]).await.unwrap()[0].name,
+        "Analytical Engine"
+    );
+    let stats = s.graph_stats("kb").await.unwrap();
+    assert_eq!(
+        (
+            stats.nodes,
+            stats.edges,
+            stats.chunks_done,
+            stats.chunks_pending
+        ),
+        (4, 3, 2, 0)
+    );
+
+    // Replacing the document drops what was learned from it.
+    doc("a.md", &["Nothing to see."]).await;
+    assert!(s.graph_nodes("kb", "", 50).await.unwrap().is_empty());
+    assert!(s.graph_edges("kb", &[], 50).await.unwrap().is_empty());
+    assert_eq!(s.graph_stats("kb").await.unwrap().chunks_pending, 1);
+    let c3 = s.graph_pending("kb", 10).await.unwrap()[0].id;
+    s.graph_add("kb", &[c3], &[ent("Nothing", "concept", &[c3])], &[])
+        .await
+        .unwrap();
+    s.graph_clear("kb").await.unwrap();
+    assert_eq!(
+        s.graph_stats("kb").await.unwrap(),
+        GraphStats {
+            chunks_pending: 1,
+            ..Default::default()
+        }
+    );
+}
+
 pub async fn agent_stats_per_version(s: SharedStore) {
     let ses = s.create_session(NewSession::default()).await.unwrap();
     let run = |agent: &str, version: u32, status: RunStatus, kind: Option<&str>| {
@@ -1332,6 +1474,12 @@ pub async fn sources_keep_their_sync_state(s: SharedStore) {
 #[macro_export]
 macro_rules! conformance_tests {
     ($make:expr) => {
+        #[tokio::test]
+        async fn knowledge_graph() {
+            if let Some(s) = $make.await {
+                $crate::conformance::knowledge_graph(s).await;
+            }
+        }
         #[tokio::test]
         async fn agent_stats_per_version() {
             if let Some(s) = $make.await {

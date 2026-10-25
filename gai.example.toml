@@ -47,6 +47,16 @@
 # [knowledge]
 # embedding_model = "ollama/nomic-embed-text"
 #
+# Read images and scanned PDFs: Tesseract when installed, else a vision model.
+# [knowledge.ocr]
+# backend = "auto"               # auto | tesseract | model | off
+# model = "openai/gpt-4o-mini"
+#
+# Knowledge graphs (gai collections graph <name>): which model reads the
+# passages. Defaults to default_model.
+# [knowledge.graph]
+# model = "openai/gpt-4o-mini"
+#
 # Search vectors in Qdrant or pgvector instead of scanning the store
 # (then run gai collections reindex <name> once). See docs/knowledge.md.
 # [knowledge.vector_index]

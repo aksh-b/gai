@@ -181,6 +181,46 @@ pub trait KeyStore: Send + Sync {
     async fn has_keys(&self) -> Result<bool>;
 }
 
+/// A knowledge graph per collection, built from its chunks.
+#[async_trait]
+pub trait GraphStore: Send + Sync {
+    /// Chunks of `collection` not read into the graph yet, in order.
+    async fn graph_pending(&self, collection: &str, limit: u32) -> Result<Vec<Chunk>>;
+    /// Add what was found in some chunks and mark `done` as read. Entities
+    /// merge by name (case and spacing aside); relations to names not seen
+    /// yet create those entities.
+    async fn graph_add(
+        &self,
+        collection: &str,
+        done: &[i64],
+        entities: &[NewEntity],
+        relations: &[NewRelation],
+    ) -> Result<()>;
+    /// Entities still mentioned somewhere, most mentioned first; those whose
+    /// name contains `contains` when it isn't empty.
+    async fn graph_nodes(
+        &self,
+        collection: &str,
+        contains: &str,
+        limit: u32,
+    ) -> Result<Vec<GraphNode>>;
+    async fn graph_nodes_by_id(&self, ids: &[i64]) -> Result<Vec<GraphNode>>;
+    /// Relations (touching `nodes`, or all), strongest first.
+    async fn graph_edges(
+        &self,
+        collection: &str,
+        nodes: &[i64],
+        limit: u32,
+    ) -> Result<Vec<GraphEdge>>;
+    /// Chunks mentioning the most of `nodes`: `(chunk id, how many)`.
+    async fn graph_chunks(&self, nodes: &[i64], limit: u32) -> Result<Vec<(i64, u32)>>;
+    /// Entities these chunks mention.
+    async fn graph_chunk_nodes(&self, chunks: &[i64]) -> Result<Vec<i64>>;
+    async fn graph_stats(&self, collection: &str) -> Result<GraphStats>;
+    /// Forget the collection's graph (it is rebuilt from scratch next time).
+    async fn graph_clear(&self, collection: &str) -> Result<()>;
+}
+
 /// Organizations, users, memberships and teams, and which team owns which
 /// resource. Kept in the main database for every organization.
 #[async_trait]
@@ -586,6 +626,7 @@ pub type SharedVectorIndex = Arc<dyn VectorIndex>;
 /// Everything gai stores.
 pub trait Store:
     DirectoryStore
+    + GraphStore
     + AgentStore
     + SessionStore
     + RunStore
@@ -607,6 +648,7 @@ pub trait Store:
 }
 impl<T> Store for T where
     T: DirectoryStore
+        + GraphStore
         + AgentStore
         + SessionStore
         + RunStore

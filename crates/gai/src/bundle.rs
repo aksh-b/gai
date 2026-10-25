@@ -345,7 +345,9 @@ pub async fn export(gai: &Gai, opts: &ExportOptions) -> Result<Vec<u8>, Error> {
             offset += docs.len() as u32;
             for d in docs {
                 let chunks = store.document_chunks(&d.id).await?;
-                let text = redact(&rejoin(chunks.iter().map(|c| c.text.as_str())));
+                let text = redact(&gai_memory::docs::rejoin_chunks(
+                    chunks.iter().map(|c| c.text.as_str()),
+                ));
                 let front = serde_json::json!({"source": d.source, "title": d.title, "metadata": d.metadata});
                 n += 1;
                 files.insert(
@@ -767,28 +769,6 @@ fn vars_in(s: &str) -> Vec<String> {
     out
 }
 
-/// A document's text from its chunks, dropping the text consecutive chunks
-/// share (the chunk overlap).
-fn rejoin<'a>(chunks: impl Iterator<Item = &'a str>) -> String {
-    let mut out = String::new();
-    for c in chunks {
-        if out.is_empty() {
-            out.push_str(c);
-            continue;
-        }
-        let max = c.len().min(out.len()).min(4000);
-        let overlap = (1..=max)
-            .rev()
-            .find(|&k| c.is_char_boundary(k) && out.ends_with(&c[..k]) && k >= 8)
-            .unwrap_or(0);
-        if overlap == 0 {
-            out.push_str("\n\n");
-        }
-        out.push_str(&c[overlap..]);
-    }
-    out
-}
-
 fn split_front(raw: &str) -> (Value, &str) {
     if let Some(rest) = raw.strip_prefix("<!-- gai: ")
         && let Some(end) = rest.find(" -->\n")
@@ -870,10 +850,13 @@ mod tests {
             "brown fox jumps over the lazy dog.",
         ];
         assert_eq!(
-            rejoin(chunks.into_iter()),
+            gai_memory::docs::rejoin_chunks(chunks.into_iter()),
             "The quick brown fox jumps over the lazy dog."
         );
-        assert_eq!(rejoin(["one.", "two."].into_iter()), "one.\n\ntwo.");
+        assert_eq!(
+            gai_memory::docs::rejoin_chunks(["one.", "two."].into_iter()),
+            "one.\n\ntwo."
+        );
     }
 
     #[test]

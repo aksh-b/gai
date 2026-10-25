@@ -7,6 +7,82 @@ bigger setups: an external **vector index**, **reranking**, and **sources**
 that keep a collection in step with a folder, a website, GitHub,
 Confluence or Notion.
 
+## Scanned documents (OCR)
+
+Images (PNG, JPEG, TIFF, WebP and others) and PDFs without a text layer
+are read by OCR when they are added, from uploads, folders, sources and
+`gai ingest` alike:
+
+```toml
+[knowledge.ocr]
+backend = "auto"              # auto (default) | tesseract | model | off
+# model = "openai/gpt-4o-mini" # a vision model: for `model`, and `auto` without Tesseract
+# languages = "eng+deu"        # Tesseract's language packs
+```
+
+`auto` uses [Tesseract](https://github.com/tesseract-ocr/tesseract) when
+it is installed (the Docker image has it), else the vision model when one
+is set, else nothing (images are then skipped in folders and refused on
+upload). Scanned PDFs are rendered page by page with poppler's `pdftoppm`
+when it is installed, else their embedded scans are read directly. The
+document's metadata says what read it (`"ocr": "tesseract"`).
+
+## Whole documents
+
+Agents can work with whole documents, not just search hits. Add these to
+an agent's `tools` (the **Contract reviewer** template has them all):
+
+| Tool | Does |
+| --- | --- |
+| `summarize_document` | summarizes a document of any length (in parts, then together), with an optional focus |
+| `compare_documents` | what two documents share, where they differ (both wordings), and what only one has |
+| `extract_fields` | reads the same fields from every document in a collection into a table, saved as CSV |
+| `write_document` | saves Markdown as a Markdown, Word (`.docx`) or PDF file the user can download |
+
+A document is named by its title, source or id in a collection, or as a
+file in the run's workspace. They use the agent's model, and respect who
+may find what ([acl](users.md#knowledge-only-some-may-find)).
+
+Extraction works over HTTP too:
+
+```bash
+curl -X POST "http://localhost:8484/v1/collections/contracts/extract?format=csv" \
+  -H "content-type: application/json" \
+  -d '{"fields": {"party": "the other party", "end_date": "when it ends", "fee": "the monthly fee"}}'
+```
+
+`fields` is either `{"name": "what it is"}` or a JSON Schema with
+`properties`; leave out `?format=csv` for JSON rows. Fields a document
+doesn't state come back empty. In the dashboard, a collection's **Table**
+tab does the same and downloads the CSV.
+
+## Knowledge graph
+
+A model can read a collection for the people, organizations, places,
+products, events and amounts it mentions, and the relations between them
+("Globex —supplies→ Acme"). Search then also finds passages through those
+connections: asking who leads the company Globex supplies finds the
+passage about Acme's CEO, though it never names Globex.
+
+```bash
+gai collections graph contracts                 # read every passage into the graph
+gai collections search contracts "who runs Acme" --mode graph
+```
+
+(or `POST /v1/collections/{name}/graph?wait=true`, or **Build the graph**
+on the collection's **Graph** tab, which also draws it). Builds read only
+passages they haven't read, so run them again after adding documents, or
+create the collection with `"metadata": {"graph": true}` to have it done
+after every ingest. The model is `[knowledge.graph] model`, else the
+default model; each call reads a few passages.
+
+Agents' `rag_search` uses the graph when a collection has one, and adds the
+connections it found to the results. Re-ingesting a document drops what
+was learned from it; `DELETE /v1/collections/{name}/graph` forgets the
+whole graph. A collection with documents only some may find shows its
+graph to admins only, and searches show others only the connections their
+own passages bear out.
+
 ## Vector indexes
 
 The store stays the source of truth; an index only answers "which chunks

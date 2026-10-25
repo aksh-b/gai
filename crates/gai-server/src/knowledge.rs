@@ -45,6 +45,12 @@ pub fn routes() -> Router<AppState> {
             get(get_document).delete(delete_document),
         )
         .route("/v1/collections/{name}/search", post(search))
+        .route("/v1/collections/{name}/extract", post(extract))
+        .route(
+            "/v1/collections/{name}/graph",
+            get(graph_view).post(graph_build).delete(graph_clear),
+        )
+        .route("/v1/collections/{name}/graph/nodes/{id}", get(graph_node))
         .route("/v1/collections/{name}/reindex", post(reindex))
         .route("/v1/memory/blocks", get(list_blocks).post(create_block))
         .route(
@@ -340,6 +346,7 @@ async fn add_document(
     let status = if ingested.unchanged {
         StatusCode::OK
     } else {
+        gai::memory::graph::build_in_background(s.rt.knowledge().clone(), name.clone());
         StatusCode::CREATED
     };
     Ok((status, Json(ingested)))
@@ -379,6 +386,307 @@ async fn delete_document(
     } else {
         Err(ApiError::not_found(format!("document {id} in {name}")))
     }
+}
+
+/// A collection's graph, for a picture: its most mentioned entities and
+/// the relations among them.
+#[derive(Serialize, JsonSchema)]
+pub struct GraphView {
+    pub stats: gai::store::GraphStats,
+    pub nodes: Vec<gai::store::GraphNode>,
+    pub edges: Vec<gai::store::GraphEdge>,
+}
+
+#[derive(Deserialize)]
+struct GraphQuery {
+    /// Entities whose name contains this.
+    q: Option<String>,
+    limit: Option<u32>,
+}
+
+/// The graph of a collection that has documents some may not find is for
+/// those who may find everything: entity names would give them away.
+async fn graph_allowed(s: &AppState, p: &Principal, name: &str) -> ApiResult<()> {
+    if p.access.is_none() {
+        return Ok(());
+    }
+    let restricted =
+        s.rt.store()
+            .list_documents(name, 100_000, 0)
+            .await?
+            .iter()
+            .any(|d| d.metadata["acl"].as_array().is_some_and(|a| !a.is_empty()));
+    if restricted {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "this collection has documents only some may find, so its graph is for admins",
+        ));
+    }
+    Ok(())
+}
+
+async fn graph_view(
+    Tenant(s): Tenant,
+    Extension(p): Extension<Principal>,
+    Path(name): Path<String>,
+    Query(q): Query<GraphQuery>,
+) -> ApiResult<Json<GraphView>> {
+    s.rt.knowledge().collection(&name).await?;
+    graph_allowed(&s, &p, &name).await?;
+    let store = s.rt.store();
+    let nodes = store
+        .graph_nodes(
+            &name,
+            q.q.as_deref().unwrap_or(""),
+            q.limit.unwrap_or(80).min(500),
+        )
+        .await?;
+    let ids: Vec<i64> = nodes.iter().map(|n| n.id).collect();
+    let set: std::collections::HashSet<i64> = ids.iter().copied().collect();
+    let edges = if ids.is_empty() {
+        Vec::new()
+    } else {
+        store
+            .graph_edges(&name, &ids, 2000)
+            .await?
+            .into_iter()
+            .filter(|e| set.contains(&e.source) && set.contains(&e.target))
+            .collect()
+    };
+    Ok(Json(GraphView {
+        stats: store.graph_stats(&name).await?,
+        nodes,
+        edges,
+    }))
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct BuildGraph {
+    /// The model that reads the chunks (default: `[knowledge.graph] model`,
+    /// else the default model).
+    pub model: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct WaitQuery {
+    #[serde(default)]
+    wait: bool,
+}
+
+/// Read the collection's unread chunks into its graph: in the background
+/// (202), or with `?wait=true` (200 and what was found).
+async fn graph_build(
+    Tenant(s): Tenant,
+    Extension(p): Extension<Principal>,
+    Path(name): Path<String>,
+    Query(w): Query<WaitQuery>,
+    body: Option<Json<BuildGraph>>,
+) -> ApiResult<(StatusCode, Json<Option<gai::memory::graph::GraphBuild>>)> {
+    p.check_budget()?;
+    let k = s.rt.knowledge().clone();
+    k.collection(&name).await?;
+    let model = body
+        .and_then(|b| b.0.model)
+        .or_else(|| k.settings().graph.model.clone())
+        .or_else(|| s.rt.default_model())
+        .ok_or_else(|| ApiError::bad_request("no model: pass one, or set a default model"))?;
+    if w.wait {
+        let b = k.build_graph(&name, &model).await?;
+        crate::auth::charge(s.orgs.control(), p.key_id(), b.cost_usd).await;
+        return Ok((StatusCode::OK, Json(Some(b))));
+    }
+    let (control, key) = (s.orgs.control().clone(), p.key_id().map(str::to_owned));
+    tokio::spawn(async move {
+        match k.build_graph(&name, &model).await {
+            Ok(b) => crate::auth::charge(&control, key.as_deref(), b.cost_usd).await,
+            Err(e) => {
+                tracing::warn!(collection = name, error = %e, "could not build the knowledge graph")
+            }
+        }
+    });
+    Ok((StatusCode::ACCEPTED, Json(None)))
+}
+
+async fn graph_clear(Tenant(s): Tenant, Path(name): Path<String>) -> ApiResult<StatusCode> {
+    s.rt.knowledge().collection(&name).await?;
+    s.rt.store().graph_clear(&name).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// One entity: its relations, and the passages that mention it.
+#[derive(Serialize, JsonSchema)]
+pub struct GraphNodeView {
+    pub node: gai::store::GraphNode,
+    pub relations: Vec<GraphRelationView>,
+    pub passages: Vec<SearchHit>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct GraphRelationView {
+    pub relation: String,
+    /// `out` when this entity is the subject.
+    pub direction: String,
+    pub other: gai::store::GraphNode,
+    pub weight: u64,
+}
+
+async fn graph_node(
+    Tenant(s): Tenant,
+    Extension(p): Extension<Principal>,
+    Path((name, id)): Path<(String, i64)>,
+) -> ApiResult<Json<GraphNodeView>> {
+    s.rt.knowledge().collection(&name).await?;
+    graph_allowed(&s, &p, &name).await?;
+    let store = s.rt.store();
+    let node = store
+        .graph_nodes_by_id(&[id])
+        .await?
+        .into_iter()
+        .next()
+        .ok_or_else(|| ApiError::not_found(format!("entity {id}")))?;
+    let edges = store.graph_edges(&name, &[id], 200).await?;
+    let others: Vec<i64> = edges
+        .iter()
+        .map(|e| if e.source == id { e.target } else { e.source })
+        .collect();
+    let others = store.graph_nodes_by_id(&others).await?;
+    let relations = edges
+        .iter()
+        .filter_map(|e| {
+            let (direction, other) = if e.source == id {
+                ("out", e.target)
+            } else {
+                ("in", e.source)
+            };
+            Some(GraphRelationView {
+                relation: e.relation.clone(),
+                direction: direction.into(),
+                other: others.iter().find(|n| n.id == other)?.clone(),
+                weight: e.weight,
+            })
+        })
+        .collect();
+    let chunks = store.graph_chunks(&[id], 10).await?;
+    let passages = store
+        .chunk_hits(chunks.iter().map(|(c, n)| (*c, *n as f32)).collect())
+        .await?
+        .into_iter()
+        .map(|h| SearchHit {
+            heading: h.chunk.metadata["heading"].as_str().map(str::to_owned),
+            collection: h.chunk.collection,
+            document_id: h.chunk.document_id,
+            chunk_id: h.chunk.id,
+            seq: h.chunk.seq,
+            source: h.source,
+            title: h.title,
+            text: h.chunk.text,
+            score: h.score,
+            vector_score: None,
+            text_score: None,
+            rerank_score: None,
+        })
+        .collect();
+    Ok(Json(GraphNodeView {
+        node,
+        relations,
+        passages,
+    }))
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct ExtractRequest {
+    /// `{"field": "what it is"}`, or a JSON Schema with `properties`.
+    pub fields: Value,
+    /// Only these documents (ids, sources or titles); default: every
+    /// document, up to 500.
+    #[serde(default)]
+    pub documents: Vec<String>,
+    /// The model that reads them (default: the default model).
+    pub model: Option<String>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct Extracted {
+    /// The fields, as a JSON Schema.
+    pub schema: Value,
+    pub rows: Vec<gai::memory::docs::ExtractedRow>,
+    pub cost_usd: f64,
+}
+
+#[derive(Deserialize)]
+struct ExtractQuery {
+    /// `csv` for a download.
+    format: Option<String>,
+}
+
+/// Read the same fields out of a collection's documents into a table.
+async fn extract(
+    Tenant(s): Tenant,
+    Extension(p): Extension<Principal>,
+    Path(name): Path<String>,
+    Query(q): Query<ExtractQuery>,
+    Json(b): Json<ExtractRequest>,
+) -> ApiResult<axum::response::Response> {
+    use axum::response::IntoResponse;
+    p.check_budget()?;
+    let k = s.rt.knowledge();
+    k.collection(&name).await?;
+    let schema = gai::memory::docs::fields_schema(&b.fields)?;
+    let model = b
+        .model
+        .or_else(|| s.rt.default_model())
+        .ok_or_else(|| ApiError::bad_request("no model: pass one, or set a default model"))?;
+    let docs = if b.documents.is_empty() {
+        s.rt.store().list_documents(&name, 500, 0).await?
+    } else {
+        let mut v = Vec::new();
+        for d in &b.documents {
+            v.push(k.find_document(&name, d).await?);
+        }
+        v
+    };
+    let mut spent = gai::memory::docs::Spent::default();
+    let rows = gai::memory::docs::extract(
+        k,
+        s.gai.models(),
+        &model,
+        docs,
+        &schema,
+        p.access.as_ref(),
+        &mut spent,
+    )
+    .await;
+    if let Err(e) =
+        s.rt.store()
+            .record_usage(None, &model, &spent.usage, Some(spent.cost))
+            .await
+    {
+        tracing::warn!(error = %e, "could not record extraction usage");
+    }
+    crate::auth::charge(s.orgs.control(), p.key_id(), spent.cost).await;
+    if q.format.as_deref() == Some("csv") {
+        let csv = gai::memory::docs::rows_csv(&rows, &schema);
+        return Ok((
+            [
+                (
+                    axum::http::header::CONTENT_TYPE,
+                    "text/csv; charset=utf-8".to_owned(),
+                ),
+                (
+                    axum::http::header::CONTENT_DISPOSITION,
+                    format!("attachment; filename=\"{name}-fields.csv\""),
+                ),
+            ],
+            csv,
+        )
+            .into_response());
+    }
+    Ok(Json(Extracted {
+        schema,
+        rows,
+        cost_usd: spent.cost,
+    })
+    .into_response())
 }
 
 async fn search(

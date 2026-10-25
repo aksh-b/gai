@@ -66,7 +66,13 @@ permissions read from the source systems.
 
 Done when two organizations share one server without seeing each other's data.
 
-## 17. Documents and knowledge plus
+## 17. Documents and knowledge plus — done (2026-10-26)
+
+Built: OCR (Tesseract or a vision model), summarize/compare/extract/write
+document tools and a contract-reviewer template, extraction to a table
+(API, tool, dashboard), and knowledge graphs with graph search and a
+graph view. Not built: merging near-duplicate entities, and questions
+answered from the graph alone (counts, paths).
 
 - **OCR** [37]: scanned PDFs and images on ingest, through a local engine (Tesseract) or a vision model.
 - **Document tools** [12, 13, 19]: `summarize_document`, `compare_documents` and `write_document` (Markdown, DOCX and PDF output saved as files), plus templates that use them.

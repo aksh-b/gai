@@ -13,8 +13,11 @@
 
 pub mod blocks;
 pub mod chunk;
+pub mod docs;
+pub mod graph;
 pub mod knowledge;
 pub mod load;
+pub mod ocr;
 pub mod qdrant;
 pub mod rerank;
 pub mod sources;
@@ -55,7 +58,15 @@ mod tests {
     async fn knowledge() -> Arc<Knowledge> {
         let store: SharedStore = Arc::new(SqliteStore::temporary().await.unwrap());
         let models = Arc::new(ModelRegistry::from_config(Default::default()).unwrap());
-        Arc::new(Knowledge::new(store, models, KnowledgeSettings::default()))
+        // Whether Tesseract happens to be installed mustn't change these tests.
+        let settings = KnowledgeSettings {
+            ocr: crate::ocr::OcrSettings {
+                backend: crate::ocr::OcrBackend::Off,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        Arc::new(Knowledge::new(store, models, settings))
     }
 
     fn doc(source: &str, text: &str) -> DocumentInput {

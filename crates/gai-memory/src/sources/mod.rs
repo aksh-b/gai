@@ -208,7 +208,11 @@ impl Sources {
         Ok(match &spec.kind {
             SourceKind::Folder { path, recursive } => {
                 let path = self.folder_path(path)?;
-                Box::new(folder::Folder::new(&path.to_string_lossy(), *recursive))
+                Box::new(folder::Folder::new(
+                    &path.to_string_lossy(),
+                    *recursive,
+                    self.knowledge.ocr_available(),
+                ))
             }
             SourceKind::Web {
                 urls,
@@ -406,6 +410,9 @@ impl Sources {
             .save_source_sync(name, "syncing", None, &record.stats, None)
             .await?;
         let result = self.run(&spec, &record).await;
+        if result.is_ok() {
+            crate::graph::build_in_background(self.knowledge.clone(), spec.collection.clone());
+        }
         match result {
             Ok((stats, state)) => {
                 let value = serde_json::to_value(&stats).expect("stats");

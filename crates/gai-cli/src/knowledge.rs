@@ -79,6 +79,8 @@ pub enum Mode {
     Hybrid,
     Vector,
     Text,
+    /// Hybrid plus the collection's knowledge graph
+    Graph,
 }
 
 #[derive(Subcommand)]
@@ -116,6 +118,16 @@ pub enum CollectionsCmd {
     /// Copy a collection's vectors into the configured vector index
     /// (Qdrant or pgvector), e.g. after switching to it
     Reindex { name: String },
+    /// Build (or update) a collection's knowledge graph with a model
+    Graph {
+        name: String,
+        /// The model that reads the chunks (default: [knowledge.graph] model, else the default model)
+        #[arg(long)]
+        model: Option<String>,
+        /// Forget the graph first and read everything again
+        #[arg(long)]
+        rebuild: bool,
+    },
 }
 
 pub async fn collections(gai: &Gai, cmd: CollectionsCmd) -> anyhow::Result<()> {
@@ -186,6 +198,7 @@ pub async fn collections(gai: &Gai, cmd: CollectionsCmd) -> anyhow::Result<()> {
                 Mode::Hybrid => SearchMode::Hybrid,
                 Mode::Vector => SearchMode::Vector,
                 Mode::Text => SearchMode::Text,
+                Mode::Graph => SearchMode::Graph,
             };
             let hits = rt.knowledge().search(&[name], &query, k, mode).await?;
             for (i, h) in hits.iter().enumerate() {
@@ -204,6 +217,39 @@ pub async fn collections(gai: &Gai, cmd: CollectionsCmd) -> anyhow::Result<()> {
             if hits.is_empty() {
                 eprintln!("{}", dim("No results."));
             }
+        }
+        CollectionsCmd::Graph {
+            name,
+            model,
+            rebuild,
+        } => {
+            let k = rt.knowledge();
+            k.collection(&name).await?;
+            let model = model
+                .or_else(|| k.settings().graph.model.clone())
+                .ok_or_else(|| anyhow::anyhow!("no model: pass --model, or set a default model"))?;
+            if rebuild {
+                store.graph_clear(&name).await?;
+            }
+            let pending = store.graph_stats(&name).await?.chunks_pending;
+            eprintln!(
+                "{}",
+                dim(&format!("reading {pending} chunks with {model}…"))
+            );
+            let b = k.build_graph(&name, &model).await?;
+            let st = store.graph_stats(&name).await?;
+            println!(
+                "{} {} chunks: {} entities, {} relations in the graph{}",
+                green("read"),
+                b.chunks,
+                st.nodes,
+                st.edges,
+                if b.failed > 0 {
+                    format!(" ({} batches failed)", b.failed)
+                } else {
+                    String::new()
+                }
+            );
         }
         CollectionsCmd::Reindex { name } => {
             let k = gai.runtime().await?.knowledge().clone();

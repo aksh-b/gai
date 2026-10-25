@@ -406,7 +406,14 @@ impl Gai {
                     default_model: self.default_model(),
                     data_dir: self.config.data_dir(),
                     tools: self.config.tools.clone(),
-                    knowledge: self.config.knowledge.clone(),
+                    knowledge: {
+                        let mut k = self.config.knowledge.clone();
+                        // Graphs are read with the default model unless one is set.
+                        if k.graph.model.is_none() {
+                            k.graph.model = self.default_model();
+                        }
+                        k
+                    },
                     skills_dirs: self.config.skills_dirs(),
                     agents_dirs: self.config.agents_dirs(),
                     record_requests: self.config.record_requests.unwrap_or(true),

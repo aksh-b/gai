@@ -44,6 +44,56 @@ pub struct Session {
     pub updated_at: DateTime<Utc>,
 }
 
+/// An entity a model found in chunks, with the chunks that mention it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct NewEntity {
+    pub name: String,
+    /// `person`, `organization`, `place`, `product`, `event`, `concept`,
+    /// `date`, `amount` or `other`.
+    pub kind: String,
+    pub description: Option<String>,
+    pub chunk_ids: Vec<i64>,
+}
+
+/// `source` —relation→ `target`, as one chunk says.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct NewRelation {
+    pub source: String,
+    pub target: String,
+    pub relation: String,
+    pub chunk_id: i64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[schemars(rename = "Entity")]
+pub struct GraphNode {
+    pub id: i64,
+    pub name: String,
+    pub kind: String,
+    pub description: Option<String>,
+    /// Chunks that mention it.
+    pub mentions: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[schemars(rename = "EntityRelation")]
+pub struct GraphEdge {
+    pub source: i64,
+    pub target: i64,
+    pub relation: String,
+    /// Chunks that say so.
+    pub weight: u64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct GraphStats {
+    pub nodes: u64,
+    pub edges: u64,
+    /// Chunks read into the graph, and still to read.
+    pub chunks_done: u64,
+    pub chunks_pending: u64,
+}
+
 /// Which runs [`RunStore::agent_stats`] counts.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct StatsFilter {

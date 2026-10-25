@@ -4,8 +4,9 @@
 #   docker run -p 127.0.0.1:8484:8484 -v gai-data:/data gai serve --local
 #
 # Build with `--build-arg BROWSER=1` to include Chromium for the browser
-# tools (about 300 MB more). See README.md for keys, models and the code
-# sandbox.
+# tools (about 300 MB more). Tesseract and poppler, for reading scanned
+# documents, are included; leave them out with `--build-arg OCR=0`. See
+# README.md for keys, models and the code sandbox.
 
 # ---- dashboard ----
 FROM docker.io/library/node:22-bookworm-slim AS web
@@ -28,10 +29,14 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 # ---- runtime ----
 FROM docker.io/library/debian:bookworm-slim
 ARG BROWSER=0
+ARG OCR=1
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates tini \
  && if [ "$BROWSER" != "0" ]; then \
       apt-get install -y --no-install-recommends chromium fonts-dejavu-core; \
+    fi \
+ && if [ "$OCR" != "0" ]; then \
+      apt-get install -y --no-install-recommends tesseract-ocr poppler-utils; \
     fi \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --system --uid 10001 --home-dir /data --create-home gai

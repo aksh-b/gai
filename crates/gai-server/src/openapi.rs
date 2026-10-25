@@ -236,6 +236,20 @@ pub fn document() -> Value {
             "Receive a webhook (no API key: sign the body with the trigger's secret, X-Gai-Signature: sha256=<hex>, or send X-Gai-Token)",
         )
         .ok(s::<gai::triggers::Fired>(&mut g)),
+        op("post", "/v1/collections/{name}/extract", "knowledge", "Read the same fields out of every document (or the ones named) into a table, with the default model or `model`; ?format=csv for a download")
+            .body(s::<ExtractRequest>(&mut g))
+            .ok(s::<Extracted>(&mut g))
+            .query(&[("format", "csv for a download")]),
+        op("get", "/v1/collections/{name}/graph", "knowledge", "The collection's knowledge graph: its most mentioned entities and the relations among them")
+            .ok(s::<GraphView>(&mut g))
+            .query(&[("q", "Entities whose name contains this"), ("limit", "Max entities (80)")]),
+        op("post", "/v1/collections/{name}/graph", "knowledge", "Read the collection's unread chunks into its graph with a model: 202 in the background, ?wait=true for what was found")
+            .body(s::<BuildGraph>(&mut g))
+            .ok(s::<gai::memory::graph::GraphBuild>(&mut g))
+            .query(&[("wait", "Answer when done")]),
+        op("delete", "/v1/collections/{name}/graph", "knowledge", "Forget the collection's graph (the next build reads everything again)"),
+        op("get", "/v1/collections/{name}/graph/nodes/{id}", "knowledge", "One entity: its relations and the passages that mention it")
+            .ok(s::<GraphNodeView>(&mut g)),
         op("get", "/v1/sessions/search", "sessions", "Find messages across conversations, best first, with the words marked [like this]")
             .ok(list::<gai::store::MessageHit>(&mut g))
             .query(&[("q", "Words to find"), ("agent", "One agent"), ("user", "One user id"), ("since", "RFC 3339 time"), ("until", "RFC 3339 time"), ("limit", "Max hits")]),

@@ -65,8 +65,13 @@ impl Provider for MockProvider {
                 script: Script::Judge,
                 requests: Default::default(),
             })),
+            "fields" => Ok(Arc::new(MockModel {
+                info,
+                script: Script::Fields,
+                requests: Default::default(),
+            })),
             other => Err(LlmError::NotFound(format!(
-                "mock model {other:?}; available: echo, judge"
+                "mock model {other:?}; available: echo, judge, fields"
             ))),
         }
     }
@@ -276,6 +281,7 @@ fn svg_card(prompt: &str, variant: u32, w: u32, h: u32) -> String {
 enum Script {
     Echo,
     Judge,
+    Fields,
     Fixed(Mutex<VecDeque<Result<ChatResponse, LlmError>>>),
 }
 
@@ -321,6 +327,7 @@ impl MockModel {
         match &self.script {
             Script::Echo => Ok(echo(req)),
             Script::Judge => Ok(text_response(&judge(req))),
+            Script::Fields => Ok(text_response(&fields(req))),
             Script::Fixed(q) => {
                 q.lock().expect("mock lock").pop_front().unwrap_or_else(|| {
                     Err(LlmError::InvalidRequest("mock script exhausted".into()))
@@ -358,6 +365,47 @@ fn section<'a>(prompt: &'a str, label: &str) -> &'a str {
 }
 
 /// `mock/judge`: a JSON grade from word overlap.
+/// `mock/fields`: fills the JSON Schema in the prompt from the document's
+/// `Name: value` lines (a field's name, or its name with spaces, before the
+/// colon), and null where none matches. Deterministic, for offline tests.
+fn fields(req: &ChatRequest) -> String {
+    let prompt = req
+        .messages
+        .iter()
+        .map(|m| m.text())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let schema = section(&prompt, "Schema:\n");
+    let schema: Value =
+        serde_json::from_str(schema.split("\n\nDocument").next().unwrap_or_default())
+            .unwrap_or(Value::Null);
+    let doc = prompt
+        .split_once("\nDocument")
+        .map(|(_, d)| d)
+        .unwrap_or_default();
+    let mut out = serde_json::Map::new();
+    for name in schema["properties"]
+        .as_object()
+        .into_iter()
+        .flat_map(|p| p.keys())
+    {
+        let wanted = name.replace('_', " ").to_lowercase();
+        let value = doc.lines().find_map(|l| {
+            let (k, v) = l.split_once(':')?;
+            let k = k
+                .trim()
+                .trim_start_matches(['-', '*', '#', ' '])
+                .to_lowercase();
+            (k == wanted || k == name.to_lowercase()).then(|| v.trim().to_owned())
+        });
+        out.insert(
+            name.clone(),
+            value.map(Value::String).unwrap_or(Value::Null),
+        );
+    }
+    Value::Object(out).to_string()
+}
+
 fn judge(req: &ChatRequest) -> String {
     let prompt = req
         .messages
