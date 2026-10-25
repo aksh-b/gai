@@ -103,9 +103,13 @@ initial development and will ship as 0.1.0.
 - **Docker image.** `docker build -t gai .` makes a single-binary image
   (Debian slim, dashboard included, data in `/data`); add
   `--build-arg BROWSER=1` for the browser tools.
-- **Postgres (groundwork).** The `postgres` feature of `gai-store` adds
-  `PostgresStore` for agents, settings and MCP servers, checked by the same
-  conformance tests as SQLite. gai itself still runs on SQLite.
+- **Postgres.** Set `database = "postgres://user:pass@host/db"` in gai.toml
+  (or `GAI_DATABASE`) to keep everything in Postgres instead of SQLite:
+  conversations, runs, knowledge (full-text search with tsvector), memory,
+  evals, the audit log and the rest. Both backends pass the same
+  conformance suite (`scripts/postgres-test.sh`). **Breaking** for anyone
+  who tried the earlier groundwork: the Postgres schema was redone; drop
+  that test database.
 - **SDK examples:** `cargo run -p gai --example quickstart`, `custom_tool`
   and `client`.
 - **The dashboard is built into the `gai` binary.** `gai serve` shows it

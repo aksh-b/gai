@@ -4,7 +4,7 @@ A self-hostable agentic AI platform in Rust. You define agents in YAML or in Rus
 
 Website: https://aksh-b.github.io/gai
 
-> Status: early and moving fast (v0.1, unreleased). Phases 1–14 are built (see [ROADMAP.md](ROADMAP.md) for what's next); Postgres support is groundwork only. See [STATUS.md](STATUS.md) for details and known gaps, and [CHANGELOG.md](CHANGELOG.md) for what is coming.
+> Status: early and moving fast (v0.1, unreleased). Phases 1–14 are built, and phase 15 is under way (see [ROADMAP.md](ROADMAP.md)). See [STATUS.md](STATUS.md) for details and known gaps, and [CHANGELOG.md](CHANGELOG.md) for what is coming.
 
 ## Features
 

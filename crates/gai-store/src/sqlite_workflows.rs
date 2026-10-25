@@ -161,35 +161,3 @@ impl WorkflowStore for SqliteStore {
         Ok(r.rows_affected() > 0)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use serde_json::json;
-
-    use super::*;
-
-    #[tokio::test]
-    async fn workflows_are_versioned() {
-        let s = SqliteStore::temporary().await.unwrap();
-        let a = json!({"name": "w", "description": "first", "nodes": []});
-        assert_eq!(s.put_workflow("w", &a, None).await.unwrap(), 1);
-        assert_eq!(s.put_workflow("w", &a, None).await.unwrap(), 1);
-        let b = json!({"name": "w", "description": "second", "nodes": []});
-        assert_eq!(s.put_workflow("w", &b, Some("edit")).await.unwrap(), 2);
-        let list = s.list_workflows().await.unwrap();
-        assert_eq!(
-            (list[0].latest_version, list[0].description.as_deref()),
-            (2, Some("second"))
-        );
-        assert_eq!(s.get_workflow("w", Some(1)).await.unwrap().unwrap().spec, a);
-        assert_eq!(s.get_workflow("w", None).await.unwrap().unwrap().version, 2);
-        assert_eq!(s.list_workflow_versions("w").await.unwrap().len(), 2);
-        s.set_workflow_label("w", "prod", Some(1)).await.unwrap();
-        assert!(s.set_workflow_label("w", "prod", Some(9)).await.is_err());
-        assert_eq!(s.list_workflows().await.unwrap()[0].labels["prod"], 1);
-        s.set_workflow_label("w", "prod", None).await.unwrap();
-        assert!(s.list_workflows().await.unwrap()[0].labels.is_empty());
-        assert!(s.delete_workflow("w").await.unwrap());
-        assert!(s.get_workflow("w", None).await.unwrap().is_none());
-    }
-}

@@ -6,12 +6,14 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-default = ["sandbox", "browser"]
+default = ["sandbox", "browser", "postgres"]
 # The container backend of the code sandbox (Docker/Podman via bollard).
 sandbox = ["gai-sandbox/container"]
 # The browser tools (headless Chrome via chromiumoxide). They are offered
 # only when a Chrome or Chromium is installed.
 browser = ["gai-browser/chrome"]
+# Postgres as the database (`database = "postgres://…"`).
+postgres = ["gai-store/postgres"]
 
 [dependencies]
 async-trait.workspace = true

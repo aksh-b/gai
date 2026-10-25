@@ -29,7 +29,8 @@ pub struct Config {
     /// Where databases, workspaces and artifacts live. Defaults to the
     /// platform data directory (`~/.local/share/gai` on Linux).
     pub data_dir: Option<PathBuf>,
-    /// SQLite database file. Defaults to `<data_dir>/gai.db`.
+    /// The database: a SQLite file (default `<data_dir>/gai.db`), or a
+    /// Postgres URL (`postgres://user:pass@host/db`).
     pub database: Option<PathBuf>,
     /// Directories searched for agent files (`<name>.yaml|.yml|.toml|.json`).
     pub agents_dirs: Vec<PathBuf>,
@@ -306,6 +307,12 @@ impl Config {
             .clone()
             .or_else(|| dirs::data_dir().map(|d| d.join("gai")))
             .unwrap_or_else(|| PathBuf::from(".gai"))
+    }
+
+    /// The Postgres URL, when `database` is one.
+    pub fn postgres_url(&self) -> Option<String> {
+        let d = self.database.as_ref()?.to_str()?;
+        (d.starts_with("postgres://") || d.starts_with("postgresql://")).then(|| d.to_owned())
     }
 
     pub fn database(&self) -> PathBuf {

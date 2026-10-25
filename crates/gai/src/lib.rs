@@ -320,7 +320,17 @@ impl Gai {
             .get_or_try_init(|| async {
                 let store: SharedStore = match &self.store_override {
                     Some(s) => s.clone(),
-                    None => Arc::new(SqliteStore::open(self.config.database()).await?),
+                    None => match self.config.postgres_url() {
+                        #[cfg(feature = "postgres")]
+                        Some(url) => Arc::new(gai_store::PostgresStore::connect(&url).await?),
+                        #[cfg(not(feature = "postgres"))]
+                        Some(_) => {
+                            return Err(Error::Invalid(
+                                "database is a Postgres URL, but this gai was built without the postgres feature".into(),
+                            ));
+                        }
+                        None => Arc::new(SqliteStore::open(self.config.database()).await?),
+                    },
                 };
                 let config = RuntimeConfig {
                     default_model: self.default_model(),

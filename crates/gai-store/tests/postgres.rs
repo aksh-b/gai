@@ -1,28 +1,25 @@
-//! The Postgres store against a real server, when `GAI_TEST_POSTGRES_URL`
-//! is set (e.g. `postgres://postgres:gai@localhost:5432/postgres`). Each
-//! test works in a schema of its own, dropped afterwards.
+//! The conformance suite on Postgres, when `GAI_TEST_POSTGRES_URL` is set
+//! (`scripts/postgres-test.sh` starts one). Each test gets a schema of its
+//! own.
 //!
 //!     GAI_TEST_POSTGRES_URL=... cargo test -p gai-store --features postgres --test postgres
 
 #![cfg(feature = "postgres")]
 
 use std::str::FromStr;
+use std::sync::Arc;
 
-use gai_store::PostgresStore;
-use gai_store::conformance;
+use gai_store::{PostgresStore, SharedStore};
 use sqlx::postgres::PgConnectOptions;
 
-/// A store in a fresh schema, and that schema's name.
-async fn store() -> Option<(PostgresStore, String, sqlx::PgPool)> {
+/// A store in a fresh schema, or `None` without a test database.
+async fn store() -> Option<SharedStore> {
     let Ok(url) = std::env::var("GAI_TEST_POSTGRES_URL") else {
         eprintln!("skipped: set GAI_TEST_POSTGRES_URL to run the Postgres tests");
         return None;
     };
     let admin = sqlx::PgPool::connect(&url).await.unwrap();
-    let schema = format!(
-        "gai_test_{}",
-        gai_core::new_id("s").to_lowercase().replace('-', "_")
-    );
+    let schema = gai_core::new_id("t").replace('-', "_");
     sqlx::query(&format!("CREATE SCHEMA {schema}"))
         .execute(&admin)
         .await
@@ -30,49 +27,27 @@ async fn store() -> Option<(PostgresStore, String, sqlx::PgPool)> {
     let opts = PgConnectOptions::from_str(&url)
         .unwrap()
         .options([("search_path", schema.as_str())]);
-    Some((
-        PostgresStore::connect_with(opts).await.unwrap(),
-        schema,
-        admin,
-    ))
+    Some(Arc::new(PostgresStore::connect_with(opts).await.unwrap()) as SharedStore)
 }
 
-async fn drop_schema(schema: &str, admin: &sqlx::PgPool) {
-    sqlx::query(&format!("DROP SCHEMA {schema} CASCADE"))
-        .execute(admin)
+gai_store::conformance_tests!(store());
+
+#[tokio::test]
+async fn migrations_run_twice() {
+    let Ok(url) = std::env::var("GAI_TEST_POSTGRES_URL") else {
+        return;
+    };
+    let admin = sqlx::PgPool::connect(&url).await.unwrap();
+    let schema = gai_core::new_id("t");
+    sqlx::query(&format!("CREATE SCHEMA {schema}"))
+        .execute(&admin)
         .await
         .unwrap();
-}
-
-#[tokio::test]
-async fn agents_conform() {
-    let Some((s, schema, admin)) = store().await else {
-        return;
+    let opts = || {
+        PgConnectOptions::from_str(&url)
+            .unwrap()
+            .options([("search_path", schema.as_str())])
     };
-    conformance::agents(&s).await;
-    drop_schema(&schema, &admin).await;
-}
-
-#[tokio::test]
-async fn settings_conform() {
-    let Some((s, schema, admin)) = store().await else {
-        return;
-    };
-    conformance::settings(&s).await;
-    drop_schema(&schema, &admin).await;
-}
-
-#[tokio::test]
-async fn mcp_conforms() {
-    let Some((s, schema, admin)) = store().await else {
-        return;
-    };
-    conformance::mcp(&s).await;
-    // Migrations are idempotent: connecting again is fine.
-    let url = std::env::var("GAI_TEST_POSTGRES_URL").unwrap();
-    let opts = PgConnectOptions::from_str(&url)
-        .unwrap()
-        .options([("search_path", schema.as_str())]);
-    PostgresStore::connect_with(opts).await.unwrap();
-    drop_schema(&schema, &admin).await;
+    PostgresStore::connect_with(opts()).await.unwrap();
+    PostgresStore::connect_with(opts()).await.unwrap();
 }
