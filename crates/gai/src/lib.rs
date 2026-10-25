@@ -487,6 +487,14 @@ impl Gai {
         Ok(gai_eval::Evaluator::new(self.runtime().await?.clone()))
     }
 
+    /// Sources synced into knowledge collections (folders, websites,
+    /// GitHub, Confluence, Notion).
+    pub async fn sources(&self) -> Result<gai_memory::sources::Sources, Error> {
+        Ok(gai_memory::sources::Sources::new(
+            self.runtime().await?.knowledge().clone(),
+        ))
+    }
+
     /// Apply retention: delete conversations older than each agent's
     /// `retention_days` (from `[safety]`, overridden by the agent's own
     /// `safety:`). Returns what was deleted, per agent.

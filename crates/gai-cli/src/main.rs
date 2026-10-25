@@ -8,6 +8,7 @@ mod manage;
 mod media;
 mod replay;
 mod run;
+mod sources;
 mod style;
 mod triggers;
 mod workflow;
@@ -94,6 +95,9 @@ enum Command {
     /// Manage and search knowledge collections
     #[command(subcommand)]
     Collections(knowledge::CollectionsCmd),
+    /// Folders, websites, GitHub, Confluence and Notion synced into collections
+    #[command(subcommand)]
+    Sources(sources::SourcesCmd),
     /// Inspect and edit agents' memory blocks
     #[command(subcommand)]
     Memory(knowledge::MemoryCmd),
@@ -218,6 +222,7 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
         Command::Triggers(cmd) => triggers::triggers(&gai, cmd).await,
         Command::Bundle(cmd) => bundle::bundle(&gai, cmd).await,
         Command::Eval(cmd) => eval::eval(&gai, cmd).await,
+        Command::Sources(cmd) => sources::run(&gai, cmd).await,
         Command::Audit(args) => governance::audit(&gai, args).await,
         Command::Retention(cmd) => governance::retention(&gai, cmd).await,
         Command::ForgetUser { user } => governance::forget_user(&gai, &user).await,

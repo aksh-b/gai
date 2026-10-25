@@ -175,6 +175,7 @@ Run `gai <command> --help` for details.
 - [Tools](docs/tools.md): built-ins, the code sandbox, the browser, MCP and custom tools
 - [Rust SDK](docs/sdk.md): the builder, agent handles, `#[gai::tool]` and the HTTP client
 - [Evaluations and feedback](docs/evals.md): eval sets, scorers, benchmarks, CI gates and ratings
+- [Knowledge at scale](docs/knowledge.md): vector indexes (Qdrant, pgvector), reranking, and sources synced from folders, websites, GitHub, Confluence and Notion
 - [Safety and governance](docs/safety.md): personal data, prompt injection, guardrails, audit log, retention
 - [Bundles](docs/bundles.md): sharing agents between servers
 - [Deploying](docs/deploy.md): Docker, auth and keys, data and backups

@@ -909,11 +909,72 @@ pub async fn workflows_are_versioned(s: SharedStore) {
     assert!(s.get_workflow("w", None).await.unwrap().is_none());
 }
 
+pub async fn sources_keep_their_sync_state(s: SharedStore) {
+    let spec = json!({"kind": "folder", "path": "/docs"});
+    s.put_source("docs", "handbook", "folder", &spec)
+        .await
+        .unwrap();
+    let got = s.get_source("docs").await.unwrap().unwrap();
+    assert_eq!((got.status.as_str(), got.last_sync_at), ("new", None));
+    s.save_source_sync("docs", "syncing", None, &json!({}), None)
+        .await
+        .unwrap();
+    assert!(
+        s.get_source("docs")
+            .await
+            .unwrap()
+            .unwrap()
+            .last_sync_at
+            .is_none()
+    );
+    let state = json!({"a.md": "v1"});
+    s.save_source_sync("docs", "ok", None, &json!({"added": 1}), Some(&state))
+        .await
+        .unwrap();
+    // Changing the spec keeps the state.
+    s.put_source(
+        "docs",
+        "handbook",
+        "folder",
+        &json!({"kind": "folder", "path": "/docs2"}),
+    )
+    .await
+    .unwrap();
+    let got = s.get_source("docs").await.unwrap().unwrap();
+    assert_eq!(got.state, state);
+    assert_eq!(got.stats["added"], 1);
+    assert!(got.last_sync_at.is_some());
+    assert_eq!(got.spec["path"], "/docs2");
+    s.save_source_sync("docs", "failed", Some("boom"), &json!({}), None)
+        .await
+        .unwrap();
+    let got = s.get_source("docs").await.unwrap().unwrap();
+    assert_eq!(
+        (got.status.as_str(), got.error.as_deref()),
+        ("failed", Some("boom"))
+    );
+    assert_eq!(got.state, state, "a failed sync keeps the last state");
+    assert!(
+        s.save_source_sync("nope", "ok", None, &json!({}), None)
+            .await
+            .is_err()
+    );
+    assert_eq!(s.list_sources().await.unwrap().len(), 1);
+    assert!(s.delete_source("docs").await.unwrap());
+    assert!(!s.delete_source("docs").await.unwrap());
+}
+
 /// One `#[tokio::test]` per conformance check, each on a fresh store from
 /// `$make` (an async block giving `Option<SharedStore>`; `None` skips).
 #[macro_export]
 macro_rules! conformance_tests {
     ($make:expr) => {
+        #[tokio::test]
+        async fn sources_keep_their_sync_state() {
+            if let Some(s) = $make.await {
+                $crate::conformance::sources_keep_their_sync_state(s).await;
+            }
+        }
         #[tokio::test]
         async fn agents() {
             if let Some(s) = $make.await {

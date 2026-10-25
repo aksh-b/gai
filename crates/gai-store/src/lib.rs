@@ -467,6 +467,32 @@ pub trait GovernanceStore: Send + Sync {
     async fn forget_user(&self, user_id: &str) -> Result<Deleted>;
 }
 
+/// Outside sources synced into collections.
+#[async_trait]
+pub trait SourceStore: Send + Sync {
+    /// Create or change a source; its sync state is kept.
+    async fn put_source(
+        &self,
+        name: &str,
+        collection: &str,
+        kind: &str,
+        spec: &Value,
+    ) -> Result<()>;
+    async fn get_source(&self, name: &str) -> Result<Option<SourceRecord>>;
+    async fn list_sources(&self) -> Result<Vec<SourceRecord>>;
+    async fn delete_source(&self, name: &str) -> Result<bool>;
+    /// Record a sync: `status`, its error, counts, and (when given) the new
+    /// item state.
+    async fn save_source_sync(
+        &self,
+        name: &str,
+        status: &str,
+        error: Option<&str>,
+        stats: &Value,
+        state: Option<&Value>,
+    ) -> Result<()>;
+}
+
 /// A vector index beside the store (pgvector, Qdrant): the store keeps
 /// chunks and embeddings, the index answers nearest-neighbour searches.
 /// Points are chunk ids.
@@ -506,6 +532,7 @@ pub trait Store:
     + FeedbackStore
     + EvalStore
     + GovernanceStore
+    + SourceStore
 {
 }
 impl<T> Store for T where
@@ -525,6 +552,7 @@ impl<T> Store for T where
         + FeedbackStore
         + EvalStore
         + GovernanceStore
+        + SourceStore
 {
 }
 

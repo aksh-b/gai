@@ -720,6 +720,14 @@ fn chrono_now() -> chrono::DateTime<chrono::Utc> {
     chrono::Utc::now()
 }
 
+/// Supported files under `dir`, sorted.
+pub(crate) fn supported_files(dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    walk(dir, &mut out);
+    out.sort();
+    out
+}
+
 /// Supported files under `dir`, skipping hidden directories and build or
 /// dependency folders.
 fn walk(dir: &Path, out: &mut Vec<PathBuf>) {

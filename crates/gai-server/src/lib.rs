@@ -16,6 +16,7 @@ mod openai;
 mod openapi;
 mod personas;
 mod setup;
+mod sources;
 mod triggers;
 mod ui;
 mod versions;
@@ -110,6 +111,7 @@ pub async fn router(
         .merge(bundles::routes())
         .merge(evals::routes())
         .merge(governance::routes())
+        .merge(sources::routes())
         .merge(media::routes())
         .merge(triggers::routes())
         .merge(setup::routes())
@@ -144,6 +146,7 @@ pub async fn serve(
     }
     let policy = AuthPolicy::new(mode, local, settings.rate_limit_per_minute);
     governance::start_retention(gai.clone());
+    sources::start_scheduler(gai.clone());
     let app = router(gai, policy, opts.dashboard).await?;
     let listener = tokio::net::TcpListener::bind(opts.bind).await?;
     axum::serve(listener, app)

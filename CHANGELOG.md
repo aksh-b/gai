@@ -103,6 +103,12 @@ initial development and will ship as 0.1.0.
 - **Docker image.** `docker build -t gai .` makes a single-binary image
   (Debian slim, dashboard included, data in `/data`); add
   `--build-arg BROWSER=1` for the browser tools.
+- **Sources.** Keep a knowledge collection in step with a folder, a
+  website (URLs, a sitemap, same-site links), a GitHub repository, a
+  Confluence space or Notion pages. Re-syncs only add, replace and remove
+  what changed; `every_minutes` syncs on a schedule while `gai serve` runs.
+  `gai sources save|sync|list|show|delete` and `/v1/sources`. See
+  [docs/knowledge.md](docs/knowledge.md).
 - **Vector indexes.** `[knowledge.vector_index] backend = "qdrant"` (with
   `url`) or `"pgvector"` searches vectors there instead of scanning the
   store, which stays the source of truth: ingesting, replacing and deleting

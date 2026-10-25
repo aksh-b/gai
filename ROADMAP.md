@@ -32,7 +32,12 @@ Done when an agent version can be evaluated, compared and blocked in CI from the
 
 Done when every policy decision is visible in traces and the audit log.
 
-## 15. Storage and search at scale
+## 15. Storage and search at scale — done (2026-10-25)
+
+Built: Postgres for everything, Qdrant and pgvector indexes, HTTP and LLM
+reranking, and sources for folders, websites, GitHub, Confluence and
+Notion. Not built: Google Drive, SharePoint and S3 sources; per-source
+permissions are kept on chunks (`acl`) but enforced only with phase 16.
 
 - **Postgres** (groundwork exists): port the remaining repositories, run the conformance suite on every backend, and allow `database = "postgres://…"`.
 - **Vector databases** [85]: a `VectorStore` backend for pgvector and Qdrant beside the built-in one.

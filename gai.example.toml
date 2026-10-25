@@ -46,6 +46,19 @@
 # (mock/hash) needs no model but only matches keywords.
 # [knowledge]
 # embedding_model = "ollama/nomic-embed-text"
+#
+# Search vectors in Qdrant or pgvector instead of scanning the store
+# (then run gai collections reindex <name> once). See docs/knowledge.md.
+# [knowledge.vector_index]
+# backend = "qdrant"             # builtin | qdrant | pgvector
+# url = "http://localhost:6333"
+#
+# Reorder the best results with a rerank API or a chat model.
+# [knowledge.rerank]
+# backend = "http"               # off | http | llm
+# url = "https://api.cohere.com/v2/rerank"
+# model = "rerank-v3.5"
+# api_key_env = "COHERE_API_KEY"
 
 # ---- media: image_gen, speak, transcribe and /v1/audio, /v1/images ----
 # [media]

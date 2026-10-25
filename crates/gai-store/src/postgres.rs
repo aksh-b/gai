@@ -27,6 +27,8 @@ mod memory;
 mod personas;
 #[path = "pg_quality.rs"]
 mod quality;
+#[path = "pg_sources.rs"]
+mod sources;
 #[path = "pg_triggers.rs"]
 mod triggers;
 #[path = "pg_workflows.rs"]

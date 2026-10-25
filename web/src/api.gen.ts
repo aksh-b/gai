@@ -1447,6 +1447,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sources synced into knowledge collections, with their last sync */
+        get: operations["get_v1_sources"];
+        put?: never;
+        /** Save a source (JSON, or {"yaml": "..."}): a folder, website, GitHub repository, Confluence space or Notion workspace */
+        post: operations["post_v1_sources"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sources/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A source and its last sync */
+        get: operations["get_v1_sources__name_"];
+        put?: never;
+        post?: never;
+        /** Delete a source (its documents stay in the collection) */
+        delete: operations["delete_v1_sources__name_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sources/{name}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sync now: only new, changed and removed items. 202 in the background, or ?wait=true for the counts (gai serve also syncs sources with every_minutes) */
+        post: operations["post_v1_sources__name__sync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/templates": {
         parameters: {
             query?: never;
@@ -3920,6 +3973,11 @@ export interface components {
             heading?: string | null;
             /**
              * Format: float
+             * @description From the reranker, when one is configured.
+             */
+            rerank_score?: number | null;
+            /**
+             * Format: float
              * @description Higher is better. Fused rank score in hybrid mode, cosine similarity
              *     in vector mode, BM25 in text mode.
              */
@@ -4023,6 +4081,106 @@ export interface components {
             name: string;
             source: components["schemas"]["SkillSource"];
         };
+        /** @description An outside source synced into a knowledge collection. */
+        SourceRecord: {
+            collection: string;
+            /** Format: date-time */
+            created_at: string;
+            error?: string | null;
+            /** @description `folder`, `web`, `github`, `confluence` or `notion`. */
+            kind: string;
+            /** Format: date-time */
+            last_sync_at?: string | null;
+            name: string;
+            /** @description The source spec as JSON. The memory crate owns its shape. */
+            spec: unknown;
+            /** @description Each item seen and its version, for incremental syncs. */
+            state: unknown;
+            /** @description The last sync's counts: added, updated, removed, unchanged, failed. */
+            stats: unknown;
+            /** @description `new`, `syncing`, `ok` or `failed`. */
+            status: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description A source and where it syncs to. */
+        SourceSpec: {
+            /** @description The knowledge collection it fills (created if missing). */
+            collection: string;
+            /**
+             * Format: uint32
+             * @description Sync this often while `gai serve` runs; none for by hand only.
+             */
+            every_minutes?: number | null;
+            /**
+             * Format: uint
+             * @description Stop after this many items.
+             */
+            max_items?: number | null;
+            /** @description Letters, digits, `-`, `_` and `.`. */
+            name: string;
+        } & ({
+            /** @constant */
+            kind: "folder";
+            path: string;
+            /** @default true */
+            recursive: boolean;
+        } | {
+            /**
+             * @description Let it fetch localhost and private addresses.
+             * @default false
+             */
+            allow_private: boolean;
+            /**
+             * Format: uint32
+             * @default 0
+             */
+            depth: number;
+            /** @constant */
+            kind: "web";
+            /**
+             * Format: uint
+             * @default 200
+             */
+            max_pages: number;
+            sitemap?: string | null;
+            /** @default [] */
+            urls: string[];
+        } | {
+            /** @description For GitHub Enterprise: `https://github.example.com/api/v3`. */
+            api_url?: string | null;
+            /** @description Defaults to the repository's default branch. */
+            branch?: string | null;
+            /** @constant */
+            kind: "github";
+            /** @description Only files under this folder. */
+            path?: string | null;
+            /** @description `owner/name`. */
+            repo: string;
+            /** @description Environment variable with a token (needed for private repos). */
+            token_env?: string | null;
+        } | {
+            /** @description `https://<site>.atlassian.net/wiki`, or a Data Center base URL. */
+            base_url: string;
+            /**
+             * @description Environment variable with the account email (Cloud). Without it
+             *     the token is sent as a bearer token (Data Center).
+             */
+            email_env?: string | null;
+            /** @constant */
+            kind: "confluence";
+            /** @description The space key. */
+            space: string;
+            token_env: string;
+        } | {
+            api_url?: string | null;
+            database_id?: string | null;
+            /** @constant */
+            kind: "notion";
+            /** @default [] */
+            page_ids: string[];
+            token_env: string;
+        });
         /** @description Text to speak. */
         SpeakBody: {
             /** @description `mp3` (default), `wav`, `opus`, `aac`, `flac` or `pcm`. */
@@ -4170,6 +4328,21 @@ export interface components {
             runs: number;
             /** Format: uint64 */
             sessions: number;
+        };
+        /** @description What one sync did. */
+        SyncStats: {
+            /** Format: uint64 */
+            added: number;
+            /** @description The first few failures. */
+            errors?: string[];
+            /** Format: uint64 */
+            failed: number;
+            /** Format: uint64 */
+            removed: number;
+            /** Format: uint64 */
+            unchanged: number;
+            /** Format: uint64 */
+            updated: number;
         };
         /** @description What a trigger starts. */
         Target: {
@@ -8201,6 +8374,162 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_sources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceRecord"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_sources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceSpec"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceRecord"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_sources__name_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceRecord"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_sources__name_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_sources__name__sync: {
+        parameters: {
+            query?: {
+                /** @description Answer when done, with the counts */
+                wait?: string;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncStats"];
+                };
             };
             /** @description Error */
             default: {

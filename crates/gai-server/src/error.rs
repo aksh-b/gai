@@ -97,6 +97,7 @@ impl From<gai::Error> for ApiError {
             gai::Error::Skill(s) => s.into(),
             gai::Error::Workflow(w) => w.into(),
             gai::Error::Eval(e) => e.into(),
+            gai::Error::Invalid(m) => Self::bad_request(m),
             other => Self::bad_request(other.to_string()),
         }
     }

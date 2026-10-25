@@ -627,3 +627,25 @@ pub struct Deleted {
     pub memory_blocks: u64,
     pub feedback: u64,
 }
+
+/// An outside source synced into a knowledge collection.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct SourceRecord {
+    pub name: String,
+    pub collection: String,
+    /// `folder`, `web`, `github`, `confluence` or `notion`.
+    pub kind: String,
+    /// The source spec as JSON. The memory crate owns its shape.
+    pub spec: Value,
+    /// Each item seen and its version, for incremental syncs.
+    #[serde(skip_serializing)]
+    pub state: Value,
+    /// `new`, `syncing`, `ok` or `failed`.
+    pub status: String,
+    pub error: Option<String>,
+    /// The last sync's counts: added, updated, removed, unchanged, failed.
+    pub stats: Value,
+    pub last_sync_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}

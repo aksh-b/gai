@@ -17,6 +17,7 @@ pub mod knowledge;
 pub mod load;
 pub mod qdrant;
 pub mod rerank;
+pub mod sources;
 pub mod tools;
 
 pub use blocks::{ArchivalScope, BlockSpec, MemoryConfig, RunMemory, archival_collection};

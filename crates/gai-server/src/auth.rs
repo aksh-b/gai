@@ -124,6 +124,7 @@ pub fn required_scope(method: &Method, path: &str) -> Scope {
         || path.starts_with("/v1/providers")
         || path.starts_with("/v1/templates")
         || path.starts_with("/v1/bundles")
+        || path.starts_with("/v1/sources")
         // Saving or deleting eval sets and evaluations; running one is `run`.
         || (path.starts_with("/v1/evals") && !path.ends_with("/runs"))
         || path.starts_with("/v1/eval-runs/")

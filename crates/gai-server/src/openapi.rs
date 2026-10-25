@@ -241,6 +241,17 @@ pub fn document() -> Value {
             .ok(s::<gai::store::Deleted>(&mut g)),
         op("post", "/v1/retention/sweep", "governance", "Delete conversations older than each agent's safety.retention_days now (gai serve also does this hourly)")
             .ok(s::<Swept>(&mut g)),
+        op("get", "/v1/sources", "knowledge", "Sources synced into knowledge collections, with their last sync")
+            .ok(list::<gai::store::SourceRecord>(&mut g)),
+        op("post", "/v1/sources", "knowledge", "Save a source (JSON, or {\"yaml\": \"...\"}): a folder, website, GitHub repository, Confluence space or Notion workspace")
+            .body(s::<gai::memory::sources::SourceSpec>(&mut g))
+            .ok(s::<gai::store::SourceRecord>(&mut g)),
+        op("get", "/v1/sources/{name}", "knowledge", "A source and its last sync")
+            .ok(s::<gai::store::SourceRecord>(&mut g)),
+        op("delete", "/v1/sources/{name}", "knowledge", "Delete a source (its documents stay in the collection)"),
+        op("post", "/v1/sources/{name}/sync", "knowledge", "Sync now: only new, changed and removed items. 202 in the background, or ?wait=true for the counts (gai serve also syncs sources with every_minutes)")
+            .ok(s::<gai::memory::sources::SyncStats>(&mut g))
+            .query(&[("wait", "Answer when done, with the counts")]),
         op("post", "/v1/runs/{id}/feedback", "feedback", "Rate a reply: 1 good, -1 bad, with an optional comment and tags. Rating again replaces your rating")
             .body(s::<Rate>(&mut g))
             .ok(s::<gai::store::Feedback>(&mut g)),
