@@ -72,5 +72,9 @@ async fn organization_schemas_are_apart() {
     // Reopening keeps the data: the migrations ran in the schema itself.
     let again = PostgresStore::connect_schema(&url, &a).await.unwrap();
     assert!(again.get_agent("only-a", None).await.unwrap().is_some());
-    assert!(PostgresStore::connect_schema(&url, "bad;name").await.is_err());
+    assert!(
+        PostgresStore::connect_schema(&url, "bad;name")
+            .await
+            .is_err()
+    );
 }

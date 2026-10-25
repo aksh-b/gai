@@ -212,19 +212,23 @@ struct PageQuery {
 
 async fn list_documents(
     Tenant(s): Tenant,
+    Extension(p): Extension<Principal>,
     Path(name): Path<String>,
     Query(q): Query<PageQuery>,
 ) -> ApiResult<Json<Vec<Document>>> {
     s.rt.knowledge().collection(&name).await?;
-    Ok(Json(
+    let mut docs =
         s.rt.store()
             .list_documents(
                 &name,
                 q.limit.unwrap_or(100).min(1000),
                 q.offset.unwrap_or(0),
             )
-            .await?,
-    ))
+            .await?;
+    if let Some(a) = &p.access {
+        docs.retain(|d| a.allows(&d.metadata["acl"]));
+    }
+    Ok(Json(docs))
 }
 
 /// Fetch a URL for ingestion, refusing private addresses unless tools may
@@ -343,6 +347,7 @@ async fn add_document(
 
 async fn get_document(
     Tenant(s): Tenant,
+    Extension(p): Extension<Principal>,
     Path((name, id)): Path<(String, String)>,
 ) -> ApiResult<Json<DocumentView>> {
     let document =
@@ -350,6 +355,11 @@ async fn get_document(
             .get_document(&id)
             .await?
             .filter(|d| d.collection == name)
+            .filter(|d| {
+                p.access
+                    .as_ref()
+                    .is_none_or(|a| a.allows(&d.metadata["acl"]))
+            })
             .ok_or_else(|| ApiError::not_found(format!("document {id} in {name}")))?;
     let chunks = s.rt.store().document_chunks(&id).await?;
     Ok(Json(DocumentView { document, chunks }))
@@ -373,12 +383,19 @@ async fn delete_document(
 
 async fn search(
     Tenant(s): Tenant,
+    Extension(p): Extension<Principal>,
     Path(name): Path<String>,
     Json(b): Json<SearchRequest>,
 ) -> ApiResult<Json<Vec<SearchHit>>> {
     Ok(Json(
         s.rt.knowledge()
-            .search(&[name], &b.query, b.k.unwrap_or(8), b.mode)
+            .search_as(
+                &[name],
+                &b.query,
+                b.k.unwrap_or(8),
+                b.mode,
+                p.access.as_ref(),
+            )
             .await?,
     ))
 }

@@ -26,6 +26,7 @@ const DETAIL_BODY_LIMIT: usize = 256 << 10;
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/v1/audit", get(list))
+        .route("/v1/changes", get(changes))
         .route("/v1/users/{id}", delete(forget))
         .route("/v1/retention/sweep", post(sweep))
 }
@@ -147,6 +148,49 @@ pub async fn record(Tenant(s): Tenant, req: Request, next: Next) -> Response {
         tracing::warn!(error = %e, "could not write the audit log");
     }
     resp
+}
+
+#[derive(Deserialize)]
+struct ChangesQuery {
+    /// e.g. `agents/helper`.
+    target: String,
+    #[serde(default)]
+    limit: u32,
+}
+
+/// Who changed one thing, and when: the audit log for a target, without
+/// details, for everyone who can see it.
+#[derive(Serialize, JsonSchema)]
+pub struct Change {
+    pub at: chrono::DateTime<chrono::Utc>,
+    pub actor: String,
+    pub action: String,
+    pub status: u16,
+}
+
+async fn changes(Tenant(s): Tenant, Query(q): Query<ChangesQuery>) -> ApiResult<Json<Vec<Change>>> {
+    let rows =
+        s.rt.store()
+            .list_audit(AuditFilter {
+                actor: None,
+                target: Some(q.target.clone()),
+                since: None,
+                until: None,
+                limit: if q.limit == 0 { 50 } else { q.limit.min(500) },
+            })
+            .await?;
+    Ok(Json(
+        rows.into_iter()
+            // `target` matches by prefix; keep this one thing only.
+            .filter(|r| r.target == q.target)
+            .map(|r| Change {
+                at: r.at,
+                actor: r.actor,
+                action: r.action,
+                status: r.status,
+            })
+            .collect(),
+    ))
 }
 
 #[derive(Deserialize)]

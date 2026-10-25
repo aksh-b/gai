@@ -9,7 +9,7 @@ use axum::{Extension, Json, Router};
 use gai::agent::ReplayRequest;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value};
 use tokio::sync::mpsc;
 
 use crate::AppState;
@@ -224,9 +224,7 @@ async fn replay(
 ) -> ApiResult<Response> {
     p.check_budget()?;
     let mut meta = Map::new();
-    if let Some(key) = p.key_id() {
-        meta.insert("key_id".into(), json!(key));
-    }
+    p.stamp(&mut meta);
     let mut handle = s.rt.replay(&id, b.replay, meta).await?;
     match b.mode {
         Mode::Background => {

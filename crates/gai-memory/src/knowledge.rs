@@ -133,6 +133,47 @@ pub enum SearchMode {
     Text,
 }
 
+/// Who is searching, for documents that say who may find them (an `acl`
+/// list in their metadata: `team:<name>`, `user:<email>`, `role:<role>`).
+/// Documents without one are found by everyone.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Access {
+    /// What the searcher is: `user:ada@example.com`, `team:support`, and
+    /// `role:<r>` for their role and every role below it.
+    pub identities: Vec<String>,
+}
+
+impl Access {
+    /// Whether an `acl` value (a list, or missing) lets this searcher in.
+    pub fn allows(&self, acl: &Value) -> bool {
+        match acl.as_array() {
+            Some(list) if !list.is_empty() => list.iter().filter_map(Value::as_str).any(|entry| {
+                self.identities
+                    .iter()
+                    .any(|i| i.eq_ignore_ascii_case(entry))
+            }),
+            _ => true,
+        }
+    }
+}
+
+/// Check `acl` entries: `team:`, `user:` or `role:` and a name.
+pub fn validate_acl(acl: &[String]) -> Result<()> {
+    for e in acl {
+        let ok = match e.split_once(':') {
+            Some(("team" | "user", v)) => !v.trim().is_empty(),
+            Some(("role", v)) => ["viewer", "member", "builder", "admin", "owner"].contains(&v),
+            _ => false,
+        };
+        if !ok {
+            return Err(MemoryError::Invalid(format!(
+                "acl entry {e:?}: use team:<name>, user:<email> or role:<viewer|member|builder|admin|owner>"
+            )));
+        }
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct SearchHit {
     pub collection: String,
@@ -376,6 +417,8 @@ impl Knowledge {
         if let Some(existing) = &existing
             && existing.content_hash == hash
             && existing.title == doc.title
+            // Who may find it lives on the chunks, so a new acl re-chunks.
+            && existing.metadata.get("acl") == doc.metadata.get("acl")
         {
             return Ok(Ingested {
                 document: existing.clone(),
@@ -410,9 +453,20 @@ impl Knowledge {
             .map(|(p, v)| NewChunk {
                 text: p.text,
                 embedding: Some(v),
-                metadata: match p.heading {
-                    Some(h) => json!({"heading": h}),
-                    None => json!({}),
+                metadata: {
+                    let mut m = match p.heading {
+                        Some(h) => json!({"heading": h}),
+                        None => json!({}),
+                    };
+                    // Searches filter chunks, so each carries who may find it.
+                    if let Some(acl) = doc
+                        .metadata
+                        .get("acl")
+                        .filter(|a| a.as_array().is_some_and(|a| !a.is_empty()))
+                    {
+                        m["acl"] = acl.clone();
+                    }
+                    m
                 },
             })
             .collect();
@@ -593,6 +647,19 @@ impl Knowledge {
         k: usize,
         mode: SearchMode,
     ) -> Result<Vec<SearchHit>> {
+        self.search_as(collections, query, k, mode, None).await
+    }
+
+    /// Like [`search`](Self::search), leaving out chunks `access` may not
+    /// find (`None`: everything).
+    pub async fn search_as(
+        &self,
+        collections: &[String],
+        query: &str,
+        k: usize,
+        mode: SearchMode,
+        access: Option<&Access>,
+    ) -> Result<Vec<SearchHit>> {
         let k = k.clamp(1, 100);
         if query.trim().is_empty() {
             return Err(MemoryError::Invalid("the search query is empty".into()));
@@ -604,7 +671,9 @@ impl Knowledge {
         }
         // Each ranking contributes more candidates than asked for, so fusion
         // has something to work with.
-        let pool = (k * 3).max(20);
+        let pool = (k * 3).max(20) * if access.is_some() { 3 } else { 1 };
+        let visible =
+            |h: &gai_store::ChunkHit| access.is_none_or(|a| a.allows(&h.chunk.metadata["acl"]));
         let mut vector: Vec<gai_store::ChunkHit> = Vec::new();
         if mode != SearchMode::Text {
             for (model, names) in &by_model {
@@ -631,14 +700,16 @@ impl Knowledge {
                     vector.extend(found);
                 }
             }
+            vector.retain(visible);
             vector.sort_by(|a, b| b.score.total_cmp(&a.score));
             vector.truncate(pool);
         }
-        let text = if mode != SearchMode::Vector {
+        let mut text = if mode != SearchMode::Vector {
             self.store.text_search(collections, query, pool).await?
         } else {
             Vec::new()
         };
+        text.retain(visible);
 
         let mut hits: HashMap<i64, SearchHit> = HashMap::new();
         let mut fused: HashMap<i64, f32> = HashMap::new();

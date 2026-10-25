@@ -44,6 +44,154 @@ pub struct Session {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Which runs [`RunStore::agent_stats`] counts.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct StatsFilter {
+    pub agent: Option<String>,
+    pub since: Option<DateTime<Utc>>,
+    pub until: Option<DateTime<Utc>>,
+}
+
+/// How one agent version did. Evaluation runs aren't counted.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct AgentStats {
+    pub agent: String,
+    pub agent_version: Option<u32>,
+    pub runs: u64,
+    pub completed: u64,
+    pub failed: u64,
+    /// Cancelled, or stopped by a budget.
+    pub stopped: u64,
+    /// Queued, running or waiting for approval.
+    pub open: u64,
+    /// Completed out of finished runs, 0 to 1.
+    pub success_rate: f64,
+    pub avg_steps: f64,
+    pub p50_latency_ms: u64,
+    pub p95_latency_ms: u64,
+    pub cost_usd: f64,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    /// Thumbs up and down.
+    pub good: u64,
+    pub bad: u64,
+    pub last_run_at: Option<DateTime<Utc>>,
+}
+
+/// One run, as [`AgentStats`] needs it.
+pub(crate) struct StatRow {
+    pub agent: String,
+    pub agent_version: Option<u32>,
+    pub status: String,
+    pub steps: i64,
+    pub cost: f64,
+    pub usage: Usage,
+    pub created_at: DateTime<Utc>,
+    pub finished_at: Option<DateTime<Utc>>,
+    pub good: i64,
+    pub bad: i64,
+}
+
+/// Group runs by agent version, busiest first.
+pub(crate) fn aggregate(rows: Vec<StatRow>) -> Vec<AgentStats> {
+    // Per agent version: the counts, latencies and total steps.
+    type Group = (AgentStats, Vec<u64>, i64);
+    let mut groups: BTreeMap<(String, Option<u32>), Group> = BTreeMap::new();
+    for r in rows {
+        let (s, latencies, steps) = groups
+            .entry((r.agent.clone(), r.agent_version))
+            .or_insert_with(|| {
+                (
+                    AgentStats {
+                        agent: r.agent.clone(),
+                        agent_version: r.agent_version,
+                        ..Default::default()
+                    },
+                    Vec::new(),
+                    0,
+                )
+            });
+        s.runs += 1;
+        match r.status.as_str() {
+            "completed" => s.completed += 1,
+            "failed" => s.failed += 1,
+            "cancelled" | "budget_exceeded" => s.stopped += 1,
+            _ => s.open += 1,
+        }
+        *steps += r.steps;
+        s.cost_usd += r.cost;
+        s.input_tokens += r.usage.input_tokens;
+        s.output_tokens += r.usage.output_tokens;
+        s.good += r.good.max(0) as u64;
+        s.bad += r.bad.max(0) as u64;
+        if let Some(f) = r.finished_at {
+            latencies.push((f - r.created_at).num_milliseconds().max(0) as u64);
+        }
+        if s.last_run_at.is_none_or(|t| r.created_at > t) {
+            s.last_run_at = Some(r.created_at);
+        }
+    }
+    let mut out: Vec<AgentStats> = groups
+        .into_values()
+        .map(|(mut s, mut lat, steps)| {
+            let finished = s.completed + s.failed + s.stopped;
+            if finished > 0 {
+                s.success_rate = s.completed as f64 / finished as f64;
+            }
+            if s.runs > 0 {
+                s.avg_steps = steps as f64 / s.runs as f64;
+            }
+            lat.sort_unstable();
+            let pct = |p: f64| -> u64 {
+                if lat.is_empty() {
+                    return 0;
+                }
+                lat[((lat.len() - 1) as f64 * p).round() as usize]
+            };
+            s.p50_latency_ms = pct(0.5);
+            s.p95_latency_ms = pct(0.95);
+            s
+        })
+        .collect();
+    out.sort_by(|a, b| {
+        b.runs
+            .cmp(&a.runs)
+            .then(a.agent.cmp(&b.agent))
+            .then(b.agent_version.cmp(&a.agent_version))
+    });
+    out
+}
+
+/// What to look for in conversations.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct MessageSearch {
+    /// Words to find (all of them; the last may be the start of a word).
+    pub text: String,
+    /// Only conversations with this agent.
+    pub agent: Option<String>,
+    /// Only this user's conversations.
+    pub user_id: Option<String>,
+    pub since: Option<DateTime<Utc>>,
+    pub until: Option<DateTime<Utc>>,
+    pub limit: u32,
+}
+
+/// A message that matched, with the words marked `[like this]`.
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct MessageHit {
+    pub session_id: String,
+    pub seq: i64,
+    pub run_id: Option<String>,
+    pub role: String,
+    pub snippet: String,
+    pub created_at: DateTime<Utc>,
+    pub session_title: Option<String>,
+    pub agent: Option<String>,
+    pub user_id: Option<String>,
+    /// Higher is a better match.
+    pub score: f32,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct StoredMessage {
     pub seq: i64,

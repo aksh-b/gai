@@ -20,7 +20,7 @@ use gai::tools::ToolPolicy;
 use gai::tools::mcp::{McpServer, McpServerConfig, McpServerInfo};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value};
 use tokio::sync::mpsc;
 
 use crate::AppState;
@@ -44,6 +44,8 @@ pub fn routes() -> Router<AppState> {
             post(set_label).delete(remove_label),
         )
         .route("/v1/sessions", get(list_sessions).post(create_session))
+        .route("/v1/sessions/search", get(search_sessions))
+        .route("/v1/analytics/agents", get(agent_analytics))
         .route("/v1/sessions/{id}", get(get_session).delete(delete_session))
         .route("/v1/sessions/{id}/messages", get(session_messages))
         .route("/v1/runs", get(list_runs).post(create_run))
@@ -455,6 +457,59 @@ async fn list_sessions(
     ))
 }
 
+#[derive(Deserialize)]
+struct SearchSessionsQuery {
+    q: String,
+    agent: Option<String>,
+    user: Option<String>,
+    since: Option<chrono::DateTime<chrono::Utc>>,
+    until: Option<chrono::DateTime<chrono::Utc>>,
+    limit: Option<u32>,
+}
+
+/// Find messages across conversations, best matches first.
+async fn search_sessions(
+    Tenant(s): Tenant,
+    Query(q): Query<SearchSessionsQuery>,
+) -> ApiResult<Json<Vec<gai::store::MessageHit>>> {
+    Ok(Json(
+        s.rt.store()
+            .search_messages(&gai::store::MessageSearch {
+                text: q.q,
+                agent: q.agent,
+                user_id: q.user,
+                since: q.since,
+                until: q.until,
+                limit: q.limit.unwrap_or(50),
+            })
+            .await?,
+    ))
+}
+
+#[derive(Deserialize)]
+struct AnalyticsQuery {
+    agent: Option<String>,
+    since: Option<chrono::DateTime<chrono::Utc>>,
+    until: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// How each agent version does: runs, success, steps, latency, cost and
+/// ratings.
+async fn agent_analytics(
+    Tenant(s): Tenant,
+    Query(q): Query<AnalyticsQuery>,
+) -> ApiResult<Json<Vec<gai::store::AgentStats>>> {
+    Ok(Json(
+        s.rt.store()
+            .agent_stats(gai::store::StatsFilter {
+                agent: q.agent,
+                since: q.since,
+                until: q.until,
+            })
+            .await?,
+    ))
+}
+
 async fn create_session(
     Tenant(s): Tenant,
     Json(new): Json<NewSession>,
@@ -515,9 +570,7 @@ async fn create_run(
     req.user_id = body.user_id;
     req.callback_url = body.callback_url;
     req.persona = body.persona;
-    if let Some(id) = p.key_id() {
-        req.metadata.insert("key_id".into(), json!(id));
-    }
+    p.stamp(&mut req.metadata);
     // Spend is charged to the key by the runtime's finish hook (see
     // `router`), so every mode and resumed runs are charged alike.
     if body.mode == Mode::Background {

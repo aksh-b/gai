@@ -198,7 +198,10 @@ function TeamsCard({
     <Card>
       <CardHeader>
         <CardTitle>Teams</CardTitle>
-        <CardDescription>Give an assistant, workflow or collection to a team from its page, or with gai's API.</CardDescription>
+        <CardDescription>
+          Give an assistant to a team on its page (or anything else with <code>PUT /v1/owners/&lt;kind&gt;/&lt;name&gt;</code>): then only the team's builders
+          change it.
+        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {teams?.length === 0 && <EmptyState title="No teams yet">Everyone with a builder role can change everything.</EmptyState>}

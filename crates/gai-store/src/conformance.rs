@@ -919,6 +919,169 @@ pub async fn workflows_are_versioned(s: SharedStore) {
     assert!(s.get_workflow("w", None).await.unwrap().is_none());
 }
 
+pub async fn agent_stats_per_version(s: SharedStore) {
+    let ses = s.create_session(NewSession::default()).await.unwrap();
+    let run = |agent: &str, version: u32, status: RunStatus, kind: Option<&str>| {
+        let s = s.clone();
+        let ses = ses.id.clone();
+        let agent = agent.to_owned();
+        let kind = kind.map(str::to_owned);
+        async move {
+            let r = s
+                .create_run(NewRun {
+                    session_id: ses,
+                    agent,
+                    agent_version: Some(version),
+                    input: json!("hi"),
+                    metadata: kind.map(|k| json!({"kind": k})).unwrap_or(json!({})),
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+            s.update_run(
+                &r.id,
+                RunUpdate {
+                    status: Some(status),
+                    steps: Some(2),
+                    cost: Some(0.5),
+                    usage: Some(Usage {
+                        input_tokens: 10,
+                        output_tokens: 5,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+            r.id
+        }
+    };
+    let good = run("helper", 1, RunStatus::Completed, None).await;
+    run("helper", 1, RunStatus::Failed, None).await;
+    run("helper", 1, RunStatus::Running, None).await;
+    run("helper", 2, RunStatus::Completed, None).await;
+    run("helper", 2, RunStatus::Completed, Some("eval")).await;
+    run("other", 1, RunStatus::Cancelled, None).await;
+    let good = s.get_run(&good).await.unwrap().unwrap();
+    s.put_feedback(&good, "ada", 1, None, &[]).await.unwrap();
+
+    let stats = s.agent_stats(StatsFilter::default()).await.unwrap();
+    assert_eq!(stats.len(), 3, "{stats:?}");
+    let v1 = &stats[0];
+    assert_eq!((v1.agent.as_str(), v1.agent_version), ("helper", Some(1)));
+    assert_eq!((v1.runs, v1.completed, v1.failed, v1.open), (3, 1, 1, 1));
+    assert_eq!(v1.success_rate, 0.5);
+    assert_eq!(v1.avg_steps, 2.0);
+    assert!((v1.cost_usd - 1.5).abs() < 1e-9);
+    assert_eq!((v1.input_tokens, v1.output_tokens), (30, 15));
+    assert_eq!((v1.good, v1.bad), (1, 0));
+    assert!(v1.last_run_at.is_some());
+    // Evaluation runs don't count.
+    let v2 = stats.iter().find(|x| x.agent_version == Some(2)).unwrap();
+    assert_eq!(v2.runs, 1);
+    let other = stats.iter().find(|x| x.agent == "other").unwrap();
+    assert_eq!((other.stopped, other.success_rate), (1, 0.0));
+    let only = s
+        .agent_stats(StatsFilter {
+            agent: Some("other".into()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(only.len(), 1);
+    let later = s
+        .agent_stats(StatsFilter {
+            since: Some(Utc::now() + Duration::hours(1)),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(later.is_empty());
+}
+
+pub async fn conversations_are_searchable(s: SharedStore) {
+    let a = s
+        .create_session(NewSession {
+            agent: Some("helper".into()),
+            user_id: Some("ada".into()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    let b = s
+        .create_session(NewSession {
+            agent: Some("other".into()),
+            user_id: Some("bob".into()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    s.append_messages(
+        &a.id,
+        None,
+        &[
+            Message::user("How do I reset my router password?"),
+            Message::assistant("Hold the reset button for ten seconds."),
+        ],
+    )
+    .await
+    .unwrap();
+    s.append_messages(
+        &b.id,
+        None,
+        &[Message::user("Passwords for the wiki are in the vault")],
+    )
+    .await
+    .unwrap();
+    s.add_compaction(&a.id, None, 1, "router talk")
+        .await
+        .unwrap();
+
+    let find = |text: &str| MessageSearch {
+        text: text.into(),
+        ..Default::default()
+    };
+    let hits = s.search_messages(&find("router password")).await.unwrap();
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0].session_id, a.id);
+    assert_eq!(hits[0].seq, 1);
+    assert_eq!(hits[0].role, "user");
+    assert_eq!(hits[0].agent.as_deref(), Some("helper"));
+    assert!(hits[0].snippet.contains("[router]"), "{}", hits[0].snippet);
+    // Stemmed, and the last word may be partial.
+    assert_eq!(
+        s.search_messages(&find("passwords")).await.unwrap().len(),
+        2
+    );
+    assert_eq!(s.search_messages(&find("rese")).await.unwrap().len(), 2);
+    let mut only_bob = find("password");
+    only_bob.user_id = Some("bob".into());
+    assert_eq!(
+        s.search_messages(&only_bob).await.unwrap()[0].session_id,
+        b.id
+    );
+    let mut only_helper = find("password");
+    only_helper.agent = Some("helper".into());
+    assert_eq!(s.search_messages(&only_helper).await.unwrap().len(), 1);
+    let mut later = find("password");
+    later.since = Some(Utc::now() + Duration::hours(1));
+    assert!(s.search_messages(&later).await.unwrap().is_empty());
+    assert!(s.search_messages(&find("  ?! ")).await.unwrap().is_empty());
+    // Forks are searchable; deleted conversations aren't.
+    let fork = s
+        .fork_session(&a.id, None, NewSession::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        s.search_messages(&find("ten seconds")).await.unwrap().len(),
+        2
+    );
+    assert!(s.delete_session(&fork.id).await.unwrap());
+    assert!(s.delete_session(&b.id).await.unwrap());
+    assert_eq!(s.search_messages(&find("password")).await.unwrap().len(), 1);
+}
+
 pub async fn directory_orgs_users_and_teams(s: SharedStore) {
     // The default organization is always there and can't be deleted.
     assert_eq!(
@@ -1169,6 +1332,18 @@ pub async fn sources_keep_their_sync_state(s: SharedStore) {
 #[macro_export]
 macro_rules! conformance_tests {
     ($make:expr) => {
+        #[tokio::test]
+        async fn agent_stats_per_version() {
+            if let Some(s) = $make.await {
+                $crate::conformance::agent_stats_per_version(s).await;
+            }
+        }
+        #[tokio::test]
+        async fn conversations_are_searchable() {
+            if let Some(s) = $make.await {
+                $crate::conformance::conversations_are_searchable(s).await;
+            }
+        }
         #[tokio::test]
         async fn directory_orgs_users_and_teams() {
             if let Some(s) = $make.await {

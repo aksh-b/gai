@@ -208,8 +208,8 @@ impl GaiMcp {
         }
         let mut meta = Map::new();
         meta.insert("source".into(), json!("mcp"));
-        if let Some(id) = principal.and_then(Principal::key_id) {
-            meta.insert("key_id".into(), json!(id));
+        if let Some(p) = principal {
+            p.stamp(&mut meta);
         }
         let timeout = Duration::from_secs(self.settings().call_timeout_secs.max(1));
 

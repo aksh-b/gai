@@ -49,6 +49,7 @@ import { Personas } from './pages/Personas';
 import { Evals } from './pages/Evals';
 import { Audit } from './pages/Audit';
 import { People } from './pages/People';
+import { AgentAnalytics, ConversationSearch } from './pages/Insights';
 import { Skills } from './pages/Skills';
 import { Workflows } from './pages/Workflows';
 import { Welcome, welcomeDone } from './pages/Welcome';
@@ -87,9 +88,11 @@ const NAV: { id: string; label: string; icon: Icon; routes: string[]; tabs?: { i
     id: 'activity',
     label: 'Activity',
     icon: IconRuns,
-    routes: ['activity', 'runs', 'approvals', 'usage'],
+    routes: ['activity', 'runs', 'search', 'analytics', 'approvals', 'usage'],
     tabs: [
       { id: 'activity', label: 'History' },
+      { id: 'search', label: 'Search chats' },
+      { id: 'analytics', label: 'By assistant' },
       { id: 'approvals', label: 'Needs your OK' },
       { id: 'usage', label: 'Spending' },
     ],
@@ -341,6 +344,12 @@ export function App() {
         break;
       case 'people':
         page = <People />;
+        break;
+      case 'search':
+        page = <ConversationSearch />;
+        break;
+      case 'analytics':
+        page = <AgentAnalytics />;
         break;
       case 'keys':
         page = <Keys />;

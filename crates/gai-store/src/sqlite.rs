@@ -340,6 +340,60 @@ impl AgentStore for SqliteStore {
 
 #[async_trait]
 impl SessionStore for SqliteStore {
+    async fn search_messages(&self, q: &MessageSearch) -> Result<Vec<MessageHit>> {
+        let words: Vec<String> = q
+            .text
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .map(|w| format!("\"{}\"", w.to_lowercase()))
+            .collect();
+        let Some(last) = words.last() else {
+            return Ok(Vec::new());
+        };
+        // Every word; the last as a prefix, for search-as-you-type.
+        let fts = format!("{} {last}*", words[..words.len() - 1].join(" "));
+        let rows = sqlx::query(
+            "SELECT ms.session_id, ms.seq, m.run_id, json_extract(m.body, '$.role') AS role,
+                    snippet(message_search, 0, '[', ']', '…', 16) AS snippet, m.created_at,
+                    s.title, s.agent, s.user_id, -bm25(message_search) AS score
+             FROM message_search ms
+             JOIN messages m ON m.session_id = ms.session_id AND m.seq = ms.seq
+             JOIN sessions s ON s.id = ms.session_id
+             WHERE message_search MATCH ?
+               AND (? IS NULL OR s.agent = ?) AND (? IS NULL OR s.user_id = ?)
+               AND (? IS NULL OR m.created_at >= ?) AND (? IS NULL OR m.created_at < ?)
+             ORDER BY bm25(message_search) LIMIT ?",
+        )
+        .bind(fts.trim())
+        .bind(&q.agent)
+        .bind(&q.agent)
+        .bind(&q.user_id)
+        .bind(&q.user_id)
+        .bind(q.since)
+        .bind(q.since)
+        .bind(q.until)
+        .bind(q.until)
+        .bind(i64::from(if q.limit == 0 { 50 } else { q.limit.min(500) }))
+        .fetch_all(&self.pool)
+        .await?;
+        rows.iter()
+            .map(|r| {
+                Ok(MessageHit {
+                    session_id: r.try_get("session_id")?,
+                    seq: r.try_get("seq")?,
+                    run_id: r.try_get("run_id")?,
+                    role: r.try_get::<Option<String>, _>("role")?.unwrap_or_default(),
+                    snippet: r.try_get("snippet")?,
+                    created_at: r.try_get("created_at")?,
+                    session_title: r.try_get("title")?,
+                    agent: r.try_get("agent")?,
+                    user_id: r.try_get("user_id")?,
+                    score: r.try_get::<f64, _>("score")? as f32,
+                })
+            })
+            .collect()
+    }
+
     async fn create_session(&self, new: NewSession) -> Result<Session> {
         let id = gai_core::new_id("ses");
         let ts = now();
@@ -528,6 +582,47 @@ impl SessionStore for SqliteStore {
 
 #[async_trait]
 impl RunStore for SqliteStore {
+    async fn agent_stats(&self, filter: StatsFilter) -> Result<Vec<AgentStats>> {
+        let rows = sqlx::query(
+            "SELECT r.agent, r.agent_version, r.status, r.steps, r.cost, r.usage, r.created_at, r.finished_at,
+                    COALESCE((SELECT SUM(CASE WHEN f.rating > 0 THEN 1 ELSE 0 END) FROM feedback f WHERE f.run_id = r.id), 0) AS good,
+                    COALESCE((SELECT SUM(CASE WHEN f.rating < 0 THEN 1 ELSE 0 END) FROM feedback f WHERE f.run_id = r.id), 0) AS bad
+             FROM runs r
+             WHERE COALESCE(json_extract(r.metadata, '$.kind'), '') <> 'eval'
+               AND (? IS NULL OR r.agent = ?)
+               AND (? IS NULL OR r.created_at >= ?) AND (? IS NULL OR r.created_at < ?)
+             ORDER BY r.created_at DESC LIMIT 200000",
+        )
+        .bind(&filter.agent)
+        .bind(&filter.agent)
+        .bind(filter.since)
+        .bind(filter.since)
+        .bind(filter.until)
+        .bind(filter.until)
+        .fetch_all(&self.pool)
+        .await?;
+        let rows = rows
+            .iter()
+            .map(|r| {
+                Ok(crate::types::StatRow {
+                    agent: r.try_get("agent")?,
+                    agent_version: r
+                        .try_get::<Option<i64>, _>("agent_version")?
+                        .map(|v| v as u32),
+                    status: r.try_get("status")?,
+                    steps: r.try_get::<i64, _>("steps")?,
+                    cost: r.try_get("cost")?,
+                    usage: parse(&r.try_get::<String, _>("usage")?)?,
+                    created_at: r.try_get("created_at")?,
+                    finished_at: r.try_get("finished_at")?,
+                    good: r.try_get("good")?,
+                    bad: r.try_get("bad")?,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(crate::types::aggregate(rows))
+    }
+
     async fn create_run(&self, new: NewRun) -> Result<Run> {
         let id = new.id.unwrap_or_else(|| gai_core::new_id("run"));
         let ts = now();

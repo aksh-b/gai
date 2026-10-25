@@ -51,6 +51,10 @@ pub struct SourceSpec {
     /// Stop after this many items.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_items: Option<usize>,
+    /// Who may find what it brings in: `team:<name>`, `user:<email>`,
+    /// `role:<role>` (that role or higher). Empty: everyone.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub acl: Vec<String>,
     #[serde(flatten)]
     pub kind: SourceKind,
 }
@@ -338,6 +342,7 @@ impl Sources {
             serde_json::from_value(value).map_err(|e| invalid(format!("source: {e}")))?;
         Knowledge::validate_name(&spec.name)?;
         Knowledge::validate_name(&spec.collection)?;
+        crate::knowledge::validate_acl(&spec.acl)?;
         Ok(spec)
     }
 
@@ -360,12 +365,28 @@ impl Sources {
                 _ => {}
             }
         }
+        crate::knowledge::validate_acl(&spec.acl)?;
         let value = serde_json::to_value(spec).expect("serializable spec");
-        Ok(self
-            .knowledge
-            .store()
+        let store = self.knowledge.store();
+        let before = store.get_source(&spec.name).await?;
+        store
             .put_source(&spec.name, &spec.collection, spec.kind.name(), &value)
-            .await?)
+            .await?;
+        // A new acl must reach every item, changed or not: forget the versions.
+        if let Some(b) = before
+            && b.spec.get("acl") != value.get("acl")
+        {
+            store
+                .save_source_sync(
+                    &spec.name,
+                    &b.status,
+                    b.error.as_deref(),
+                    &b.stats,
+                    Some(&json!({})),
+                )
+                .await?;
+        }
+        Ok(())
     }
 
     pub async fn get(&self, name: &str) -> Result<SourceRecord> {
@@ -449,6 +470,8 @@ impl Sources {
                     }
                     if !item.acl.is_empty() {
                         meta["acl"] = json!(item.acl);
+                    } else if !spec.acl.is_empty() {
+                        meta["acl"] = json!(spec.acl);
                     }
                     k.ingest_bytes(
                         &spec.collection,

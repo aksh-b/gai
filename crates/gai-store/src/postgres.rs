@@ -336,6 +336,64 @@ impl AgentStore for PostgresStore {
 
 #[async_trait]
 impl SessionStore for PostgresStore {
+    async fn search_messages(&self, q: &MessageSearch) -> Result<Vec<MessageHit>> {
+        let words: Vec<String> = q
+            .text
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .map(str::to_lowercase)
+            .collect();
+        let Some(last) = words.last() else {
+            return Ok(Vec::new());
+        };
+        // Every word; the last as a prefix, for search-as-you-type.
+        let mut terms: Vec<String> = words[..words.len() - 1]
+            .iter()
+            .map(|w| format!("'{w}'"))
+            .collect();
+        terms.push(format!("'{last}':*"));
+        let rows = sqlx::query(
+            "WITH q AS (SELECT to_tsquery('english', $1) AS q)
+             SELECT m.session_id, m.seq, m.run_id, (m.body::jsonb)->>'role' AS role,
+                    ts_headline('english',
+                        (SELECT string_agg(t, ' ') FROM jsonb_array_elements_text(
+                            jsonb_path_query_array(m.body::jsonb, '$.content[*] ? (@.type == \"text\").text')) t),
+                        q.q, 'StartSel=[, StopSel=], MaxWords=24, MinWords=8') AS snippet,
+                    m.created_at, s.title, s.agent, s.user_id, ts_rank(m.tsv, q.q)::FLOAT8 AS score
+             FROM messages m JOIN sessions s ON s.id = m.session_id, q
+             WHERE m.tsv @@ q.q
+               AND ($2::TEXT IS NULL OR s.agent = $2) AND ($3::TEXT IS NULL OR s.user_id = $3)
+               AND ($4::TIMESTAMPTZ IS NULL OR m.created_at >= $4) AND ($5::TIMESTAMPTZ IS NULL OR m.created_at < $5)
+             ORDER BY score DESC LIMIT $6",
+        )
+        .bind(terms.join(" & "))
+        .bind(&q.agent)
+        .bind(&q.user_id)
+        .bind(q.since)
+        .bind(q.until)
+        .bind(i64::from(if q.limit == 0 { 50 } else { q.limit.min(500) }))
+        .fetch_all(&self.pool)
+        .await?;
+        rows.iter()
+            .map(|r| {
+                Ok(MessageHit {
+                    session_id: r.try_get("session_id")?,
+                    seq: r.try_get("seq")?,
+                    run_id: r.try_get("run_id")?,
+                    role: r.try_get::<Option<String>, _>("role")?.unwrap_or_default(),
+                    snippet: r
+                        .try_get::<Option<String>, _>("snippet")?
+                        .unwrap_or_default(),
+                    created_at: r.try_get("created_at")?,
+                    session_title: r.try_get("title")?,
+                    agent: r.try_get("agent")?,
+                    user_id: r.try_get("user_id")?,
+                    score: r.try_get::<f64, _>("score")? as f32,
+                })
+            })
+            .collect()
+    }
+
     async fn create_session(&self, new: NewSession) -> Result<Session> {
         let id = gai_core::new_id("ses");
         let ts = now();
@@ -524,6 +582,44 @@ impl SessionStore for PostgresStore {
 
 #[async_trait]
 impl RunStore for PostgresStore {
+    async fn agent_stats(&self, filter: StatsFilter) -> Result<Vec<AgentStats>> {
+        let rows = sqlx::query(
+            "SELECT r.agent, r.agent_version, r.status, r.steps, r.cost, r.usage, r.created_at, r.finished_at,
+                    COALESCE((SELECT SUM(CASE WHEN f.rating > 0 THEN 1 ELSE 0 END) FROM feedback f WHERE f.run_id = r.id), 0)::BIGINT AS good,
+                    COALESCE((SELECT SUM(CASE WHEN f.rating < 0 THEN 1 ELSE 0 END) FROM feedback f WHERE f.run_id = r.id), 0)::BIGINT AS bad
+             FROM runs r
+             WHERE COALESCE((r.metadata::jsonb)->>'kind', '') <> 'eval'
+               AND ($1::TEXT IS NULL OR r.agent = $1)
+               AND ($2::TIMESTAMPTZ IS NULL OR r.created_at >= $2) AND ($3::TIMESTAMPTZ IS NULL OR r.created_at < $3)
+             ORDER BY r.created_at DESC LIMIT 200000",
+        )
+        .bind(&filter.agent)
+        .bind(filter.since)
+        .bind(filter.until)
+        .fetch_all(&self.pool)
+        .await?;
+        let rows = rows
+            .iter()
+            .map(|r| {
+                Ok(crate::types::StatRow {
+                    agent: r.try_get("agent")?,
+                    agent_version: r
+                        .try_get::<Option<i64>, _>("agent_version")?
+                        .map(|v| v as u32),
+                    status: r.try_get("status")?,
+                    steps: r.try_get::<i64, _>("steps")?,
+                    cost: r.try_get("cost")?,
+                    usage: parse(&r.try_get::<String, _>("usage")?)?,
+                    created_at: r.try_get("created_at")?,
+                    finished_at: r.try_get("finished_at")?,
+                    good: r.try_get("good")?,
+                    bad: r.try_get("bad")?,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(crate::types::aggregate(rows))
+    }
+
     async fn create_run(&self, new: NewRun) -> Result<Run> {
         let id = new.id.unwrap_or_else(|| gai_core::new_id("run"));
         let ts = now();

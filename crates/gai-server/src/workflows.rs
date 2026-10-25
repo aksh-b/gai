@@ -9,7 +9,7 @@ use gai::orchestra::{GraphNode, WorkflowRequest, WorkflowSpec};
 use gai::store::{WorkflowSummary, WorkflowVersion};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value};
 use tokio::sync::mpsc;
 
 use crate::AppState;
@@ -220,9 +220,7 @@ async fn run(
     req.user_id = b.user_id;
     req.auto_approve = b.auto_approve;
     req.callback_url = b.callback_url;
-    if let Some(id) = p.key_id() {
-        req.metadata.insert("key_id".into(), json!(id));
-    }
+    p.stamp(&mut req.metadata);
     match b.mode {
         Mode::Background => {
             let (run_id, session_id) = s.wf.enqueue(req).await?;

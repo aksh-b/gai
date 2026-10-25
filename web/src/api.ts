@@ -19,6 +19,9 @@ export type OrgRole = Schemas['Role'];
 export type Owner = Schemas['Owner'];
 export type Me = Schemas['Me'];
 export type AuthConfig = Schemas['AuthConfig'];
+export type AgentStats = Schemas['AgentStats'];
+export type MessageHit = Schemas['MessageHit'];
+export type Change = Schemas['Change'];
 export type AgentSummary = Schemas['AgentSummary'];
 export type PendingApproval = Schemas['PendingApproval'];
 export type McpServerInfo = Schemas['McpServerInfo'];
@@ -477,6 +480,10 @@ export const api = {
   owners: () => get<Owner[]>('/v1/owners'),
   setOwner: (kind: string, name: string, team: string | null) =>
     request<unknown>('PUT', `/v1/owners/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`, { team }),
+  agentStats: (since?: string) => get<AgentStats[]>(`/v1/analytics/agents${since ? `?since=${encodeURIComponent(since)}` : ''}`),
+  searchSessions: (q: string, agent?: string) =>
+    get<MessageHit[]>(`/v1/sessions/search?q=${encodeURIComponent(q)}${agent ? `&agent=${encodeURIComponent(agent)}` : ''}`),
+  changes: (target: string) => get<Change[]>(`/v1/changes?target=${encodeURIComponent(target)}`),
   secrets: () => get<string[]>('/v1/secrets'),
   putSecret: (name: string, value: string) => request<{ ok: boolean }>('PUT', `/v1/secrets/${encodeURIComponent(name)}`, { value }),
   deleteSecret: (name: string) => request<{ ok: boolean }>('DELETE', `/v1/secrets/${encodeURIComponent(name)}`),

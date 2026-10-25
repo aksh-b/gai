@@ -338,9 +338,7 @@ async fn start(
     }
     let mut meta = Map::new();
     meta.insert("source".into(), json!("a2a"));
-    if let Some(k) = p.key_id() {
-        meta.insert("key_id".into(), json!(k));
-    }
+    p.stamp(&mut meta);
     if let Some(m) = msg["messageId"].as_str() {
         meta.insert("a2a_message_id".into(), json!(m));
     }

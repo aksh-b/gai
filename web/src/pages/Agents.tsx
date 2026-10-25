@@ -22,6 +22,7 @@ import { useDevMode } from '../prefs';
 import { navigate } from '../router';
 import { useLoad } from '../util';
 import { VersionHistory } from '../Versions';
+import { Ownership } from '../Ownership';
 
 const BLANK: AgentSpec = {
   name: '',
@@ -197,7 +198,8 @@ export function Agents({ selected, creating = false }: { selected?: string; crea
             <CardHeader>
               <CardTitle className="text-lg">{selected === 'new' ? 'New assistant' : selected}</CardTitle>
               {current && (
-                <CardAction className="flex gap-2">
+                <CardAction className="flex flex-wrap items-center justify-end gap-2">
+                  <Ownership kind="agent" name={current.summary.name} />
                   <Button variant="outline" size="sm" onClick={() => navigate(`/chat?agent=${encodeURIComponent(current.summary.name)}`)}>
                     <IconChat data-icon="inline-start" />
                     Chat

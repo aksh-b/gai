@@ -456,9 +456,7 @@ async fn agent_completion(
     if let Some(sys) = system {
         run.vars.insert("client_system".into(), json!(sys));
     }
-    if let Some(id) = p.key_id() {
-        run.metadata.insert("key_id".into(), json!(id));
-    }
+    p.stamp(&mut run.metadata);
     let mut handle = s.rt.start(run).await?;
     let id = format!("chatcmpl-{}", handle.run_id);
     let model_name = req.model.clone();

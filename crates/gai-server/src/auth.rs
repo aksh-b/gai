@@ -44,6 +44,10 @@ pub struct Principal {
     pub teams: Vec<String>,
     #[serde(skip)]
     pub key: Option<ApiKey>,
+    /// What the caller may find in knowledge with an `acl`; None for
+    /// admins, who find everything.
+    #[serde(skip)]
+    pub access: Option<gai::memory::Access>,
 }
 
 impl Principal {
@@ -59,6 +63,7 @@ impl Principal {
             team_id: None,
             teams: Vec::new(),
             key: None,
+            access: None,
         }
     }
 
@@ -74,6 +79,7 @@ impl Principal {
             team_id: k.team_id.clone(),
             teams: k.team_id.iter().cloned().collect(),
             key: Some(k),
+            access: None,
         }
     }
 
@@ -89,6 +95,18 @@ impl Principal {
             team_id: None,
             teams,
             key: None,
+            access: None,
+        }
+    }
+
+    /// Put who started a run on it: the key it is charged to, and what it
+    /// may find in knowledge.
+    pub fn stamp(&self, meta: &mut serde_json::Map<String, serde_json::Value>) {
+        if let Some(id) = self.key_id() {
+            meta.insert("key_id".into(), serde_json::json!(id));
+        }
+        if let Some(a) = &self.access {
+            meta.insert("access".into(), serde_json::json!(a));
         }
     }
 
@@ -621,8 +639,47 @@ async fn authorize(s: &AppState, req: &mut Request) -> Result<(), Response> {
             .map_err(IntoResponse::into_response)?;
         req.extensions_mut().insert(state);
     }
+    let mut principal = principal;
+    principal.access = access(s.orgs.control(), &principal).await;
     req.extensions_mut().insert(principal);
     Ok(())
+}
+
+/// What a non-admin may find in knowledge with an `acl`: who they are,
+/// their teams, and their role and every role below it.
+async fn access(control: &SharedStore, p: &Principal) -> Option<gai::memory::Access> {
+    if p.is_admin() {
+        return None;
+    }
+    let mut identities = Vec::new();
+    if p.key.is_none() && p.user_id.is_some() {
+        identities.push(format!("user:{}", p.name.to_lowercase()));
+    }
+    if !p.teams.is_empty() {
+        for t in control.list_teams(&p.org_id).await.unwrap_or_default() {
+            if p.teams.contains(&t.id) {
+                identities.push(format!("team:{}", t.name));
+            }
+        }
+    }
+    let role = p.role.unwrap_or(match Scope::highest(&p.scopes) {
+        Scope::Read => Role::Viewer,
+        Scope::Run => Role::Member,
+        Scope::Build => Role::Builder,
+        Scope::Admin => Role::Admin,
+    });
+    for r in [
+        Role::Viewer,
+        Role::Member,
+        Role::Builder,
+        Role::Admin,
+        Role::Owner,
+    ] {
+        if r <= role {
+            identities.push(format!("role:{}", format!("{r:?}").to_lowercase()));
+        }
+    }
+    Some(gai::memory::Access { identities })
 }
 
 fn too_many(wait: std::time::Duration) -> Response {

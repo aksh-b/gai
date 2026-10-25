@@ -160,6 +160,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/analytics/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Per agent version: runs, success rate, steps, p50/p95 latency, cost, tokens and ratings (evaluations not counted) */
+        get: operations["get_v1_analytics_agents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/approvals": {
         parameters: {
             query?: never;
@@ -394,6 +411,23 @@ export interface paths {
         put?: never;
         /** Read a .gaibundle (the request body) without importing it: its contents and what this server is missing */
         post: operations["post_v1_bundles_inspect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Who changed one thing and when (its audit entries, without details) */
+        get: operations["get_v1_changes"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1533,6 +1567,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Find messages across conversations, best first, with the words marked [like this] */
+        get: operations["get_v1_sessions_search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{id}": {
         parameters: {
             query?: never;
@@ -2290,6 +2341,54 @@ export interface components {
              */
             workspace?: string | null;
         };
+        /** @description How one agent version did. Evaluation runs aren't counted. */
+        AgentStats: {
+            agent: string;
+            /** Format: uint32 */
+            agent_version?: number | null;
+            /** Format: double */
+            avg_steps: number;
+            /** Format: uint64 */
+            bad: number;
+            /** Format: uint64 */
+            completed: number;
+            /** Format: double */
+            cost_usd: number;
+            /** Format: uint64 */
+            failed: number;
+            /**
+             * Format: uint64
+             * @description Thumbs up and down.
+             */
+            good: number;
+            /** Format: uint64 */
+            input_tokens: number;
+            /** Format: date-time */
+            last_run_at?: string | null;
+            /**
+             * Format: uint64
+             * @description Queued, running or waiting for approval.
+             */
+            open: number;
+            /** Format: uint64 */
+            output_tokens: number;
+            /** Format: uint64 */
+            p50_latency_ms: number;
+            /** Format: uint64 */
+            p95_latency_ms: number;
+            /** Format: uint64 */
+            runs: number;
+            /**
+             * Format: uint64
+             * @description Cancelled, or stopped by a budget.
+             */
+            stopped: number;
+            /**
+             * Format: double
+             * @description Completed out of finished runs, 0 to 1.
+             */
+            success_rate: number;
+        };
         AgentSummary: {
             /** Format: date-time */
             created_at: string;
@@ -2537,6 +2636,18 @@ export interface components {
             provider: string;
         };
         CatchUp: "once" | "skip";
+        /**
+         * @description Who changed one thing, and when: the audit log for a target, without
+         *     details, for everyone who can see it.
+         */
+        Change: {
+            action: string;
+            actor: string;
+            /** Format: date-time */
+            at: string;
+            /** Format: uint16 */
+            status: number;
+        };
         ChatCompletionRequest: {
             /** Format: uint32 */
             max_completion_tokens?: number | null;
@@ -3624,6 +3735,25 @@ export interface components {
             content: components["schemas"]["ContentBlock"][];
             role: components["schemas"]["Role2"];
         };
+        /** @description A message that matched, with the words marked `[like this]`. */
+        MessageHit: {
+            agent?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            role: string;
+            run_id?: string | null;
+            /**
+             * Format: float
+             * @description Higher is a better match.
+             */
+            score: number;
+            /** Format: int64 */
+            seq: number;
+            session_id: string;
+            session_title?: string | null;
+            snippet: string;
+            user_id?: string | null;
+        };
         Mode: "wait" | "stream" | "background";
         ModelKind: ("chat" | "embedding") | "transcription" | "speech" | "image";
         NewBlock: {
@@ -4525,6 +4655,11 @@ export interface components {
         };
         /** @description A source and where it syncs to. */
         SourceSpec: {
+            /**
+             * @description Who may find what it brings in: `team:<name>`, `user:<email>`,
+             *     `role:<role>` (that role or higher). Empty: everyone.
+             */
+            acl?: string[];
             /** @description The knowledge collection it fills (created if missing). */
             collection: string;
             /**
@@ -5553,6 +5688,42 @@ export interface operations {
             };
         };
     };
+    get_v1_analytics_agents: {
+        parameters: {
+            query?: {
+                /** @description One agent */
+                agent?: string;
+                /** @description RFC 3339 time */
+                since?: string;
+                /** @description RFC 3339 time */
+                until?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentStats"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get_v1_approvals: {
         parameters: {
             query?: never;
@@ -6039,6 +6210,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ImportReport"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_changes: {
+        parameters: {
+            query?: {
+                /** @description e.g. agents/helper */
+                target?: string;
+                /** @description Max rows */
+                limit?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Change"][];
                 };
             };
             /** @description Error */
@@ -9008,6 +9213,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Session"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_sessions_search: {
+        parameters: {
+            query?: {
+                /** @description Words to find */
+                q?: string;
+                /** @description One agent */
+                agent?: string;
+                /** @description One user id */
+                user?: string;
+                /** @description RFC 3339 time */
+                since?: string;
+                /** @description RFC 3339 time */
+                until?: string;
+                /** @description Max hits */
+                limit?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageHit"][];
                 };
             };
             /** @description Error */

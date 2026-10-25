@@ -140,6 +140,43 @@ builders change it; everyone can still see and use it. A **team key**
 (`gai keys create --name ci --scope build --team support --org acme`)
 changes only what its team owns, or what no team owns.
 
+## Knowledge only some may find
+
+A source can say who may find what it brings in:
+
+```yaml
+name: eng-wiki
+collection: wiki
+kind: confluence
+# ...
+acl: ["team:eng", "role:admin"]   # team:<name>, user:<email>, role:<role> (that role or higher)
+```
+
+Searches (`POST /v1/collections/{name}/search`), document lists and
+documents leave those out for everyone else, and so does `rag_search`
+inside a run: a run remembers who started it, and the agents it delegates
+to and a workflow's steps inherit that. Admins find everything. Runs
+started by schedules and webhooks find everything too, since builders set
+them up. Documents you add with an `acl` in their metadata
+(`POST /v1/collections/{name}/documents`) work the same way. Changing a
+source's `acl` re-applies it at its next sync.
+
+## Working together
+
+Everyone in an organization sees its conversations, assistants and
+workflows; roles decide who changes them.
+
+- **Search chats** (**Activity › Search chats**, `GET /v1/sessions/search?q=`)
+  finds words across every conversation, by assistant, person and date.
+- **By assistant** (**Activity › By assistant**, `GET /v1/analytics/agents`)
+  shows each version's runs, how often it finished well, steps, median and
+  slowest latency, cost, tokens and ratings. Tests aren't counted.
+- **@mentions** in a chat hand that turn to another assistant: "@researcher
+  find the 2024 numbers" asks `researcher` in the same conversation.
+- **Who changed what**: an assistant's page says who changed it last, and
+  `GET /v1/changes?target=agents/helper` lists its changes for anyone in
+  the organization (the full audit log stays with admins).
+
 ## API
 
 | | |
@@ -151,3 +188,6 @@ changes only what its team owns, or what no team owns.
 | `GET, POST /v1/teams`, `DELETE /v1/teams/{team}`, `PUT, DELETE /v1/teams/{team}/members/{email}` | teams |
 | `GET /v1/owners`, `PUT /v1/owners/{kind}/{name}` | which team owns what |
 | `GET /v1/secrets`, `PUT, DELETE /v1/secrets/{name}` | the organization's secrets |
+| `GET /v1/sessions/search` | find words in conversations |
+| `GET /v1/analytics/agents` | how each agent version does |
+| `GET /v1/changes?target=` | who changed one thing, and when |

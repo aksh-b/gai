@@ -217,6 +217,20 @@ struct RagArgs {
     k: Option<usize>,
 }
 
+/// Who started a run, for documents with an `acl`: the run's (or its first
+/// ancestor's) `metadata.access`. None: it may find everything.
+pub async fn run_access(store: &gai_store::SharedStore, run_id: &str) -> Option<crate::Access> {
+    let mut id = run_id.to_owned();
+    for _ in 0..16 {
+        let run = store.get_run(&id).await.ok().flatten()?;
+        if let Some(a) = run.metadata.get("access").filter(|a| !a.is_null()) {
+            return serde_json::from_value(a.clone()).ok();
+        }
+        id = run.parent_run_id?;
+    }
+    None
+}
+
 /// `rag_search` over `collections`, or over every knowledge collection
 /// when the list is empty.
 pub fn rag_tool(knowledge: Arc<Knowledge>, collections: Vec<String>) -> SharedTool {
@@ -229,9 +243,11 @@ pub fn rag_tool(knowledge: Arc<Knowledge>, collections: Vec<String>) -> SharedTo
         typed_tool(
             "rag_search",
             &format!("Search {scope} for passages relevant to a question. Results are numbered with their sources; cite them as [n]. Search again with different words if the first results miss."),
-            move |_ctx, a: RagArgs| {
+            move |ctx, a: RagArgs| {
                 let (k, allowed) = (knowledge.clone(), collections.clone());
+                let run_id = ctx.run_id.clone();
                 async move {
+                    let access = run_access(k.store(), &run_id).await;
                     let all = if allowed.is_empty() {
                         k.store()
                             .list_collections()
@@ -258,7 +274,13 @@ pub fn rag_tool(knowledge: Arc<Knowledge>, collections: Vec<String>) -> SharedTo
                         return Ok(ToolOutput::text("There are no knowledge collections yet."));
                     }
                     let hits = k
-                        .search(&targets, &a.query, a.k.unwrap_or(5).min(20), SearchMode::Hybrid)
+                        .search_as(
+                            &targets,
+                            &a.query,
+                            a.k.unwrap_or(5).min(20),
+                            SearchMode::Hybrid,
+                            access.as_ref(),
+                        )
                         .await?;
                     Ok(ToolOutput::text(format_hits(&hits)))
                 }

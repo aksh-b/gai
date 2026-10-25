@@ -46,11 +46,14 @@ permissions are kept on chunks (`acl`) but enforced only with phase 16.
 
 Done when a server runs on Postgres with an external vector store and synced sources.
 
-## 16. Users, teams and tenants — in progress
+## 16. Users, teams and tenants — done (2026-10-25)
 
-Built so far: users with roles, OIDC and proxy sign-in, teams owning
-resources and team keys, organizations each in their own database with
-budgets, rate limits and branding.
+Built: users with roles, OIDC and proxy sign-in, teams owning resources and
+team keys, organizations each in their own database (budgets, rate limits,
+branding), conversation search, per-agent analytics, @mentions of
+assistants, who changed what, and source permissions on search. Not built:
+notifying people mentioned in chats, private chats, and per-item
+permissions read from the source systems.
 
 - **Users and RBAC** [67]: user accounts with roles (owner, admin, builder, member, viewer) and per-resource permissions, beyond API key scopes.
 - **SSO** [68]: OIDC (and SAML through a proxy) sign-in for the dashboard, with users created on first sign-in.

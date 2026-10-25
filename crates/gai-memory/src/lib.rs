@@ -22,8 +22,9 @@ pub mod tools;
 
 pub use blocks::{ArchivalScope, BlockSpec, MemoryConfig, RunMemory, archival_collection};
 pub use knowledge::{
-    DocumentInput, FALLBACK_EMBEDDING_MODEL, Ingested, Knowledge, KnowledgeSettings, NewCollection,
-    SearchHit, SearchMode, VectorBackend, VectorIndexSettings, format_hits,
+    Access, DocumentInput, FALLBACK_EMBEDDING_MODEL, Ingested, Knowledge, KnowledgeSettings,
+    NewCollection, SearchHit, SearchMode, VectorBackend, VectorIndexSettings, format_hits,
+    validate_acl,
 };
 
 #[derive(Debug, thiserror::Error)]

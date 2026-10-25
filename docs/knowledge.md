@@ -112,10 +112,14 @@ An item that fails (a page that 404s, a file that can't be read) is
 counted and retried on the next sync; the rest still go in. Deleting a
 source leaves its documents in the collection.
 
+Add `acl: ["team:eng"]` (or `user:<email>`, `role:<role>`) to a source to
+let only those people find what it brings in; see
+[users.md](users.md#knowledge-only-some-may-find).
+
 Web sources stay on the sites they start from and refuse localhost and
 private addresses unless `allow_private: true`. Tokens are read from the
 environment variables you name, never stored.
 
-Not built yet: Google Drive, SharePoint and S3 sources, and enforcing the
-source's permissions on search (items can carry an `acl` in their
-metadata, which phase 16's users and teams will check).
+Not built yet: Google Drive, SharePoint and S3 sources, and reading each
+item's permissions from the system it came from (the `acl` is set per
+source).

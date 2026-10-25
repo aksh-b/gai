@@ -97,6 +97,8 @@ pub trait SessionStore: Send + Sync {
         summary: &str,
     ) -> Result<()>;
     async fn load_history(&self, session_id: &str) -> Result<History>;
+    /// Messages matching words, best first, across conversations.
+    async fn search_messages(&self, q: &MessageSearch) -> Result<Vec<MessageHit>>;
     /// Every message, ignoring compactions (for transcripts and the UI).
     async fn list_messages(&self, session_id: &str) -> Result<Vec<StoredMessage>>;
     /// A new session holding a copy of `from`'s rows (messages and
@@ -116,6 +118,8 @@ pub trait RunStore: Send + Sync {
     async fn get_run(&self, id: &str) -> Result<Option<Run>>;
     async fn list_runs(&self, filter: RunFilter) -> Result<Vec<Run>>;
     async fn update_run(&self, id: &str, update: RunUpdate) -> Result<()>;
+    /// Runs, success, latency, cost and ratings per agent version.
+    async fn agent_stats(&self, filter: StatsFilter) -> Result<Vec<AgentStats>>;
 
     async fn start_step(
         &self,

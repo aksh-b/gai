@@ -29,6 +29,15 @@ initial development and will ship as 0.1.0.
   assistants, workflows, knowledge and the rest, so only their builders
   change them; team keys are limited the same way. `gai members`,
   `gai teams`, **Settings › People & teams**.
+- **Search chats, analytics and @mentions.** Find words across every
+  conversation (**Activity › Search chats**, `GET /v1/sessions/search`),
+  see how each assistant version does (runs, success, steps, latency, cost,
+  ratings: **Activity › By assistant**, `GET /v1/analytics/agents`), hand a
+  chat turn to another assistant with `@name`, and see who changed an
+  assistant last (`GET /v1/changes`).
+- **Knowledge only some may find.** A source's `acl` (`team:`, `user:`,
+  `role:`) limits who finds what it brings in, in searches, document lists
+  and agents' `rag_search`.
 - **Build scope.** Keys get a `build` scope between `run` and `admin`:
   changing agents, personas, workflows, skills, triggers, sources and evals
   now needs `build` (admin keys still can). **Breaking** for scripts that

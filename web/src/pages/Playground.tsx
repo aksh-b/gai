@@ -432,8 +432,12 @@ export function Playground({ route }: { route: Route }) {
       .map((f) => `\n\n--- ${f.name} ---\n${f.text}`)
       .join('');
     const docs = attached.filter((f) => f.knowledge).map((f) => f.name);
+    // "@helper ..." hands this turn to another assistant, in the same chat.
+    const at = /^@([A-Za-z0-9_.-]+)\s+/.exec(typed);
+    const mentioned = at && agents.some((a) => a.name === at[1]) ? at[1] : null;
+    const said = mentioned ? typed.slice(at![0].length) : typed;
     const message =
-      (typed || (docs.length ? 'Please look at the attached file.' : 'Please look at this.')) +
+      (said || (docs.length ? 'Please look at the attached file.' : 'Please look at this.')) +
       (docs.length ? `\n\n(I added ${docs.join(', ')} to my documents; search them to answer.)` : '') +
       notes;
     for (const f of attached) if (f.block) blocks.push(f.block);
@@ -446,10 +450,10 @@ export function Playground({ route }: { route: Route }) {
     try {
       await streamRun(
         {
-          agent: agent || undefined,
+          agent: mentioned ?? (agent || undefined),
           input: blocks.length ? [{ type: 'text', text: message }, ...blocks] : message,
           session_id: sessionRef.current ?? undefined,
-          model: model || undefined,
+          model: mentioned ? undefined : model || undefined,
           persona: persona || undefined,
           auto_approve: autoApprove,
         },
@@ -825,7 +829,9 @@ export function Playground({ route }: { route: Route }) {
             )}
             <InputGroupTextarea
               value={input}
-              placeholder={running ? 'Working… you can type your next message' : 'Message  (Enter to send, Shift+Enter for a new line)'}
+              placeholder={
+                running ? 'Working… you can type your next message' : 'Message  (Enter to send, Shift+Enter for a new line, @name for another assistant)'
+              }
               rows={Math.min(8, Math.max(1, input.split('\n').length))}
               onChange={(e) => setInput(e.target.value)}
               onPaste={(e) => {

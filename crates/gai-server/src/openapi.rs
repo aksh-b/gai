@@ -236,6 +236,15 @@ pub fn document() -> Value {
             "Receive a webhook (no API key: sign the body with the trigger's secret, X-Gai-Signature: sha256=<hex>, or send X-Gai-Token)",
         )
         .ok(s::<gai::triggers::Fired>(&mut g)),
+        op("get", "/v1/sessions/search", "sessions", "Find messages across conversations, best first, with the words marked [like this]")
+            .ok(list::<gai::store::MessageHit>(&mut g))
+            .query(&[("q", "Words to find"), ("agent", "One agent"), ("user", "One user id"), ("since", "RFC 3339 time"), ("until", "RFC 3339 time"), ("limit", "Max hits")]),
+        op("get", "/v1/analytics/agents", "runs", "Per agent version: runs, success rate, steps, p50/p95 latency, cost, tokens and ratings (evaluations not counted)")
+            .ok(list::<gai::store::AgentStats>(&mut g))
+            .query(&[("agent", "One agent"), ("since", "RFC 3339 time"), ("until", "RFC 3339 time")]),
+        op("get", "/v1/changes", "governance", "Who changed one thing and when (its audit entries, without details)")
+            .ok(list::<Change>(&mut g))
+            .query(&[("target", "e.g. agents/helper"), ("limit", "Max rows")]),
         op("get", "/v1/audit", "governance", "Changes made through the API, newest first: who, what, when and the answer's status")
             .ok(list::<gai::store::AuditEntry>(&mut g))
             .query(&[("actor", "API key name"), ("target", "Targets starting with this, e.g. agents/"), ("since", "RFC 3339 time"), ("until", "RFC 3339 time"), ("limit", "Max rows"), ("format", "csv for a download")]),
