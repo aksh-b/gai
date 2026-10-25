@@ -1,9 +1,13 @@
 [package]
 name = "gai-store"
-description = "Storage for gai: repository traits and the SQLite implementation."
+description = "Storage for gai: repository traits, the SQLite implementation, and Postgres groundwork."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+
+[features]
+# Postgres groundwork: agents, settings and MCP servers (see PostgresStore).
+postgres = ["sqlx/postgres"]
 
 [dependencies]
 gai-core.workspace = true

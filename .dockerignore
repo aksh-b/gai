@@ -1,0 +1,15 @@
+# Keep the build context small, and keep local state out of the image.
+.git
+.claude
+target
+web/node_modules
+web/dist
+web/tsconfig.tsbuildinfo
+*.db
+*.db-shm
+*.db-wal
+.env
+.admin-key
+NUL
+# This machine's config (model servers, keys); the image reads its own.
+gai.toml

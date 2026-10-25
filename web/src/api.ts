@@ -29,6 +29,8 @@ export type GraphNode = Schemas['GraphNode'];
 export type WorkflowEntry = Schemas['WorkflowEntry'];
 export type WorkflowView = Schemas['WorkflowView'];
 export type WorkflowSpec = Schemas['WorkflowSpec'];
+export type BundleReport = Schemas['ImportReport'];
+export type BundleExport = Schemas['ExportOptions'];
 export type Validation = Schemas['Validation'];
 export type Trace = Schemas['Trace'];
 export type WorkflowVersion = Schemas['WorkflowVersion'];
@@ -562,6 +564,25 @@ export const api = {
       body: file,
     });
     if (!res.ok) throw new ApiError(res.status, await res.text());
+    return res.json();
+  },
+  /** A .gaibundle (zip) of the chosen items and what they use. */
+  exportBundle: async (opts: Partial<BundleExport>): Promise<Blob> => {
+    const res = await fetch('/v1/bundles/export', { method: 'POST', headers: headers(true), body: JSON.stringify(opts) });
+    unauthorized(res);
+    if (!res.ok) throw new ApiError(res.status, (await res.json().catch(() => null))?.error?.message ?? `HTTP ${res.status}`);
+    return res.blob();
+  },
+  /** What a bundle holds and what this server is missing, or (with `install`) import it. */
+  bundle: async (file: Blob, install?: { skip_existing?: boolean }): Promise<BundleReport> => {
+    const path = install ? `/v1/bundles/import${install.skip_existing ? '?skip_existing=true' : ''}` : '/v1/bundles/inspect';
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { ...(headers(false) as Record<string, string>), 'content-type': 'application/zip' },
+      body: file,
+    });
+    unauthorized(res);
+    if (!res.ok) throw new ApiError(res.status, (await res.json().catch(() => null))?.error?.message ?? `HTTP ${res.status}`);
     return res.json();
   },
   transcribe: (body: { audio_base64?: string; media_type?: string; blob_id?: string; model?: string; language?: string }) =>

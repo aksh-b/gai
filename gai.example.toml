@@ -1,0 +1,82 @@
+# An example gai configuration. Copy it to gai.toml (which git ignores, so
+# your settings stay yours) or to ~/.config/gai/gai.toml, and keep what you
+# need. Every option is documented in crates/gai/src/config.rs, and any value
+# can also come from GAI_* variables (GAI_DEFAULT_MODEL=..., and
+# GAI_PROVIDERS__OLLAMA__BASE_URL=... for nested keys).
+#
+# Without any config, gai uses the first provider whose key is set
+# (ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, ...), and the
+# dashboard's first-run screen helps you connect one.
+
+# The model agents use when they name none: `provider/model`, an alias, or
+# a router.
+# default_model = "anthropic/claude-sonnet-5-5"
+# default_model = "router/auto"
+
+# Where the database, workspaces and files live (default: the platform data
+# folder, ~/.local/share/gai on Linux).
+# data_dir = "./data"
+
+# ---- local models through Ollama (https://ollama.com) ----
+# Models listed here show up in the dashboard; any other pulled model works
+# as ollama/<name>. Say whether a model can call tools, so it is never sent
+# tools it can't use.
+#
+# [providers.ollama]
+# base_url = "http://localhost:11434/v1"   # the default
+#
+# [[providers.ollama.models]]
+# id = "qwen3:4b"
+# capabilities = { tools = true, context_window = 32768 }
+#
+# [[providers.ollama.models]]
+# id = "nomic-embed-text"
+# kind = "embedding"
+# capabilities = { dimensions = 768 }
+
+# ---- a router: easy chat to a cheap model, harder work to a strong one ----
+# [routers.auto]
+# models = [
+#   { model = "ollama/qwen3:4b", level = "easy" },
+#   { model = "anthropic/claude-sonnet-5-5", level = "hard" },
+# ]
+
+# ---- knowledge ----
+# Collections embed with this unless they name another model. The default
+# (mock/hash) needs no model but only matches keywords.
+# [knowledge]
+# embedding_model = "ollama/nomic-embed-text"
+
+# ---- media: image_gen, speak, transcribe and /v1/audio, /v1/images ----
+# [media]
+# image = "openai/gpt-image-1"
+# speech = "openai/gpt-4o-mini-tts"
+# voice = "alloy"
+# transcription = "openai/gpt-4o-mini-transcribe"
+
+# ---- the code sandbox (code_exec) ----
+# A fresh Docker/Podman container per call: no network, 512 MB, 60 s.
+# [sandbox]
+# backend = "container"   # "local" runs on the host (needs approval), "off" turns it off
+# [sandbox.images]
+# python = "docker.io/library/python:3.13-slim"   # scripts/sandbox-image.sh builds one with pandas
+
+# ---- the browser tools (when Chrome or Chromium is installed) ----
+# [browser]
+# allow_domains = []                 # empty: any public site
+# deny_domains = ["facebook.com"]
+# allow_private_network = false
+
+# ---- the server ----
+# [server]
+# auth = "auto"                      # auto | required | off
+# rate_limit_per_minute = 600
+
+# ---- MCP servers whose tools agents can use (mcp__<name>__<tool>) ----
+# [mcp_servers.fs]
+# command = "npx"
+# args = ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+#
+# [mcp_servers.tracker]
+# url = "https://mcp.example.com/mcp"
+# headers = { Authorization = "Bearer ${TRACKER_TOKEN}" }

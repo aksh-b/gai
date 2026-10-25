@@ -1,4 +1,5 @@
 mod ask;
+mod bundle;
 mod chat;
 mod knowledge;
 mod manage;
@@ -103,6 +104,9 @@ enum Command {
     /// Run and manage multi-agent workflows
     #[command(subcommand)]
     Workflow(workflow::WorkflowCmd),
+    /// Export and import .gaibundle files (agents and what they use)
+    #[command(subcommand)]
+    Bundle(bundle::BundleCmd),
     /// List models from provider catalogs, or ask a provider what it serves
     Models {
         /// Only this provider
@@ -199,6 +203,7 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
         Command::Skills(cmd) => knowledge::skills(&gai, cmd).await,
         Command::Workflow(cmd) => workflow::workflow(&gai, cmd).await,
         Command::Triggers(cmd) => triggers::triggers(&gai, cmd).await,
+        Command::Bundle(cmd) => bundle::bundle(&gai, cmd).await,
         Command::Models {
             provider,
             remote,

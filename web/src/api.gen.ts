@@ -264,6 +264,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/bundles/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Write a .gaibundle (zip) with the chosen agents, workflows, personas, skills, MCP servers and knowledge, plus what they use */
+        post: operations["post_v1_bundles_export"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/bundles/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import a .gaibundle (the request body). Existing items get a new version unless skip_existing */
+        post: operations["post_v1_bundles_import"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/bundles/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read a .gaibundle (the request body) without importing it: its contents and what this server is missing */
+        post: operations["post_v1_bundles_inspect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/collections": {
         parameters: {
             query?: never;
@@ -1965,6 +2016,25 @@ export interface components {
             /** @constant */
             type: "redacted_thinking";
         };
+        Contents: {
+            /** @default [] */
+            agents: string[];
+            /** @default [] */
+            knowledge: string[];
+            /** @default [] */
+            mcp_servers: string[];
+            /**
+             * Format: uint
+             * @default 0
+             */
+            memory_blocks: number;
+            /** @default [] */
+            personas: string[];
+            /** @default [] */
+            skills: string[];
+            /** @default [] */
+            workflows: string[];
+        };
         /** @description How the runtime keeps the conversation inside the context window. */
         ContextConfig: {
             /**
@@ -2133,6 +2203,11 @@ export interface components {
             document: string;
             query: string;
         };
+        EnvVar: {
+            name: string;
+            /** @description What needs it. */
+            used_by: string;
+        };
         Error: {
             error?: {
                 message: string;
@@ -2276,6 +2351,53 @@ export interface components {
             type: "run_finished";
             usage: components["schemas"]["Usage"];
         });
+        /** @description What to put in a bundle. */
+        ExportOptions: {
+            /**
+             * @description Stored agents (latest versions).
+             * @default []
+             */
+            agents: string[];
+            /**
+             * @description Everything stored (knowledge only when also listed or `knowledge_all`).
+             * @default false
+             */
+            all: boolean;
+            /** @default null */
+            description: string | null;
+            /**
+             * @description Knowledge collections, with their documents.
+             * @default []
+             */
+            knowledge: string[];
+            /**
+             * @description With `all`: every knowledge collection too.
+             * @default false
+             */
+            knowledge_all: boolean;
+            /**
+             * @description MCP servers added through the API.
+             * @default []
+             */
+            mcp_servers: string[];
+            /**
+             * @description Shown when the bundle is imported.
+             * @default null
+             */
+            name: string | null;
+            /**
+             * @description Leave out what the chosen items use (delegates, personas, skills,
+             *     knowledge, MCP servers, agents in workflows).
+             * @default false
+             */
+            no_dependencies: boolean;
+            /** @default [] */
+            personas: string[];
+            /** @default [] */
+            skills: string[];
+            /** @default [] */
+            workflows: string[];
+        };
         /** @description What one firing did. */
         Fired: {
             error?: string | null;
@@ -2317,6 +2439,19 @@ export interface components {
             quality?: string | null;
             /** @description `1024x1024`, `1536x1024`... Providers reject sizes they lack. */
             size?: string | null;
+        };
+        /** @description What an import did. */
+        ImportReport: {
+            /** @description `kind/name` (and `@vN` for versioned items) of what was saved. */
+            installed: string[];
+            manifest: components["schemas"]["Manifest"];
+            /** @description Required environment variables that are not set on this server. */
+            missing_env: components["schemas"]["EnvVar"][];
+            /** @description Models the agents use that this server can't reach. */
+            missing_models: string[];
+            /** @description Items left alone because they exist (with `skip_existing`). */
+            skipped: string[];
+            warnings: string[];
         };
         Ingested: {
             document: components["schemas"]["Document"];
@@ -2389,6 +2524,35 @@ export interface components {
              * @description Wall-clock seconds, including time waiting for approvals.
              */
             timeout_secs?: number | null;
+        };
+        /** @description `bundle.toml`. */
+        Manifest: {
+            /**
+             * @default {
+             *       "agents": [],
+             *       "knowledge": [],
+             *       "mcp_servers": [],
+             *       "memory_blocks": 0,
+             *       "personas": [],
+             *       "skills": [],
+             *       "workflows": []
+             *     }
+             */
+            contents: components["schemas"]["Contents"];
+            created_at: string;
+            description?: string | null;
+            /** Format: uint32 */
+            format: number;
+            /** @description The gai version that wrote the bundle. */
+            gai_version: string;
+            name: string;
+            /**
+             * @default {
+             *       "env": [],
+             *       "models": []
+             *     }
+             */
+            requires: components["schemas"]["Requires"];
         };
         /** @description How to reach one MCP server. */
         McpServerConfig: {
@@ -2990,6 +3154,18 @@ export interface components {
             mode?: components["schemas"]["Mode"];
             /** @default {} */
             overrides: components["schemas"]["ReplayOverrides"];
+        };
+        Requires: {
+            /**
+             * @description Environment variables the bundle's items read (API keys, tokens).
+             * @default []
+             */
+            env: components["schemas"]["EnvVar"][];
+            /**
+             * @description Models the agents name.
+             * @default []
+             */
+            models: string[];
         };
         /**
          * @description Who authored a message. System prompts are carried separately on the
@@ -4313,6 +4489,98 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Blob"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_bundles_export: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportOptions"];
+            };
+        };
+        responses: {
+            /** @description Done */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_bundles_import: {
+        parameters: {
+            query?: {
+                /** @description Leave items that already exist alone */
+                skip_existing?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportReport"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_bundles_inspect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportReport"];
                 };
             };
             /** @description Error */

@@ -967,6 +967,13 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    async fn conforms() {
+        crate::conformance::agents(&SqliteStore::temporary().await.unwrap()).await;
+        crate::conformance::settings(&SqliteStore::temporary().await.unwrap()).await;
+        crate::conformance::mcp(&SqliteStore::temporary().await.unwrap()).await;
+    }
+
+    #[tokio::test]
     async fn settings_round_trip() {
         let s = SqliteStore::temporary().await.unwrap();
         assert_eq!(s.get_setting("default_model").await.unwrap(), None);

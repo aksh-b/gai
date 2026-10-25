@@ -16,7 +16,7 @@
 //! let gai = gai::Gai::builder().default_model("mock/echo").tool(add_tool()).build()?;
 //!
 //! // An agent from gai.toml's agents_dirs or the store, by name...
-//! let reply = gai.find_agent("researcher").run("What changed in Rust 1.91?").await?;
+//! let reply = gai.agent("researcher").run("What changed in Rust 1.91?").await?;
 //! println!("{}", reply.text);
 //!
 //! // ...or one written in code, streaming its events.
@@ -30,6 +30,7 @@
 //!
 //! [`client::Client`] talks to a running `gai serve` over HTTP instead.
 
+pub mod bundle;
 pub mod client;
 mod config;
 
@@ -88,6 +89,9 @@ pub enum Error {
     Skill(#[from] gai_skills::SkillError),
     #[error(transparent)]
     Workflow(#[from] gai_orchestra::WorkflowError),
+    /// A `.gaibundle` that can't be written or read.
+    #[error("bundle: {0}")]
+    Bundle(String),
 }
 
 /// Setting names in the store.

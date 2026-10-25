@@ -232,6 +232,28 @@ pub fn document() -> Value {
             "Receive a webhook (no API key: sign the body with the trigger's secret, X-Gai-Signature: sha256=<hex>, or send X-Gai-Token)",
         )
         .ok(s::<gai::triggers::Fired>(&mut g)),
+        op(
+            "post",
+            "/v1/bundles/export",
+            "bundles",
+            "Write a .gaibundle (zip) with the chosen agents, workflows, personas, skills, MCP servers and knowledge, plus what they use",
+        )
+        .body(s::<gai::bundle::ExportOptions>(&mut g)),
+        op(
+            "post",
+            "/v1/bundles/inspect",
+            "bundles",
+            "Read a .gaibundle (the request body) without importing it: its contents and what this server is missing",
+        )
+        .ok(s::<gai::bundle::ImportReport>(&mut g)),
+        op(
+            "post",
+            "/v1/bundles/import",
+            "bundles",
+            "Import a .gaibundle (the request body). Existing items get a new version unless skip_existing",
+        )
+        .ok(s::<gai::bundle::ImportReport>(&mut g))
+        .query(&[("skip_existing", "Leave items that already exist alone")]),
         op("get", "/v1/media", "media", "Default media models from [media]")
             .ok(s::<MediaDefaults>(&mut g)),
         op("get", "/v1/blobs", "media", "Stored media, newest first")

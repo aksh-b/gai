@@ -12,6 +12,7 @@ import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import YAML from 'yaml';
 import { AgentForm } from '../AgentForm';
+import { BundleMenu } from '../Bundles';
 import { api, streamRun, type AgentSpec, type AgentVersion, type Template } from '../api';
 import { SpecEditor } from '../forms';
 import { ConfirmAction, EmptyState, ErrorNote, LinkItem, Page, PageHeader } from '@/components/shared';
@@ -128,10 +129,13 @@ export function Agents({ selected, creating = false }: { selected?: string; crea
         title="Assistants"
         subtitle="Each assistant has its own instructions, tools and knowledge. Every change is kept, so you can always go back."
         actions={
-          <Button onClick={startNew}>
-            <IconPlus data-icon="inline-start" />
-            New assistant
-          </Button>
+          <>
+            <BundleMenu selected={current ? selected : undefined} onImported={() => list.reload()} />
+            <Button onClick={startNew}>
+              <IconPlus data-icon="inline-start" />
+              New assistant
+            </Button>
+          </>
         }
       />
       <ErrorNote error={list.error} />

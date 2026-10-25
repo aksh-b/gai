@@ -123,6 +123,7 @@ pub fn required_scope(method: &Method, path: &str) -> Scope {
         || path.starts_with("/v1/settings")
         || path.starts_with("/v1/providers")
         || path.starts_with("/v1/templates")
+        || path.starts_with("/v1/bundles")
         || workflow_admin)
         && method != Method::GET;
     if path.starts_with("/v1/keys") || admin_write {

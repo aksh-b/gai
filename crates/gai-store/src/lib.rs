@@ -2,9 +2,15 @@
 //!
 //! The rest of gai talks to the repository traits ([`AgentStore`],
 //! [`SessionStore`], [`RunStore`]) through [`Store`], so the backend can be
-//! swapped. [`SqliteStore`] is the default: one file, zero setup.
+//! swapped. [`SqliteStore`] is the default: one file, zero setup. A
+//! Postgres backend is started behind the `postgres` feature
+//! ([`PostgresStore`]); see its docs for what it covers so far.
 
+#[doc(hidden)]
+pub mod conformance;
 pub mod keys;
+#[cfg(feature = "postgres")]
+mod postgres;
 mod sqlite;
 mod types;
 
@@ -15,6 +21,8 @@ use async_trait::async_trait;
 use gai_core::{Message, Usage};
 use serde_json::Value;
 
+#[cfg(feature = "postgres")]
+pub use postgres::PostgresStore;
 pub use sqlite::SqliteStore;
 pub use types::*;
 

@@ -5,6 +5,7 @@
 mod a2a;
 mod api;
 mod auth;
+mod bundles;
 mod error;
 mod knowledge;
 pub mod mcp_server;
@@ -28,7 +29,7 @@ use gai::{AuthMode, Gai};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
-pub use auth::{AuthPolicy, Principal};
+pub use auth::{AuthPolicy, Principal, required_scope};
 pub use ui::Dashboard;
 pub use versions::{spec_yaml, unified_diff};
 
@@ -104,6 +105,7 @@ pub async fn router(
         .merge(workflows::routes())
         .merge(versions::routes())
         .merge(personas::routes())
+        .merge(bundles::routes())
         .merge(media::routes())
         .merge(triggers::routes())
         .merge(setup::routes())

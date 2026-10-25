@@ -27,6 +27,7 @@ gai-sandbox.workspace = true
 gai-skills.workspace = true
 gai-store.workspace = true
 gai-tools.workspace = true
+chrono.workspace = true
 dirs.workspace = true
 figment.workspace = true
 futures.workspace = true
@@ -35,11 +36,15 @@ reqwest.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_yaml.workspace = true
 thiserror.workspace = true
+toml.workspace = true
 tokio.workspace = true
 secrecy.workspace = true
 tracing.workspace = true
+zip.workspace = true
 
 [dev-dependencies]
+zip.workspace = true
 regex.workspace = true
 tempfile.workspace = true

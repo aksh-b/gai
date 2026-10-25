@@ -7,3 +7,5 @@
 .env
 .admin-key
 /NUL
+# This machine's config; gai.example.toml is the template.
+/gai.toml

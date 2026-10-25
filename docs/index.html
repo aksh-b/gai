@@ -152,7 +152,7 @@
   <div class="wrap">
     <span class="pill">Open source · Rust · v0.1</span>
     <h1>The agentic AI platform you <em>run yourself</em></h1>
-    <p class="lede">Define agents in YAML, give them any model, tools, memory and each other, and run them from a CLI, an OpenAI-compatible API or a web dashboard. One binary, one SQLite file.</p>
+    <p class="lede">Define agents in YAML or Rust, give them any model, tools, a browser, memory and each other, and run them from a CLI, an OpenAI-compatible API or a web dashboard. One binary, one SQLite file.</p>
     <div class="cta">
       <a class="btn primary" href="#start">Get started</a>
       <a class="btn" href="https://github.com/aksh-b/gai">
@@ -191,6 +191,18 @@
       <div class="card">
         <h3><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg></span>Tools &amp; MCP</h3>
         <p>Built-in tools plus any MCP server over stdio or HTTP, with OAuth sign-in and per-tool approval policies.</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01M10 6.5h.01"/></svg></span>Browser &amp; code sandbox</h3>
+        <p>Agents drive a real headless Chrome under domain rules, and run Python, JavaScript or bash in a throwaway container with no network.</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>Personas</h3>
+        <p>Reusable, versioned voices with tone, rules, examples, an avatar and a greeting, for any agent or a single chat.</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8"/></svg></span>Rust SDK &amp; bundles</h3>
+        <p>Embed the whole platform with a builder and <code>#[gai::tool]</code>, and move agents between servers as <code>.gaibundle</code> files with no secrets inside.</p>
       </div>
       <div class="card">
         <h3><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span>Memory &amp; RAG</h3>
@@ -338,7 +350,8 @@
         </div>
       </div>
     </div>
-    <p style="margin-top:32px"><a href="https://github.com/aksh-b/gai#readme">Read the full README →</a></p>
+    <p class="sub" style="margin-top:28px">Or as one container: <code>docker build -t gai .</code> then <code>docker run -p 127.0.0.1:8484:8484 -v gai-data:/data gai serve --local</code>.</p>
+    <p style="margin-top:16px"><a href="https://github.com/aksh-b/gai#readme">Read the README</a> · <a href="https://github.com/aksh-b/gai/blob/main/docs/agents.md">Agents</a> · <a href="https://github.com/aksh-b/gai/blob/main/docs/tools.md">Tools</a> · <a href="https://github.com/aksh-b/gai/blob/main/docs/sdk.md">Rust SDK</a> · <a href="https://github.com/aksh-b/gai/blob/main/docs/deploy.md">Deploying</a></p>
   </div>
 </section>
 

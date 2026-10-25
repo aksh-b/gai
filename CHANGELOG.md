@@ -58,6 +58,21 @@ initial development and will ship as 0.1.0.
   output. `gai::client::Client` talks to a running server over HTTP: run,
   stream, follow, cancel and approve. **Breaking:** the old
   `Gai::agent(reference)` lookup is now `Gai::find_agent`.
+- **Bundles.** A `.gaibundle` file carries assistants and everything they
+  use (personas, skills, delegate assistants, workflows, knowledge
+  collections with their documents, MCP servers and starting memory) to
+  another gai server. API keys and tokens are never written: secret values
+  become `${VARS}`, and the bundle lists the variables and models it needs.
+  `gai bundle export|inspect|import`, `/v1/bundles/{export,inspect,import}`,
+  and **Share** on the Assistants page.
+- **Docker image.** `docker build -t gai .` makes a single-binary image
+  (Debian slim, dashboard included, data in `/data`); add
+  `--build-arg BROWSER=1` for the browser tools.
+- **Postgres (groundwork).** The `postgres` feature of `gai-store` adds
+  `PostgresStore` for agents, settings and MCP servers, checked by the same
+  conformance tests as SQLite. gai itself still runs on SQLite.
+- **SDK examples:** `cargo run -p gai --example quickstart`, `custom_tool`
+  and `client`.
 - **The dashboard is built into the `gai` binary.** `gai serve` shows it
   without a `web/dist` folder next to it; build `web/` before building gai
   to include it (a binary built without it shows how). `--ui <dir>` still
@@ -82,6 +97,10 @@ initial development and will ship as 0.1.0.
 
 ### Changed
 
+- The repository no longer ships a `gai.toml`: it was one developer's
+  machine setup (local Ollama models and a locally built sandbox image),
+  which a fresh clone picked up and then failed on. `gai.example.toml` is
+  the template; copy it to `gai.toml`, which git now ignores.
 - The dashboard is built entirely from [shadcn/ui](https://ui.shadcn.com)
   components (on Radix and Tailwind CSS) instead of the flame library and
   hand-written styles, so it builds from a plain clone with `npm install`.

@@ -35,6 +35,10 @@ pub fn cyan(text: &str) -> String {
     paint(text, "36")
 }
 
+pub fn bold(text: &str) -> String {
+    paint(text, "1")
+}
+
 /// First line of `s`, cut to `max` characters.
 pub fn one_line(s: &str, max: usize) -> String {
     let line = s
