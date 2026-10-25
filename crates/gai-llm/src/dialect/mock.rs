@@ -4,6 +4,9 @@
 //!   `call:<tool> <json args>` makes it call that tool instead, and after a
 //!   tool result it reports what the tool returned. That is enough to drive
 //!   the whole agent loop end to end without a real model.
+//! - `mock/judge` grades answers for evals without a real model: it scores
+//!   by how many of the rubric's (or reference answer's) words the answer
+//!   uses, and counts answer sentences backed by the sources.
 //! - [`MockModel::scripted`] replays fixed responses and records requests.
 //! - Any `mock/<name>` also works as a speech, transcription or image model:
 //!   speech is a short silent WAV that carries its text, transcription reads
@@ -57,8 +60,13 @@ impl Provider for MockProvider {
                 script: Script::Echo,
                 requests: Default::default(),
             })),
+            "judge" => Ok(Arc::new(MockModel {
+                info,
+                script: Script::Judge,
+                requests: Default::default(),
+            })),
             other => Err(LlmError::NotFound(format!(
-                "mock model {other:?}; available: echo"
+                "mock model {other:?}; available: echo, judge"
             ))),
         }
     }
@@ -267,6 +275,7 @@ fn svg_card(prompt: &str, variant: u32, w: u32, h: u32) -> String {
 
 enum Script {
     Echo,
+    Judge,
     Fixed(Mutex<VecDeque<Result<ChatResponse, LlmError>>>),
 }
 
@@ -311,6 +320,7 @@ impl MockModel {
     fn next(&self, req: &ChatRequest) -> Result<ChatResponse, LlmError> {
         match &self.script {
             Script::Echo => Ok(echo(req)),
+            Script::Judge => Ok(text_response(&judge(req))),
             Script::Fixed(q) => {
                 q.lock().expect("mock lock").pop_front().unwrap_or_else(|| {
                     Err(LlmError::InvalidRequest("mock script exhausted".into()))
@@ -318,6 +328,77 @@ impl MockModel {
             }
         }
     }
+}
+
+/// Lowercase words of four letters or more.
+fn words(s: &str) -> std::collections::HashSet<String> {
+    s.split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.chars().count() >= 4)
+        .map(str::to_lowercase)
+        .collect()
+}
+
+/// The text after `label` (a line of its own) up to the next blank-line label.
+fn section<'a>(prompt: &'a str, label: &str) -> &'a str {
+    let Some(i) = prompt.find(label) else {
+        return "";
+    };
+    let rest = &prompt[i + label.len()..];
+    let end = [
+        "\n\nAnswer:\n",
+        "\n\nRubric",
+        "\n\nReference answer:\n",
+        "\nAnswer:\n",
+    ]
+    .iter()
+    .filter_map(|m| rest.find(m))
+    .min()
+    .unwrap_or(rest.len());
+    &rest[..end]
+}
+
+/// `mock/judge`: a JSON grade from word overlap.
+fn judge(req: &ChatRequest) -> String {
+    let prompt = req
+        .messages
+        .iter()
+        .map(|m| m.text())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let answer = section(&prompt, "Answer:\n");
+    if prompt.starts_with("Sources:") {
+        let sources = words(section(&prompt, "Sources:\n"));
+        let claims: Vec<&str> = answer
+            .split(['.', '!', '?', '\n'])
+            .map(str::trim)
+            .filter(|s| !words(s).is_empty())
+            .collect();
+        let unsupported: Vec<&str> = claims
+            .iter()
+            .copied()
+            .filter(|c| {
+                let w = words(c);
+                w.iter().filter(|x| sources.contains(*x)).count() * 2 < w.len()
+            })
+            .collect();
+        return serde_json::json!({
+            "claims": claims.len(),
+            "supported": claims.len() - unsupported.len(),
+            "unsupported": unsupported,
+        })
+        .to_string();
+    }
+    let mut want = words(section(&prompt, "Rubric (what a good answer does):\n"));
+    want.extend(words(section(&prompt, "Reference answer:\n")));
+    let got = words(answer);
+    let hit = want.iter().filter(|w| got.contains(*w)).count();
+    let score = if want.is_empty() {
+        0
+    } else {
+        (hit * 10).div_ceil(want.len())
+    };
+    serde_json::json!({"score": score.min(10), "reason": format!("uses {hit} of {} expected words", want.len())})
+        .to_string()
 }
 
 /// A plain text response, handy for scripting.

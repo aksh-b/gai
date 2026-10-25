@@ -1,0 +1,495 @@
+//! SQLite implementation of feedback and eval storage.
+
+use async_trait::async_trait;
+use serde_json::Value;
+use sqlx::Row;
+use sqlx::sqlite::SqliteRow;
+
+use super::{SqliteStore, json, now, parse};
+use crate::*;
+
+fn feedback(r: &SqliteRow) -> Result<Feedback> {
+    Ok(Feedback {
+        id: r.try_get("id")?,
+        run_id: r.try_get("run_id")?,
+        session_id: r.try_get("session_id")?,
+        agent: r.try_get("agent")?,
+        agent_version: r
+            .try_get::<Option<i64>, _>("agent_version")?
+            .map(|v| v as u32),
+        user_id: r.try_get("user_id")?,
+        rating: r.try_get::<i64, _>("rating")? as i8,
+        comment: r.try_get("comment")?,
+        tags: parse(&r.try_get::<String, _>("tags")?)?,
+        created_at: r.try_get("created_at")?,
+        updated_at: r.try_get("updated_at")?,
+    })
+}
+
+#[async_trait]
+impl FeedbackStore for SqliteStore {
+    async fn put_feedback(
+        &self,
+        run: &Run,
+        user_id: &str,
+        rating: i8,
+        comment: Option<&str>,
+        tags: &[String],
+    ) -> Result<Feedback> {
+        let rating = rating.signum();
+        if rating == 0 {
+            return Err(StoreError::Conflict(
+                "a rating is 1 (good) or -1 (bad)".into(),
+            ));
+        }
+        let ts = now();
+        sqlx::query(
+            "INSERT INTO feedback (id, run_id, session_id, agent, agent_version, user_id, rating, comment, tags, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(run_id, user_id) DO UPDATE SET rating = excluded.rating,
+                 comment = excluded.comment, tags = excluded.tags, updated_at = excluded.updated_at",
+        )
+        .bind(gai_core::new_id("fb"))
+        .bind(&run.id)
+        .bind(&run.session_id)
+        .bind(&run.agent)
+        .bind(run.agent_version.map(|v| v as i64))
+        .bind(user_id)
+        .bind(rating as i64)
+        .bind(comment)
+        .bind(json(&tags))
+        .bind(ts)
+        .bind(ts)
+        .execute(&self.pool)
+        .await?;
+        let row = sqlx::query("SELECT * FROM feedback WHERE run_id = ? AND user_id = ?")
+            .bind(&run.id)
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
+        feedback(&row)
+    }
+
+    async fn delete_feedback(&self, run_id: &str, user_id: &str) -> Result<bool> {
+        let r = sqlx::query("DELETE FROM feedback WHERE run_id = ? AND user_id = ?")
+            .bind(run_id)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(r.rows_affected() > 0)
+    }
+
+    async fn list_feedback(&self, f: FeedbackFilter) -> Result<Vec<Feedback>> {
+        let rows = sqlx::query(
+            "SELECT * FROM feedback
+             WHERE (?1 IS NULL OR agent = ?1) AND (?2 IS NULL OR run_id = ?2) AND (?3 IS NULL OR rating = ?3)
+             ORDER BY created_at DESC LIMIT ?4",
+        )
+        .bind(f.agent)
+        .bind(f.run_id)
+        .bind(f.rating.map(i64::from))
+        .bind(if f.limit == 0 { 100 } else { f.limit as i64 })
+        .fetch_all(&self.pool)
+        .await?;
+        rows.iter().map(feedback).collect()
+    }
+
+    async fn feedback_summary(&self, agent: Option<&str>) -> Result<Vec<FeedbackSummary>> {
+        let rows = sqlx::query(
+            "SELECT agent, agent_version,
+                    SUM(CASE WHEN rating > 0 THEN 1 ELSE 0 END) AS good,
+                    SUM(CASE WHEN rating < 0 THEN 1 ELSE 0 END) AS bad
+             FROM feedback WHERE (?1 IS NULL OR agent = ?1)
+             GROUP BY agent, agent_version ORDER BY agent, agent_version",
+        )
+        .bind(agent)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.iter()
+            .map(|r| {
+                Ok(FeedbackSummary {
+                    agent: r.try_get("agent")?,
+                    agent_version: r
+                        .try_get::<Option<i64>, _>("agent_version")?
+                        .map(|v| v as u32),
+                    good: r.try_get::<i64, _>("good")? as u64,
+                    bad: r.try_get::<i64, _>("bad")? as u64,
+                })
+            })
+            .collect()
+    }
+}
+
+fn set_version(r: &SqliteRow) -> Result<EvalSetVersion> {
+    Ok(EvalSetVersion {
+        name: r.try_get("name")?,
+        version: r.try_get::<i64, _>("version")? as u32,
+        spec: parse(&r.try_get::<String, _>("spec")?)?,
+        note: r.try_get("note")?,
+        created_at: r.try_get("created_at")?,
+    })
+}
+
+fn eval_run(r: &SqliteRow) -> Result<EvalRun> {
+    Ok(EvalRun {
+        id: r.try_get("id")?,
+        eval_set: r.try_get("eval_set")?,
+        eval_version: r.try_get::<i64, _>("eval_version")? as u32,
+        target: parse(&r.try_get::<String, _>("target")?)?,
+        status: r.try_get("status")?,
+        summary: parse(&r.try_get::<String, _>("summary")?)?,
+        error: r.try_get("error")?,
+        created_at: r.try_get("created_at")?,
+        finished_at: r.try_get("finished_at")?,
+    })
+}
+
+fn eval_result(r: &SqliteRow) -> Result<EvalResult> {
+    Ok(EvalResult {
+        eval_run_id: r.try_get("eval_run_id")?,
+        case_id: r.try_get("case_id")?,
+        run_id: r.try_get("run_id")?,
+        output: r.try_get("output")?,
+        scores: parse(&r.try_get::<String, _>("scores")?)?,
+        score: r.try_get("score")?,
+        passed: r.try_get::<i64, _>("passed")? != 0,
+        cost: r.try_get("cost")?,
+        latency_ms: r.try_get::<i64, _>("latency_ms")? as u64,
+        error: r.try_get("error")?,
+    })
+}
+
+#[async_trait]
+impl EvalStore for SqliteStore {
+    async fn put_eval_set(&self, name: &str, spec: &Value, note: Option<&str>) -> Result<u32> {
+        let mut tx = self.write_tx().await?;
+        let latest: Option<(i64, String)> = sqlx::query_as(
+            "SELECT v.version, v.spec FROM eval_sets s JOIN eval_set_versions v ON v.name = s.name AND v.version = s.latest_version WHERE s.name = ?",
+        )
+        .bind(name)
+        .fetch_optional(&mut *tx)
+        .await?;
+        if let Some((v, s)) = &latest
+            && parse::<Value>(s)? == *spec
+        {
+            return Ok(*v as u32);
+        }
+        let v = latest.map(|(v, _)| v + 1).unwrap_or(1);
+        let ts = now();
+        let cases = spec["cases"].as_array().map(Vec::len).unwrap_or(0) as i64;
+        sqlx::query(
+            "INSERT INTO eval_sets (name, latest_version, description, cases, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON CONFLICT(name) DO UPDATE SET latest_version = excluded.latest_version,
+                 description = excluded.description, cases = excluded.cases, updated_at = excluded.updated_at",
+        )
+        .bind(name)
+        .bind(v)
+        .bind(spec["description"].as_str())
+        .bind(cases)
+        .bind(ts)
+        .bind(ts)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            "INSERT INTO eval_set_versions (name, version, spec, note, created_at) VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(name)
+        .bind(v)
+        .bind(json(spec))
+        .bind(note)
+        .bind(ts)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(v as u32)
+    }
+
+    async fn get_eval_set(
+        &self,
+        name: &str,
+        version: Option<u32>,
+    ) -> Result<Option<EvalSetVersion>> {
+        let row = match version {
+            Some(v) => {
+                sqlx::query("SELECT * FROM eval_set_versions WHERE name = ? AND version = ?")
+                    .bind(name)
+                    .bind(v as i64)
+                    .fetch_optional(&self.pool)
+                    .await?
+            }
+            None => {
+                sqlx::query(
+                    "SELECT v.* FROM eval_sets s JOIN eval_set_versions v ON v.name = s.name AND v.version = s.latest_version WHERE s.name = ?",
+                )
+                .bind(name)
+                .fetch_optional(&self.pool)
+                .await?
+            }
+        };
+        row.as_ref().map(set_version).transpose()
+    }
+
+    async fn list_eval_sets(&self) -> Result<Vec<EvalSetSummary>> {
+        let rows = sqlx::query("SELECT * FROM eval_sets ORDER BY name")
+            .fetch_all(&self.pool)
+            .await?;
+        rows.iter()
+            .map(|r| {
+                Ok(EvalSetSummary {
+                    name: r.try_get("name")?,
+                    latest_version: r.try_get::<i64, _>("latest_version")? as u32,
+                    description: r.try_get("description")?,
+                    cases: r.try_get::<i64, _>("cases")? as u32,
+                    labels: parse(&r.try_get::<String, _>("labels")?)?,
+                    created_at: r.try_get("created_at")?,
+                    updated_at: r.try_get("updated_at")?,
+                })
+            })
+            .collect()
+    }
+
+    async fn list_eval_set_versions(&self, name: &str) -> Result<Vec<EvalSetVersion>> {
+        let rows =
+            sqlx::query("SELECT * FROM eval_set_versions WHERE name = ? ORDER BY version DESC")
+                .bind(name)
+                .fetch_all(&self.pool)
+                .await?;
+        rows.iter().map(set_version).collect()
+    }
+
+    async fn delete_eval_set(&self, name: &str) -> Result<bool> {
+        let r = sqlx::query("DELETE FROM eval_sets WHERE name = ?")
+            .bind(name)
+            .execute(&self.pool)
+            .await?;
+        Ok(r.rows_affected() > 0)
+    }
+
+    async fn create_eval_run(
+        &self,
+        eval_set: &str,
+        eval_version: u32,
+        target: &Value,
+    ) -> Result<EvalRun> {
+        let id = gai_core::new_id("eval");
+        sqlx::query(
+            "INSERT INTO eval_runs (id, eval_set, eval_version, target, status, created_at) VALUES (?, ?, ?, ?, 'running', ?)",
+        )
+        .bind(&id)
+        .bind(eval_set)
+        .bind(eval_version as i64)
+        .bind(json(target))
+        .bind(now())
+        .execute(&self.pool)
+        .await?;
+        self.get_eval_run(&id)
+            .await?
+            .ok_or(StoreError::NotFound(id))
+    }
+
+    async fn finish_eval_run(
+        &self,
+        id: &str,
+        status: &str,
+        summary: &Value,
+        error: Option<&str>,
+    ) -> Result<()> {
+        sqlx::query(
+            "UPDATE eval_runs SET status = ?, summary = ?, error = ?, finished_at = ? WHERE id = ?",
+        )
+        .bind(status)
+        .bind(json(summary))
+        .bind(error)
+        .bind(now())
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn get_eval_run(&self, id: &str) -> Result<Option<EvalRun>> {
+        let row = sqlx::query("SELECT * FROM eval_runs WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.as_ref().map(eval_run).transpose()
+    }
+
+    async fn list_eval_runs(&self, eval_set: Option<&str>, limit: u32) -> Result<Vec<EvalRun>> {
+        let rows = sqlx::query(
+            "SELECT * FROM eval_runs WHERE (?1 IS NULL OR eval_set = ?1) ORDER BY created_at DESC LIMIT ?2",
+        )
+        .bind(eval_set)
+        .bind(if limit == 0 { 50 } else { limit as i64 })
+        .fetch_all(&self.pool)
+        .await?;
+        rows.iter().map(eval_run).collect()
+    }
+
+    async fn delete_eval_run(&self, id: &str) -> Result<bool> {
+        let r = sqlx::query("DELETE FROM eval_runs WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(r.rows_affected() > 0)
+    }
+
+    async fn put_eval_result(&self, x: &EvalResult) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO eval_results (eval_run_id, case_id, run_id, output, scores, score, passed, cost, latency_ms, error)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(eval_run_id, case_id) DO UPDATE SET run_id = excluded.run_id, output = excluded.output,
+                 scores = excluded.scores, score = excluded.score, passed = excluded.passed,
+                 cost = excluded.cost, latency_ms = excluded.latency_ms, error = excluded.error",
+        )
+        .bind(&x.eval_run_id)
+        .bind(&x.case_id)
+        .bind(&x.run_id)
+        .bind(&x.output)
+        .bind(json(&x.scores))
+        .bind(x.score)
+        .bind(x.passed as i64)
+        .bind(x.cost)
+        .bind(x.latency_ms as i64)
+        .bind(&x.error)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn list_eval_results(&self, eval_run_id: &str) -> Result<Vec<EvalResult>> {
+        let rows = sqlx::query("SELECT * FROM eval_results WHERE eval_run_id = ? ORDER BY rowid")
+            .bind(eval_run_id)
+            .fetch_all(&self.pool)
+            .await?;
+        rows.iter().map(eval_result).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn feedback_is_one_per_user_and_counted() {
+        let s = SqliteStore::temporary().await.unwrap();
+        let ses = s.create_session(NewSession::default()).await.unwrap();
+        let mk = |agent: &str| NewRun {
+            session_id: ses.id.clone(),
+            agent: agent.into(),
+            agent_version: Some(2),
+            input: json!("hi"),
+            ..Default::default()
+        };
+        let a = s.create_run(mk("helper")).await.unwrap();
+        let b = s.create_run(mk("helper")).await.unwrap();
+        s.put_feedback(&a, "ada", 1, None, &[]).await.unwrap();
+        // Rating again replaces.
+        let f = s
+            .put_feedback(&a, "ada", -1, Some("wrong"), &["wrong".into()])
+            .await
+            .unwrap();
+        assert_eq!((f.rating, f.comment.as_deref()), (-1, Some("wrong")));
+        s.put_feedback(&a, "alan", 1, None, &[]).await.unwrap();
+        s.put_feedback(&b, "ada", 5, None, &[]).await.unwrap();
+        assert!(s.put_feedback(&b, "x", 0, None, &[]).await.is_err());
+        let sum = s.feedback_summary(Some("helper")).await.unwrap();
+        assert_eq!(
+            sum,
+            [FeedbackSummary {
+                agent: "helper".into(),
+                agent_version: Some(2),
+                good: 2,
+                bad: 1
+            }]
+        );
+        let bad = s
+            .list_feedback(FeedbackFilter {
+                rating: Some(-1),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(bad.len(), 1);
+        assert_eq!(bad[0].tags, ["wrong"]);
+        assert!(s.delete_feedback(&a.id, "ada").await.unwrap());
+        assert_eq!(
+            s.list_feedback(FeedbackFilter {
+                run_id: Some(a.id.clone()),
+                ..Default::default()
+            })
+            .await
+            .unwrap()
+            .len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn eval_sets_runs_and_results() {
+        let s = SqliteStore::temporary().await.unwrap();
+        let spec =
+            json!({"name": "maths", "description": "Sums", "cases": [{"id": "a"}, {"id": "b"}]});
+        assert_eq!(s.put_eval_set("maths", &spec, None).await.unwrap(), 1);
+        assert_eq!(s.put_eval_set("maths", &spec, None).await.unwrap(), 1);
+        let mut spec2 = spec.clone();
+        spec2["cases"] = json!([{"id": "a"}]);
+        assert_eq!(
+            s.put_eval_set("maths", &spec2, Some("fewer"))
+                .await
+                .unwrap(),
+            2
+        );
+        let list = s.list_eval_sets().await.unwrap();
+        assert_eq!((list[0].cases, list[0].latest_version), (1, 2));
+        assert_eq!(
+            s.get_eval_set("maths", Some(1))
+                .await
+                .unwrap()
+                .unwrap()
+                .spec,
+            spec
+        );
+
+        let run = s
+            .create_eval_run("maths", 2, &json!({"agent": "helper"}))
+            .await
+            .unwrap();
+        assert_eq!(run.status, "running");
+        for (case, score) in [("a", 1.0), ("b", 0.0)] {
+            s.put_eval_result(&EvalResult {
+                eval_run_id: run.id.clone(),
+                case_id: case.into(),
+                run_id: None,
+                output: Some("4".into()),
+                scores: json!([]),
+                score,
+                passed: score > 0.5,
+                cost: 0.01,
+                latency_ms: 10,
+                error: None,
+            })
+            .await
+            .unwrap();
+        }
+        s.finish_eval_run(&run.id, "completed", &json!({"score": 0.5}), None)
+            .await
+            .unwrap();
+        let got = s.get_eval_run(&run.id).await.unwrap().unwrap();
+        assert_eq!(
+            (got.status.as_str(), &got.summary["score"]),
+            ("completed", &json!(0.5))
+        );
+        let res = s.list_eval_results(&run.id).await.unwrap();
+        assert_eq!(
+            res.iter().map(|r| r.case_id.as_str()).collect::<Vec<_>>(),
+            ["a", "b"]
+        );
+        assert!(res[0].passed && !res[1].passed);
+        assert_eq!(s.list_eval_runs(Some("maths"), 0).await.unwrap().len(), 1);
+        assert!(s.delete_eval_set("maths").await.unwrap());
+    }
+}

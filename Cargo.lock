@@ -1316,6 +1316,7 @@ dependencies = [
  "gai-agent",
  "gai-browser",
  "gai-core",
+ "gai-eval",
  "gai-llm",
  "gai-macros",
  "gai-memory",
@@ -1417,6 +1418,27 @@ dependencies = [
  "serde",
  "serde_json",
  "ulid",
+]
+
+[[package]]
+name = "gai-eval"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "gai-agent",
+ "gai-core",
+ "gai-llm",
+ "gai-memory",
+ "gai-store",
+ "gai-tools",
+ "regex",
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

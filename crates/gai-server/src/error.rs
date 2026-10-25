@@ -96,7 +96,21 @@ impl From<gai::Error> for ApiError {
             gai::Error::Memory(m) => m.into(),
             gai::Error::Skill(s) => s.into(),
             gai::Error::Workflow(w) => w.into(),
+            gai::Error::Eval(e) => e.into(),
             other => Self::bad_request(other.to_string()),
+        }
+    }
+}
+
+impl From<gai::eval::EvalError> for ApiError {
+    fn from(e: gai::eval::EvalError) -> Self {
+        use gai::eval::EvalError as E;
+        match e {
+            E::NotFound(m) => Self::not_found(m),
+            E::Invalid(m) => Self::bad_request(m),
+            E::Store(s) => s.into(),
+            E::Agent(a) => a.into(),
+            E::Llm(l) => l.into(),
         }
     }
 }

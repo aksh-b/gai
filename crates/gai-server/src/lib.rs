@@ -7,6 +7,7 @@ mod api;
 mod auth;
 mod bundles;
 mod error;
+mod evals;
 mod knowledge;
 pub mod mcp_server;
 mod media;
@@ -106,6 +107,7 @@ pub async fn router(
         .merge(versions::routes())
         .merge(personas::routes())
         .merge(bundles::routes())
+        .merge(evals::routes())
         .merge(media::routes())
         .merge(triggers::routes())
         .merge(setup::routes())

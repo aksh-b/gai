@@ -486,3 +486,96 @@ pub struct NewTriggerEvent {
     pub status: String,
     pub error: Option<String>,
 }
+
+/// A person's rating of a reply (one run).
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Feedback {
+    pub id: String,
+    pub run_id: String,
+    pub session_id: String,
+    pub agent: String,
+    pub agent_version: Option<u32>,
+    /// Who rated it (empty when unknown).
+    pub user_id: String,
+    /// 1 for good, -1 for bad.
+    pub rating: i8,
+    pub comment: Option<String>,
+    /// Short reasons, e.g. `wrong`, `too long`, `unsafe`.
+    pub tags: Vec<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Ratings counted for an agent (or one of its versions).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct FeedbackSummary {
+    pub agent: String,
+    pub agent_version: Option<u32>,
+    pub good: u64,
+    pub bad: u64,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct FeedbackFilter {
+    pub agent: Option<String>,
+    pub run_id: Option<String>,
+    /// Only good (1) or bad (-1).
+    pub rating: Option<i8>,
+    pub limit: u32,
+}
+
+/// A stored eval set version.
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct EvalSetVersion {
+    pub name: String,
+    pub version: u32,
+    /// The eval set spec as JSON. The eval crate owns its shape.
+    pub spec: Value,
+    pub note: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct EvalSetSummary {
+    pub name: String,
+    pub latest_version: u32,
+    pub description: Option<String>,
+    pub cases: u32,
+    pub labels: BTreeMap<String, u32>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// One evaluation of an eval set against a target.
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct EvalRun {
+    pub id: String,
+    pub eval_set: String,
+    pub eval_version: u32,
+    /// What was evaluated: `{agent, agent_version, model}`.
+    pub target: Value,
+    /// `running`, `completed` or `failed`.
+    pub status: String,
+    /// Totals once finished: score, passed, total, cost, latency.
+    pub summary: Value,
+    pub error: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub finished_at: Option<DateTime<Utc>>,
+}
+
+/// How one case did in an evaluation.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct EvalResult {
+    pub eval_run_id: String,
+    pub case_id: String,
+    pub run_id: Option<String>,
+    pub output: Option<String>,
+    /// Each scorer's result: `{scorer, score, passed, reason}`.
+    pub scores: Value,
+    /// 0 to 1.
+    pub score: f64,
+    pub passed: bool,
+    pub cost: f64,
+    pub latency_ms: u64,
+    pub error: Option<String>,
+}

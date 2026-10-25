@@ -1,0 +1,25 @@
+# Checks the calc agent (examples/agents/calc.yaml). Runs offline: the
+# agent uses mock/echo and the judge is mock/judge.
+#
+#   gai eval run examples/evals/calc.yaml -a examples/agents/calc.yaml
+name: calc
+description: The calculator agent gets arithmetic right and uses its tool.
+threshold: 1.0
+judge_model: mock/judge
+scorers:
+  - max_steps: 4
+cases:
+  - id: multiply
+    input: 'call:calculator {"expression": "6*7"}'
+    scorers:
+      - contains: ["42"]
+      - tool_called: calculator
+  - id: percent
+    input: 'call:calculator {"expression": "17% of 2340"}'
+    scorers:
+      - regex: '397\.8'
+  - id: says-the-result
+    input: 'call:calculator {"expression": "2+2"}'
+    scorers:
+      # mock/judge grades by word overlap; a real judge model reads the rubric.
+      - judge: {rubric: Says what the tool returned, pass: 0.5}

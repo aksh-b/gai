@@ -19,6 +19,8 @@ mod blobs;
 mod memory;
 #[path = "sqlite_personas.rs"]
 mod personas;
+#[path = "sqlite_quality.rs"]
+mod quality;
 #[path = "sqlite_triggers.rs"]
 mod triggers;
 #[path = "sqlite_workflows.rs"]

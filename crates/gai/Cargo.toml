@@ -17,6 +17,7 @@ browser = ["gai-browser/chrome"]
 async-trait.workspace = true
 gai-agent.workspace = true
 gai-browser.workspace = true
+gai-eval.workspace = true
 gai-macros.workspace = true
 gai-core.workspace = true
 gai-llm.workspace = true

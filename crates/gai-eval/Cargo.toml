@@ -1,0 +1,25 @@
+[package]
+name = "gai-eval"
+description = "Evaluations for gai agents: eval sets, scorers (rules and an LLM judge), runs, comparisons and regression gates."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+gai-agent.workspace = true
+gai-core.workspace = true
+gai-llm.workspace = true
+gai-store.workspace = true
+futures.workspace = true
+regex.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+gai-memory.workspace = true
+gai-tools.workspace = true

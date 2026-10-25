@@ -16,6 +16,20 @@ initial development and will ship as 0.1.0.
 
 ### Added
 
+- **Evaluations.** An eval set (YAML) lists cases, each an input and how
+  to judge the answer: `contains`, `regex`, `equals`, `json` field checks,
+  `tool_called`, step/cost/latency limits, an LLM `judge` with a rubric,
+  `grounded` (claims backed by what the agent retrieved) and `cites` (names
+  a source it used). `gai eval run <set> -a agent@v3` scores every case,
+  stores the results, and exits with status 1 when the pass rate is below
+  the set's threshold or the score drops against `--baseline`, so it can
+  gate CI. Several `-m` flags benchmark models side by side (score, cost,
+  latency). Also `gai eval list|show|save|runs|report|compare`, and
+  `/v1/evals`, `/v1/eval-runs`. `mock/judge` grades offline for trying it
+  out; see `examples/evals/calc.yaml`.
+- **Feedback on replies:** `POST /v1/runs/{id}/feedback` with a rating (1
+  or -1), a comment and tags; `/v1/feedback` lists them and
+  `/v1/feedback/summary` counts them per agent version.
 - **Code sandbox.** Agents can run Python, JavaScript or bash with the new
   `code_exec` tool. Each call runs in a fresh Docker or Podman container with
   no network access, capped memory and CPU, and a time limit. The container

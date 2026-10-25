@@ -14,6 +14,7 @@ use schemars::{JsonSchema, SchemaGenerator};
 use serde_json::{Map, Value, json};
 
 use crate::api::*;
+use crate::evals::*;
 use crate::knowledge::*;
 use crate::media::*;
 use crate::openai::ChatCompletionRequest;
@@ -232,6 +233,43 @@ pub fn document() -> Value {
             "Receive a webhook (no API key: sign the body with the trigger's secret, X-Gai-Signature: sha256=<hex>, or send X-Gai-Token)",
         )
         .ok(s::<gai::triggers::Fired>(&mut g)),
+        op("post", "/v1/runs/{id}/feedback", "feedback", "Rate a reply: 1 good, -1 bad, with an optional comment and tags. Rating again replaces your rating")
+            .body(s::<Rate>(&mut g))
+            .ok(s::<gai::store::Feedback>(&mut g)),
+        op("get", "/v1/runs/{id}/feedback", "feedback", "Ratings of one run")
+            .ok(list::<gai::store::Feedback>(&mut g)),
+        op("delete", "/v1/runs/{id}/feedback", "feedback", "Take back your rating of a run"),
+        op("get", "/v1/feedback", "feedback", "Ratings, newest first")
+            .ok(list::<gai::store::Feedback>(&mut g))
+            .query(&[("agent", "One agent"), ("rating", "1 or -1"), ("limit", "Max rows")]),
+        op("get", "/v1/feedback/summary", "feedback", "Good and bad counts per agent version")
+            .ok(list::<gai::store::FeedbackSummary>(&mut g))
+            .query(&[("agent", "One agent")]),
+        op("get", "/v1/evals", "evals", "Eval sets")
+            .ok(list::<gai::store::EvalSetSummary>(&mut g)),
+        op("post", "/v1/evals", "evals", "Save an eval set (JSON, or {\"yaml\": \"...\"}) as a new version")
+            .body(s::<gai::eval::EvalSet>(&mut g))
+            .ok(s::<Saved>(&mut g))
+            .query(&[("note", "Why it changed")]),
+        op("get", "/v1/evals/{name}", "evals", "An eval set (name or name@v2)")
+            .ok(s::<EvalSetView>(&mut g)),
+        op("delete", "/v1/evals/{name}", "evals", "Delete an eval set and its versions"),
+        op("get", "/v1/evals/{name}/versions", "evals", "Every version of an eval set")
+            .ok(list::<gai::store::EvalSetVersion>(&mut g)),
+        op("post", "/v1/evals/{name}/runs", "evals", "Evaluate an agent (and optionally several models) on the set, in the background")
+            .body(s::<StartEval>(&mut g))
+            .ok(s::<StartedEvals>(&mut g)),
+        op("get", "/v1/evals/{name}/runs", "evals", "Evaluations of one set, newest first")
+            .ok(list::<gai::store::EvalRun>(&mut g)),
+        op("get", "/v1/eval-runs", "evals", "Evaluations, newest first")
+            .ok(list::<gai::store::EvalRun>(&mut g))
+            .query(&[("set", "One eval set"), ("limit", "Max rows")]),
+        op("get", "/v1/eval-runs/{id}", "evals", "An evaluation with its per-case results (partial while it runs)")
+            .ok(s::<gai::eval::EvalReport>(&mut g)),
+        op("delete", "/v1/eval-runs/{id}", "evals", "Delete an evaluation"),
+        op("get", "/v1/eval-runs/compare", "evals", "Two evaluations case by case, with a pass/fail verdict")
+            .ok(s::<CompareView>(&mut g))
+            .query(&[("baseline", "Evaluation id"), ("candidate", "Evaluation id"), ("max_drop", "Largest score drop that passes (0.05)")]),
         op(
             "post",
             "/v1/bundles/export",

@@ -1,6 +1,7 @@
 mod ask;
 mod bundle;
 mod chat;
+mod eval;
 mod knowledge;
 mod manage;
 mod media;
@@ -104,6 +105,9 @@ enum Command {
     /// Run and manage multi-agent workflows
     #[command(subcommand)]
     Workflow(workflow::WorkflowCmd),
+    /// Evaluate agents on eval sets, compare models and gate CI
+    #[command(subcommand)]
+    Eval(eval::EvalCmd),
     /// Export and import .gaibundle files (agents and what they use)
     #[command(subcommand)]
     Bundle(bundle::BundleCmd),
@@ -204,6 +208,7 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
         Command::Workflow(cmd) => workflow::workflow(&gai, cmd).await,
         Command::Triggers(cmd) => triggers::triggers(&gai, cmd).await,
         Command::Bundle(cmd) => bundle::bundle(&gai, cmd).await,
+        Command::Eval(cmd) => eval::eval(&gai, cmd).await,
         Command::Models {
             provider,
             remote,

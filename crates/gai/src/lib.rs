@@ -43,6 +43,7 @@ pub use config::{
 pub use gai_agent as agent;
 pub use gai_browser as browser;
 pub use gai_core as core;
+pub use gai_eval as eval;
 pub use gai_llm as llm;
 /// Write a tool as an async function; see [`gai_macros::tool`].
 pub use gai_macros::tool;
@@ -89,6 +90,8 @@ pub enum Error {
     Skill(#[from] gai_skills::SkillError),
     #[error(transparent)]
     Workflow(#[from] gai_orchestra::WorkflowError),
+    #[error(transparent)]
+    Eval(#[from] gai_eval::EvalError),
     /// A `.gaibundle` that can't be written or read.
     #[error("bundle: {0}")]
     Bundle(String),
@@ -441,6 +444,12 @@ impl Gai {
     /// An agent written in code.
     pub fn agent_spec(&self, spec: AgentSpec) -> Agent<'_> {
         Agent::new(self, AgentTarget::Spec(Box::new(spec)))
+    }
+
+    /// Evaluations: eval sets, running them against agents and models, and
+    /// their results.
+    pub async fn evals(&self) -> Result<gai_eval::Evaluator, Error> {
+        Ok(gai_eval::Evaluator::new(self.runtime().await?.clone()))
     }
 
     /// Workflows: stored and file workflows, and running them. Registers

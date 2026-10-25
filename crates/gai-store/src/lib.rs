@@ -374,6 +374,63 @@ pub trait TriggerStore: Send + Sync {
     async fn list_trigger_events(&self, trigger_id: &str, limit: u32) -> Result<Vec<TriggerEvent>>;
 }
 
+/// Ratings of replies.
+#[async_trait]
+pub trait FeedbackStore: Send + Sync {
+    /// Rate a run; rating it again (same user) replaces the rating.
+    #[allow(clippy::too_many_arguments)]
+    async fn put_feedback(
+        &self,
+        run: &Run,
+        user_id: &str,
+        rating: i8,
+        comment: Option<&str>,
+        tags: &[String],
+    ) -> Result<Feedback>;
+    async fn delete_feedback(&self, run_id: &str, user_id: &str) -> Result<bool>;
+    /// Newest first.
+    async fn list_feedback(&self, filter: FeedbackFilter) -> Result<Vec<Feedback>>;
+    /// Good and bad counts per agent version, for one agent or all.
+    async fn feedback_summary(&self, agent: Option<&str>) -> Result<Vec<FeedbackSummary>>;
+}
+
+/// Eval sets (versioned), evaluations and their per-case results.
+#[async_trait]
+pub trait EvalStore: Send + Sync {
+    /// Save a spec as the set's next version (or return the latest when
+    /// nothing changed).
+    async fn put_eval_set(&self, name: &str, spec: &Value, note: Option<&str>) -> Result<u32>;
+    async fn get_eval_set(
+        &self,
+        name: &str,
+        version: Option<u32>,
+    ) -> Result<Option<EvalSetVersion>>;
+    async fn list_eval_sets(&self) -> Result<Vec<EvalSetSummary>>;
+    async fn list_eval_set_versions(&self, name: &str) -> Result<Vec<EvalSetVersion>>;
+    async fn delete_eval_set(&self, name: &str) -> Result<bool>;
+
+    async fn create_eval_run(
+        &self,
+        eval_set: &str,
+        eval_version: u32,
+        target: &Value,
+    ) -> Result<EvalRun>;
+    async fn finish_eval_run(
+        &self,
+        id: &str,
+        status: &str,
+        summary: &Value,
+        error: Option<&str>,
+    ) -> Result<()>;
+    async fn get_eval_run(&self, id: &str) -> Result<Option<EvalRun>>;
+    /// Newest first; one set or all.
+    async fn list_eval_runs(&self, eval_set: Option<&str>, limit: u32) -> Result<Vec<EvalRun>>;
+    async fn delete_eval_run(&self, id: &str) -> Result<bool>;
+    async fn put_eval_result(&self, result: &EvalResult) -> Result<()>;
+    /// In case order.
+    async fn list_eval_results(&self, eval_run_id: &str) -> Result<Vec<EvalResult>>;
+}
+
 /// Everything gai stores.
 pub trait Store:
     AgentStore
@@ -389,6 +446,8 @@ pub trait Store:
     + PersonaStore
     + BlobStore
     + TriggerStore
+    + FeedbackStore
+    + EvalStore
 {
 }
 impl<T> Store for T where
@@ -405,6 +464,8 @@ impl<T> Store for T where
         + PersonaStore
         + BlobStore
         + TriggerStore
+        + FeedbackStore
+        + EvalStore
 {
 }
 
