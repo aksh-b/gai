@@ -81,7 +81,20 @@ last completed step and picks up queued background runs.
 
 ## Postgres
 
-`gai-store` has a `postgres` feature with a `PostgresStore` for agents,
-settings and MCP servers, tested against the same conformance checks as
-SQLite. The rest of the store is not ported yet, so a server still runs on
-SQLite. See [STATUS.md](../STATUS.md).
+SQLite (one file) suits one server. For a shared or larger setup, keep
+everything in Postgres instead:
+
+```toml
+database = "postgres://gai:secret@db.internal:5432/gai"
+```
+
+or `GAI_DATABASE=postgres://...`. gai creates its tables on first start
+(Postgres 13 or newer; 16+ recommended) and keeps them up to date. Every
+part of gai works the same on both: they pass one conformance suite. To
+move an existing SQLite setup, export a [bundle](bundles.md) with `--all
+--all-knowledge` and import it into the Postgres-backed server
+(conversation history does not move this way).
+
+Several gai servers can share one Postgres: background runs are claimed
+with `SKIP LOCKED`, so each runs once. Write transactions take one advisory
+lock, which keeps writes simple and correct but serializes them.

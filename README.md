@@ -1,6 +1,6 @@
 # gai
 
-A self-hostable agentic AI platform in Rust. You define agents in YAML or in Rust. They can use any model provider, call tools and MCP servers, browse the web, run code in a sandbox, remember things, search your documents and delegate to each other. You run them from a CLI, an HTTP API (including an OpenAI-compatible one), a web dashboard, or your own Rust program. It ships as one binary with one SQLite file.
+A self-hostable agentic AI platform in Rust. You define agents in YAML or in Rust. They can use any model provider, call tools and MCP servers, browse the web, run code in a sandbox, remember things, search your documents and delegate to each other. You run them from a CLI, an HTTP API (including an OpenAI-compatible one), a web dashboard, or your own Rust program. It ships as one binary with one SQLite file, or runs on Postgres.
 
 Website: https://aksh-b.github.io/gai
 
@@ -189,7 +189,7 @@ Run `gai <command> --help` for details.
 | `gai-tools` | Tool trait and registry, built-in tools, MCP and A2A clients |
 | `gai-sandbox` | The code sandbox (`code_exec`): container and local backends |
 | `gai-browser` | The browser tools: headless Chrome, domain rules |
-| `gai-store` | Store traits, the SQLite implementation, and Postgres groundwork |
+| `gai-store` | Store traits and the SQLite and Postgres implementations |
 | `gai-memory` | Memory blocks, archival memory, knowledge ingest and hybrid search |
 | `gai-skills` | Agent Skills |
 | `gai-agent` | Agent specs, personas and the runtime: tool loop, approvals, durability, replay, multi-agent |
