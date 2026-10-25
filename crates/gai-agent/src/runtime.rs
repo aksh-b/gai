@@ -797,7 +797,7 @@ impl Runtime {
             .or_else(|| self.default_model())
             .ok_or_else(|| {
                 AgentError::Invalid(format!(
-                    "agent {:?} names no model and there is no default model",
+                    "agent {:?} names no model and there is no default model: pass one (-m anthropic/claude-sonnet-5-5), set default_model in gai.toml, or export a provider key such as ANTHROPIC_API_KEY. mock/echo works without a key",
                     spec.name
                 ))
             })?;

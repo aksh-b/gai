@@ -125,6 +125,8 @@ initial development and will ship as 0.1.0.
 
 ### Fixed
 
+- Running an agent with no model set now says how to choose one (`-m`,
+  `default_model`, or a provider key) instead of only that there is none.
 - The calculator did integer division (`17 / 100 * 2340` gave 0), and now
   understands `X% of Y`.
 - A very long tool result, such as a whole web page, could overflow a small
