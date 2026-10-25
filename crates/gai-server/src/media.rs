@@ -1,7 +1,7 @@
 //! Media: stored blobs, speech to text, text to speech, image generation.
 
 use axum::body::Bytes;
-use axum::extract::{DefaultBodyLimit, Path, Query, State};
+use axum::extract::{DefaultBodyLimit, Path, Query};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -17,6 +17,7 @@ use serde_json::json;
 use crate::AppState;
 use crate::auth::{Principal, charge};
 use crate::error::{ApiError, ApiResult};
+use crate::orgs::Tenant;
 
 /// Uploads and generated media can be large; the default limit is 2 MB.
 const MAX_MEDIA_BYTES: usize = 50 * 1024 * 1024;
@@ -101,7 +102,7 @@ pub struct MediaResult {
     pub revised_prompts: Vec<String>,
 }
 
-async fn defaults(State(s): State<AppState>) -> Json<MediaDefaults> {
+async fn defaults(Tenant(s): Tenant) -> Json<MediaDefaults> {
     let m = &s.rt.config().media;
     Json(MediaDefaults {
         transcription: m.transcription.clone(),
@@ -111,10 +112,7 @@ async fn defaults(State(s): State<AppState>) -> Json<MediaDefaults> {
     })
 }
 
-async fn list_blobs(
-    State(s): State<AppState>,
-    Query(q): Query<BlobQuery>,
-) -> ApiResult<Json<Vec<Blob>>> {
+async fn list_blobs(Tenant(s): Tenant, Query(q): Query<BlobQuery>) -> ApiResult<Json<Vec<Blob>>> {
     Ok(Json(
         s.rt.store()
             .list_blobs(q.run_id.as_deref(), q.limit.unwrap_or(100).min(1000))
@@ -124,7 +122,7 @@ async fn list_blobs(
 
 /// Store the request body as a blob; its `content-type` is the media type.
 async fn upload_blob(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Query(q): Query<UploadQuery>,
     headers: HeaderMap,
     body: Bytes,
@@ -150,7 +148,7 @@ async fn upload_blob(
     Ok((StatusCode::CREATED, Json(blob)))
 }
 
-async fn blob_info(State(s): State<AppState>, Path(id): Path<String>) -> ApiResult<Json<Blob>> {
+async fn blob_info(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<Json<Blob>> {
     s.rt.store()
         .get_blob(&id)
         .await?
@@ -160,7 +158,7 @@ async fn blob_info(State(s): State<AppState>, Path(id): Path<String>) -> ApiResu
 
 /// The bytes. Served so a stored SVG or HTML file cannot run script on the
 /// dashboard's origin.
-async fn blob_bytes(State(s): State<AppState>, Path(id): Path<String>) -> ApiResult<Response> {
+async fn blob_bytes(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<Response> {
     let store = s.rt.store();
     let b = store
         .get_blob(&id)
@@ -190,7 +188,7 @@ async fn blob_bytes(State(s): State<AppState>, Path(id): Path<String>) -> ApiRes
         .into_response())
 }
 
-async fn delete_blob(State(s): State<AppState>, Path(id): Path<String>) -> ApiResult<StatusCode> {
+async fn delete_blob(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<StatusCode> {
     if s.rt.store().delete_blob(&id).await? {
         Ok(StatusCode::NO_CONTENT)
     } else {
@@ -219,7 +217,7 @@ async fn account(s: &AppState, p: &Principal, model: &str, cost: Option<f64>) {
 }
 
 async fn transcribe(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Extension(p): Extension<Principal>,
     Json(b): Json<TranscribeBody>,
 ) -> ApiResult<Json<TranscribeResult>> {
@@ -268,7 +266,7 @@ async fn transcribe(
 }
 
 async fn speak(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Extension(p): Extension<Principal>,
     Json(b): Json<SpeakBody>,
 ) -> ApiResult<Json<MediaResult>> {
@@ -305,7 +303,7 @@ async fn speak(
 }
 
 async fn generate_images(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Extension(p): Extension<Principal>,
     Json(b): Json<ImagesBody>,
 ) -> ApiResult<Json<MediaResult>> {

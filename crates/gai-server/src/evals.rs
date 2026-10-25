@@ -1,7 +1,7 @@
 //! Feedback on replies, and evaluations: eval sets, running them, results
 //! and comparisons.
 
-use axum::extract::{Path, Query, State};
+use axum::extract::{Path, Query};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
@@ -17,6 +17,7 @@ use crate::AppState;
 use crate::api::{Done, Saved};
 use crate::auth::Principal;
 use crate::error::{ApiError, ApiResult};
+use crate::orgs::Tenant;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -52,7 +53,7 @@ fn rater(p: &Principal) -> String {
 }
 
 async fn rate(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Extension(p): Extension<Principal>,
     Path(id): Path<String>,
     Json(body): Json<Rate>,
@@ -81,7 +82,7 @@ async fn rate(
 }
 
 async fn unrate(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Extension(p): Extension<Principal>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<Done>> {
@@ -89,10 +90,7 @@ async fn unrate(
     Ok(Json(Done { ok: true }))
 }
 
-async fn run_feedback(
-    State(s): State<AppState>,
-    Path(id): Path<String>,
-) -> ApiResult<Json<Vec<Feedback>>> {
+async fn run_feedback(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<Json<Vec<Feedback>>> {
     Ok(Json(
         s.rt.store()
             .list_feedback(FeedbackFilter {
@@ -112,7 +110,7 @@ struct FeedbackQuery {
 }
 
 async fn list_feedback(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Query(q): Query<FeedbackQuery>,
 ) -> ApiResult<Json<Vec<Feedback>>> {
     Ok(Json(
@@ -133,7 +131,7 @@ struct AgentQuery {
 }
 
 async fn feedback_summary(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Query(q): Query<AgentQuery>,
 ) -> ApiResult<Json<Vec<FeedbackSummary>>> {
     Ok(Json(
@@ -143,7 +141,7 @@ async fn feedback_summary(
 
 // ---- eval sets ----
 
-async fn list_sets(State(s): State<AppState>) -> ApiResult<Json<Vec<EvalSetSummary>>> {
+async fn list_sets(Tenant(s): Tenant) -> ApiResult<Json<Vec<EvalSetSummary>>> {
     Ok(Json(s.rt.store().list_eval_sets().await?))
 }
 
@@ -154,7 +152,7 @@ struct NoteQuery {
 
 /// The body is an eval set as JSON, or `{"yaml": "..."}`.
 async fn save_set(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Query(q): Query<NoteQuery>,
     Json(body): Json<Value>,
 ) -> ApiResult<Json<Saved>> {
@@ -181,10 +179,7 @@ pub struct EvalSetView {
     pub set: EvalSet,
 }
 
-async fn get_set(
-    State(s): State<AppState>,
-    Path(name): Path<String>,
-) -> ApiResult<Json<EvalSetView>> {
+async fn get_set(Tenant(s): Tenant, Path(name): Path<String>) -> ApiResult<Json<EvalSetView>> {
     let (set, version) = s.gai.evals().await?.load(&name).await?;
     Ok(Json(EvalSetView {
         name: set.name.clone(),
@@ -194,13 +189,13 @@ async fn get_set(
 }
 
 async fn set_versions(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
 ) -> ApiResult<Json<Vec<EvalSetVersion>>> {
     Ok(Json(s.rt.store().list_eval_set_versions(&name).await?))
 }
 
-async fn delete_set(State(s): State<AppState>, Path(name): Path<String>) -> ApiResult<Json<Done>> {
+async fn delete_set(Tenant(s): Tenant, Path(name): Path<String>) -> ApiResult<Json<Done>> {
     if !s.rt.store().delete_eval_set(&name).await? {
         return Err(ApiError::not_found(format!("eval set {name}")));
     }
@@ -232,7 +227,7 @@ pub struct StartedEvals {
 /// Start evaluations in the background; follow them with
 /// `GET /v1/eval-runs/{id}`.
 async fn start_run(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
     Json(body): Json<StartEval>,
 ) -> ApiResult<(StatusCode, Json<StartedEvals>)> {
@@ -303,10 +298,7 @@ struct RunsQuery {
     limit: u32,
 }
 
-async fn list_runs(
-    State(s): State<AppState>,
-    Query(q): Query<RunsQuery>,
-) -> ApiResult<Json<Vec<EvalRun>>> {
+async fn list_runs(Tenant(s): Tenant, Query(q): Query<RunsQuery>) -> ApiResult<Json<Vec<EvalRun>>> {
     Ok(Json(
         s.rt.store()
             .list_eval_runs(q.set.as_deref(), q.limit)
@@ -314,18 +306,15 @@ async fn list_runs(
     ))
 }
 
-async fn set_runs(
-    State(s): State<AppState>,
-    Path(name): Path<String>,
-) -> ApiResult<Json<Vec<EvalRun>>> {
+async fn set_runs(Tenant(s): Tenant, Path(name): Path<String>) -> ApiResult<Json<Vec<EvalRun>>> {
     Ok(Json(s.rt.store().list_eval_runs(Some(&name), 50).await?))
 }
 
-async fn get_run(State(s): State<AppState>, Path(id): Path<String>) -> ApiResult<Json<EvalReport>> {
+async fn get_run(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<Json<EvalReport>> {
     Ok(Json(s.gai.evals().await?.report(&id).await?))
 }
 
-async fn delete_run(State(s): State<AppState>, Path(id): Path<String>) -> ApiResult<Json<Done>> {
+async fn delete_run(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<Json<Done>> {
     if !s.rt.store().delete_eval_run(&id).await? {
         return Err(ApiError::not_found(format!("evaluation {id}")));
     }
@@ -348,7 +337,7 @@ pub struct CompareView {
 }
 
 async fn compare_runs(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Query(q): Query<CompareQuery>,
 ) -> ApiResult<Json<CompareView>> {
     let ev = s.gai.evals().await?;

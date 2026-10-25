@@ -3,19 +3,24 @@ import { TextField } from '@/components/fields';
 import { Disclosure } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { getApiKey, setApiKey } from './api';
+import { api, getApiKey, setApiKey, type AuthConfig } from './api';
 
 /** Asks for an API key whenever the server answers 401. */
 export function KeyDialog() {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
   const [hadKey, setHadKey] = useState(false);
+  const [auth, setAuth] = useState<AuthConfig>();
 
   useEffect(() => {
     const ask = () => {
       setHadKey(!!getApiKey());
       setValue('');
       setOpen(true);
+      api
+        .authConfig()
+        .then(setAuth)
+        .catch(() => {});
     };
     window.addEventListener('gai:unauthorized', ask);
     return () => window.removeEventListener('gai:unauthorized', ask);
@@ -35,10 +40,20 @@ export function KeyDialog() {
           <DialogHeader>
             <DialogTitle>{hadKey ? 'That key was not accepted' : 'Sign in'}</DialogTitle>
             <DialogDescription>
-              This gai server is shared, so it needs an access key. Ask whoever runs it for one, and paste it here. It is kept in this
-              browser only.
+              {auth?.oidc
+              ? 'Sign in with your work account, or paste an access key. A key is kept in this browser only.'
+              : 'This gai server is shared, so it needs an access key. Ask whoever runs it for one, and paste it here. It is kept in this browser only.'}
             </DialogDescription>
           </DialogHeader>
+          {auth?.oidc && (
+            <Button
+              type="button"
+              size="lg"
+              onClick={() => location.assign(`/v1/auth/login?return_to=${encodeURIComponent('/' + location.hash)}`)}
+            >
+              {auth.label}
+            </Button>
+          )}
           <Disclosure summary="I run this server">
             <p className="text-sm text-muted-foreground">
               Make a key on the server with <code>gai keys create --name me --scope admin</code> (in the repo:{' '}

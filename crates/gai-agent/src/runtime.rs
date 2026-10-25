@@ -453,7 +453,42 @@ impl Runtime {
 
     /// Add (or replace) an MCP server, connect it and register its tools.
     /// Returns how many tools it provides.
+    /// Whether this runtime may use an MCP server config. A confined
+    /// organization gets HTTP servers on public addresses, with no `${VAR}`
+    /// (they would read the server's environment).
+    pub fn check_mcp(&self, config: &gai_tools::mcp::McpServerConfig) -> Result<(), String> {
+        if !self.inner.config.tools.confined {
+            return Ok(());
+        }
+        if config.command.is_some() {
+            return Err("this organization can only use MCP servers over HTTP (url)".into());
+        }
+        let vars = config
+            .env
+            .values()
+            .chain(config.headers.values())
+            .chain(config.url.iter())
+            .chain(config.args.iter())
+            .any(|v| v.contains("${"));
+        if vars {
+            return Err(
+                "${VAR} isn't available to this organization: write the value itself".into(),
+            );
+        }
+        if let Some(url) = &config.url {
+            let u = reqwest::Url::parse(url).map_err(|e| format!("url: {e}"))?;
+            if gai_tools::builtin::is_private_host(
+                u.host_str().unwrap_or_default(),
+                u.port_or_known_default().unwrap_or(80),
+            ) {
+                return Err("MCP servers on private network addresses aren't available to this organization".into());
+            }
+        }
+        Ok(())
+    }
+
     pub async fn connect_mcp(&self, server: Arc<McpServer>) -> Result<usize, String> {
+        self.check_mcp(&server.config)?;
         if let Some(old) = self.inner.mcp.add(server.clone()) {
             old.close().await;
         }

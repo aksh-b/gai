@@ -1,7 +1,7 @@
 //! Personas: reusable voices for agents and chats. Versioned like agents,
 //! with labels, diffs and rollback, plus the global default.
 
-use axum::extract::{Path, Query, State};
+use axum::extract::{Path, Query};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::AppState;
 use crate::api::{Done, LabelBody, Saved};
 use crate::error::{ApiError, ApiResult};
+use crate::orgs::Tenant;
 use crate::versions::{DiffQuery, Rollback, VersionDiff, diff_of, pick};
 
 pub fn routes() -> Router<AppState> {
@@ -82,7 +83,7 @@ pub struct PutPersonaDefaults {
     pub reset: bool,
 }
 
-async fn list(State(s): State<AppState>) -> ApiResult<Json<Vec<PersonaEntry>>> {
+async fn list(Tenant(s): Tenant) -> ApiResult<Json<Vec<PersonaEntry>>> {
     let mut out = Vec::new();
     for summary in s.rt.store().list_personas().await? {
         let spec =
@@ -101,7 +102,7 @@ async fn list(State(s): State<AppState>) -> ApiResult<Json<Vec<PersonaEntry>>> {
 }
 
 async fn save(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Query(q): Query<SaveQuery>,
     Json(spec): Json<PersonaSpec>,
 ) -> ApiResult<(StatusCode, Json<Saved>)> {
@@ -122,7 +123,7 @@ async fn render(Json(spec): Json<PersonaSpec>) -> Json<RenderedPersona> {
 }
 
 async fn get_one(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
     Query(q): Query<VersionQuery>,
 ) -> ApiResult<Json<PersonaView>> {
@@ -139,22 +140,19 @@ async fn get_one(
 }
 
 async fn versions(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
 ) -> ApiResult<Json<Vec<PersonaVersion>>> {
     Ok(Json(s.rt.store().list_persona_versions(&name).await?))
 }
 
-async fn usage(
-    State(s): State<AppState>,
-    Path(name): Path<String>,
-) -> ApiResult<Json<Vec<String>>> {
+async fn usage(Tenant(s): Tenant, Path(name): Path<String>) -> ApiResult<Json<Vec<String>>> {
     Ok(Json(s.rt.persona_users(&name).await?))
 }
 
 /// A persona in use can't be deleted: the agents (or the default) that
 /// speak as it would stop working.
-async fn delete(State(s): State<AppState>, Path(name): Path<String>) -> ApiResult<StatusCode> {
+async fn delete(Tenant(s): Tenant, Path(name): Path<String>) -> ApiResult<StatusCode> {
     let users = s.rt.persona_users(&name).await?;
     if !users.is_empty() {
         return Err(ApiError::new(
@@ -184,7 +182,7 @@ async fn delete(State(s): State<AppState>, Path(name): Path<String>) -> ApiResul
 }
 
 async fn diff(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
     Query(q): Query<DiffQuery>,
 ) -> ApiResult<Json<VersionDiff>> {
@@ -208,7 +206,7 @@ async fn diff(
 }
 
 async fn rollback(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
     Json(b): Json<Rollback>,
 ) -> ApiResult<(StatusCode, Json<Saved>)> {
@@ -225,7 +223,7 @@ async fn rollback(
 }
 
 async fn set_label(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path((name, label)): Path<(String, String)>,
     Json(b): Json<LabelBody>,
 ) -> ApiResult<Json<Done>> {
@@ -236,14 +234,14 @@ async fn set_label(
 }
 
 async fn remove_label(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path((name, label)): Path<(String, String)>,
 ) -> ApiResult<Json<Done>> {
     s.rt.store().set_persona_label(&name, &label, None).await?;
     Ok(Json(Done { ok: true }))
 }
 
-async fn defaults(State(s): State<AppState>) -> ApiResult<Json<PersonaDefaultsView>> {
+async fn defaults(Tenant(s): Tenant) -> ApiResult<Json<PersonaDefaultsView>> {
     let (defaults, source) = s.gai.persona_defaults().await?;
     Ok(Json(PersonaDefaultsView {
         defaults,
@@ -252,7 +250,7 @@ async fn defaults(State(s): State<AppState>) -> ApiResult<Json<PersonaDefaultsVi
 }
 
 async fn put_defaults(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Json(b): Json<PutPersonaDefaults>,
 ) -> ApiResult<Json<PersonaDefaultsView>> {
     let choice = (!b.reset).then(|| PersonaDefaults {
@@ -263,5 +261,5 @@ async fn put_defaults(
         placement: b.placement,
     });
     s.gai.set_persona_defaults(choice).await?;
-    defaults(State(s)).await
+    defaults(Tenant(s)).await
 }

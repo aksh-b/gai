@@ -92,6 +92,15 @@
 # [server]
 # auth = "auto"                      # auto | required | off
 # rate_limit_per_minute = 600
+#
+# People sign in to the dashboard with your identity provider (docs/users.md).
+# [server.sso]
+# admins = ["you@example.com"]       # owners of the default organization
+# default_role = "member"            # for people nobody invited
+# [server.sso.oidc]
+# issuer = "https://accounts.example.com"
+# client_id = "gai"
+# client_secret_env = "GAI_OIDC_CLIENT_SECRET"
 
 # ---- MCP servers whose tools agents can use (mcp__<name>__<tool>) ----
 # [mcp_servers.fs]

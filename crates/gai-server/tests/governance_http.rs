@@ -45,13 +45,13 @@ async fn changes_are_audited_with_who_did_them() {
         .await
         .unwrap()
         .store()
-        .create_key(
+        .create_key(&gai::store::NewKey::new(
             "ada",
             &key.prefix,
             &key.hash,
             &[gai::store::Scope::Admin],
             None,
-        )
+        ))
         .await
         .unwrap();
     let k = Some(key.secret.as_str());

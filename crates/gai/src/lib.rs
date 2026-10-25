@@ -38,7 +38,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub use config::{
-    A2aServeSettings, AuthMode, Config, ConfigError, McpServeSettings, ServerSettings,
+    A2aServeSettings, AuthMode, Config, ConfigError, McpServeSettings, OidcSettings,
+    ServerSettings, SsoSettings, TrustedHeader,
 };
 pub use gai_agent as agent;
 pub use gai_browser as browser;
@@ -122,6 +123,11 @@ pub fn default_agent() -> AgentSpec {
         ])
 }
 
+/// An organization slug as a SQL identifier part (`-` becomes `_`).
+fn org_ident(slug: &str) -> String {
+    slug.replace('-', "_")
+}
+
 /// A loaded gai instance. The store and runtime open on first use, so
 /// commands that only talk to models never touch the database.
 pub struct Gai {
@@ -163,6 +169,64 @@ impl Gai {
     /// model, store and extra tools.
     pub fn builder() -> GaiBuilder {
         GaiBuilder::default()
+    }
+
+    /// The instance an organization (other than the default one) works in:
+    /// its own database (a SQLite file under `<data_dir>/orgs/<slug>`, or a
+    /// Postgres schema `org_<slug>`), files, workspaces and vector index.
+    /// It shares the server's models and settings from gai.toml, but not
+    /// its MCP servers or A2A agents, and it is confined: no `shell` tool,
+    /// no private network addresses, MCP over HTTP only, file triggers and
+    /// folder sources only under its own `files` folder, and source tokens
+    /// from its own secrets instead of the server's environment.
+    pub fn for_org(&self, slug: &str) -> Result<Self, Error> {
+        if slug.is_empty()
+            || !slug
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        {
+            return Err(Error::Invalid(format!("bad organization slug {slug:?}")));
+        }
+        let mut c = self.config.clone();
+        let dir = self.config.data_dir().join("orgs").join(slug);
+        c.data_dir = Some(dir.clone());
+        if c.postgres_url().is_none() {
+            c.database = None;
+        }
+        c.org = Some(slug.to_owned());
+        c.agents_dirs = vec![dir.join("agents")];
+        c.skills_dirs = vec![dir.join("skills")];
+        c.workflows_dirs = vec![dir.join("workflows")];
+        c.mcp_servers.clear();
+        c.a2a_agents.clear();
+        c.tools.allow_private_network = false;
+        c.tools.confined = true;
+        c.browser.allow_private_network = false;
+        let prefix = c
+            .knowledge
+            .vector_index
+            .prefix
+            .clone()
+            .unwrap_or_else(|| "gai_".into());
+        c.knowledge.vector_index.prefix = Some(format!("{prefix}{}_", org_ident(slug)));
+        let mut g = Self::from_config(c, self.config_path.clone())?;
+        g.extra_tools = self.extra_tools.clone();
+        Ok(g)
+    }
+
+    /// The general assistant for this instance: [`default_agent`], without
+    /// the tools a confined organization doesn't have.
+    pub fn default_agent(&self) -> AgentSpec {
+        let mut spec = default_agent();
+        if self.config.tools.confined {
+            spec.tools.retain(|t| t != "shell");
+        }
+        spec
+    }
+
+    /// The organization this instance belongs to; `None` for the default one.
+    pub fn org(&self) -> Option<&str> {
+        self.config.org.as_deref()
     }
 
     /// Use this store instead of the configured database.
@@ -322,7 +386,13 @@ impl Gai {
                     Some(s) => s.clone(),
                     None => match self.config.postgres_url() {
                         #[cfg(feature = "postgres")]
-                        Some(url) => Arc::new(gai_store::PostgresStore::connect(&url).await?),
+                        Some(url) => match &self.config.org {
+                            Some(org) => Arc::new(
+                                gai_store::PostgresStore::connect_schema(&url, &format!("org_{}", org_ident(org)))
+                                    .await?,
+                            ),
+                            None => Arc::new(gai_store::PostgresStore::connect(&url).await?),
+                        },
                         #[cfg(not(feature = "postgres"))]
                         Some(_) => {
                             return Err(Error::Invalid(
@@ -366,9 +436,14 @@ impl Gai {
                         Err(e) => tracing::warn!(setting = %name, error = %e, "ignoring a stored model"),
                     }
                 }
+                let mut tools = ToolRegistry::with_builtins();
+                if self.config.tools.confined {
+                    // It runs anything as the server's user.
+                    tools.unregister_prefix("shell");
+                }
                 let rt = Runtime::new(
                     self.models.clone(),
-                    ToolRegistry::with_builtins(),
+                    tools,
                     store.clone(),
                     config,
                 );
@@ -386,7 +461,15 @@ impl Gai {
                             )
                         })?;
                     #[cfg(feature = "postgres")]
-                    rt.knowledge().set_index(Some(Arc::new(gai_store::PgVectorIndex::connect(&url).await?)));
+                    {
+                        let table = match &self.config.org {
+                            Some(org) => format!("gai_vectors_{}", org_ident(org)),
+                            None => "gai_vectors".into(),
+                        };
+                        rt.knowledge().set_index(Some(Arc::new(
+                            gai_store::PgVectorIndex::connect_table(&url, &table).await?,
+                        )));
+                    }
                     #[cfg(not(feature = "postgres"))]
                     return Err(Error::Invalid(format!(
                         "the pgvector index ({url}) needs gai built with the postgres feature"
@@ -490,9 +573,12 @@ impl Gai {
     /// Sources synced into knowledge collections (folders, websites,
     /// GitHub, Confluence, Notion).
     pub async fn sources(&self) -> Result<gai_memory::sources::Sources, Error> {
-        Ok(gai_memory::sources::Sources::new(
-            self.runtime().await?.knowledge().clone(),
-        ))
+        let sources = gai_memory::sources::Sources::new(self.runtime().await?.knowledge().clone());
+        Ok(if self.config.tools.confined {
+            sources.confined(self.config.data_dir().join("files"))
+        } else {
+            sources
+        })
     }
 
     /// Apply retention: delete conversations older than each agent's

@@ -410,14 +410,24 @@ pub enum KeysCmd {
     Create {
         #[arg(long)]
         name: String,
-        /// admin, run or read (repeatable)
+        /// admin, build, run or read (repeatable)
         #[arg(long = "scope", default_value = "run", value_parser = parse_scope)]
         scopes: Vec<gai::store::Scope>,
         /// Stop the key from starting new work after spending this much (USD)
         #[arg(long)]
         budget: Option<f64>,
+        /// The organization it acts in (slug; default: the default one)
+        #[arg(long)]
+        org: Option<String>,
+        /// Limit it to what this team owns
+        #[arg(long)]
+        team: Option<String>,
     },
-    List,
+    List {
+        /// Only this organization's keys
+        #[arg(long)]
+        org: Option<String>,
+    },
     Revoke {
         id: String,
     },
@@ -425,7 +435,7 @@ pub enum KeysCmd {
 
 fn parse_scope(s: &str) -> Result<gai::store::Scope, String> {
     serde_json::from_value(serde_json::Value::String(s.to_lowercase()))
-        .map_err(|_| format!("unknown scope {s:?}; use admin, run or read"))
+        .map_err(|_| format!("unknown scope {s:?}; use admin, build, run or read"))
 }
 
 pub async fn keys(gai: &Gai, cmd: KeysCmd) -> anyhow::Result<()> {
@@ -435,11 +445,24 @@ pub async fn keys(gai: &Gai, cmd: KeysCmd) -> anyhow::Result<()> {
             name,
             scopes,
             budget,
+            org,
+            team,
         } => {
             let k = gai::store::keys::generate();
-            let key = store
-                .create_key(&name, &k.prefix, &k.hash, &scopes, budget)
-                .await?;
+            let mut new = gai::store::NewKey::new(&name, &k.prefix, &k.hash, &scopes, budget);
+            if let Some(o) = &org {
+                new.org_id = crate::orgs::org_id(&store, o).await?;
+            }
+            if let Some(t) = &team {
+                new.team_id = Some(
+                    store
+                        .get_team(&new.org_id, t)
+                        .await?
+                        .ok_or_else(|| anyhow::anyhow!("no team {t}"))?
+                        .id,
+                );
+            }
+            let key = store.create_key(&new).await?;
             println!("{}", k.secret);
             eprintln!(
                 "{}",
@@ -454,8 +477,12 @@ pub async fn keys(gai: &Gai, cmd: KeysCmd) -> anyhow::Result<()> {
                 ))
             );
         }
-        KeysCmd::List => {
-            for k in store.list_keys().await? {
+        KeysCmd::List { org } => {
+            let org = match &org {
+                Some(o) => Some(crate::orgs::org_id(&store, o).await?),
+                None => None,
+            };
+            for k in store.list_keys(org.as_deref()).await? {
                 let state = if k.revoked_at.is_some() {
                     red("revoked")
                 } else {

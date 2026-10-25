@@ -165,22 +165,87 @@ pub trait RunStore: Send + Sync {
 #[async_trait]
 pub trait KeyStore: Send + Sync {
     /// Store a key given its hash; the plaintext never reaches the store.
-    async fn create_key(
-        &self,
-        name: &str,
-        prefix: &str,
-        hash: &str,
-        scopes: &[Scope],
-        budget_usd: Option<f64>,
-    ) -> Result<ApiKey>;
+    async fn create_key(&self, key: &NewKey) -> Result<ApiKey>;
     /// An unrevoked key by hash.
     async fn find_key(&self, hash: &str) -> Result<Option<ApiKey>>;
-    async fn list_keys(&self) -> Result<Vec<ApiKey>>;
+    /// Keys of one organization, or of all.
+    async fn list_keys(&self, org_id: Option<&str>) -> Result<Vec<ApiKey>>;
     async fn revoke_key(&self, id: &str) -> Result<bool>;
     async fn touch_key(&self, id: &str) -> Result<()>;
     async fn add_key_spend(&self, id: &str, usd: f64) -> Result<()>;
     /// Whether any unrevoked key exists.
     async fn has_keys(&self) -> Result<bool>;
+}
+
+/// Organizations, users, memberships and teams, and which team owns which
+/// resource. Kept in the main database for every organization.
+#[async_trait]
+pub trait DirectoryStore: Send + Sync {
+    /// Fails with `Conflict` when the slug is taken.
+    async fn create_org(&self, slug: &str, name: &str) -> Result<Org>;
+    /// By id or slug.
+    async fn get_org(&self, id_or_slug: &str) -> Result<Option<Org>>;
+    async fn list_orgs(&self) -> Result<Vec<Org>>;
+    async fn update_org(
+        &self,
+        id: &str,
+        name: Option<&str>,
+        settings: Option<&Value>,
+    ) -> Result<Org>;
+    /// Removes its memberships, teams, ownerships and keys. The default
+    /// organization can't be deleted.
+    async fn delete_org(&self, id: &str) -> Result<bool>;
+
+    /// A user who hasn't signed in yet (an invitation). Returns the existing
+    /// user when the email is known.
+    async fn create_user(&self, email: &str, name: Option<&str>) -> Result<User>;
+    /// At sign-in: the user with this identity-provider subject, else the
+    /// user invited with this (verified) email, else a new user.
+    async fn sign_in_user(&self, subject: &str, email: &str, name: Option<&str>) -> Result<User>;
+    async fn get_user(&self, id: &str) -> Result<Option<User>>;
+    async fn find_user_by_email(&self, email: &str) -> Result<Option<User>>;
+    async fn list_users(&self) -> Result<Vec<User>>;
+    async fn set_user_disabled(&self, id: &str, disabled: bool) -> Result<bool>;
+
+    async fn set_membership(&self, org_id: &str, user_id: &str, role: Role) -> Result<()>;
+    /// Also takes the user out of the organization's teams.
+    async fn remove_membership(&self, org_id: &str, user_id: &str) -> Result<bool>;
+    async fn list_members(&self, org_id: &str) -> Result<Vec<Membership>>;
+    async fn user_memberships(&self, user_id: &str) -> Result<Vec<Membership>>;
+
+    /// Fails with `Conflict` when the organization has a team by that name.
+    async fn create_team(&self, org_id: &str, name: &str) -> Result<Team>;
+    /// By id or name.
+    async fn get_team(&self, org_id: &str, id_or_name: &str) -> Result<Option<Team>>;
+    async fn list_teams(&self, org_id: &str) -> Result<Vec<Team>>;
+    /// Also clears what it owned.
+    async fn delete_team(&self, org_id: &str, team_id: &str) -> Result<bool>;
+    async fn add_team_member(&self, team_id: &str, user_id: &str) -> Result<()>;
+    async fn remove_team_member(&self, team_id: &str, user_id: &str) -> Result<bool>;
+
+    /// Give a resource (`agent`, `collection`, `workflow`, ...) to a team,
+    /// or back to the whole organization with `None`.
+    async fn set_owner(
+        &self,
+        org_id: &str,
+        kind: &str,
+        name: &str,
+        team_id: Option<&str>,
+    ) -> Result<()>;
+    async fn get_owner(&self, org_id: &str, kind: &str, name: &str) -> Result<Option<String>>;
+    /// `(kind, name, team id)` of every owned resource.
+    async fn list_owners(&self, org_id: &str) -> Result<Vec<(String, String, String)>>;
+
+    /// A browser sign-in, stored by the hash of its token.
+    async fn create_login(
+        &self,
+        hash: &str,
+        user_id: &str,
+        expires_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<()>;
+    /// An unexpired sign-in and its (enabled) user. Marks the user seen.
+    async fn find_login(&self, hash: &str) -> Result<Option<(Login, User)>>;
+    async fn delete_login(&self, hash: &str) -> Result<()>;
 }
 
 /// MCP servers added at runtime. The config is stored as JSON; the tools
@@ -516,7 +581,8 @@ pub type SharedVectorIndex = Arc<dyn VectorIndex>;
 
 /// Everything gai stores.
 pub trait Store:
-    AgentStore
+    DirectoryStore
+    + AgentStore
     + SessionStore
     + RunStore
     + KeyStore
@@ -536,7 +602,8 @@ pub trait Store:
 {
 }
 impl<T> Store for T where
-    T: AgentStore
+    T: DirectoryStore
+        + AgentStore
         + SessionStore
         + RunStore
         + KeyStore

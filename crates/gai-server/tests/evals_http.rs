@@ -178,10 +178,10 @@ async fn eval_sets_run_in_the_background_and_compare() {
 #[test]
 fn scopes() {
     use gai::store::Scope;
-    assert_eq!(required_scope(&Method::POST, "/v1/evals"), Scope::Admin);
+    assert_eq!(required_scope(&Method::POST, "/v1/evals"), Scope::Build);
     assert_eq!(
         required_scope(&Method::DELETE, "/v1/evals/basics"),
-        Scope::Admin
+        Scope::Build
     );
     assert_eq!(
         required_scope(&Method::POST, "/v1/evals/basics/runs"),
@@ -189,7 +189,7 @@ fn scopes() {
     );
     assert_eq!(
         required_scope(&Method::DELETE, "/v1/eval-runs/e1"),
-        Scope::Admin
+        Scope::Build
     );
     assert_eq!(
         required_scope(&Method::POST, "/v1/runs/r1/feedback"),

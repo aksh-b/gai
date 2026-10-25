@@ -16,6 +16,8 @@ use crate::{Result, StoreError, VectorIndex};
 
 pub struct PgVectorIndex {
     pool: PgPool,
+    /// `gai_vectors`, or `gai_vectors_<org>` for an organization.
+    table: String,
     /// Dimension sizes that already have their HNSW index.
     indexed: Mutex<HashSet<usize>>,
 }
@@ -40,10 +42,23 @@ impl PgVectorIndex {
     pub async fn connect(url: &str) -> Result<Self> {
         let opts =
             PgConnectOptions::from_str(url).map_err(|e| StoreError::Database(e.to_string()))?;
-        Self::connect_with(opts).await
+        Self::connect_with(opts, "gai_vectors").await
     }
 
-    pub async fn connect_with(opts: PgConnectOptions) -> Result<Self> {
+    /// Like [`connect`](Self::connect), keeping the vectors in `table`.
+    pub async fn connect_table(url: &str, table: &str) -> Result<Self> {
+        let opts =
+            PgConnectOptions::from_str(url).map_err(|e| StoreError::Database(e.to_string()))?;
+        Self::connect_with(opts, table).await
+    }
+
+    /// Keep the vectors in `table` (letters, digits and `_`).
+    pub async fn connect_with(opts: PgConnectOptions, table: &str) -> Result<Self> {
+        if table.is_empty() || !table.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            return Err(StoreError::Database(format!(
+                "bad vector table name {table:?}"
+            )));
+        }
         let pool = PgPoolOptions::new()
             .max_connections(8)
             .connect_with(opts)
@@ -56,21 +71,24 @@ impl PgVectorIndex {
                     "pgvector is not available in this Postgres (CREATE EXTENSION vector: {e})"
                 ))
             })?;
-        sqlx::query(
-            "CREATE TABLE IF NOT EXISTS gai_vectors (
+        sqlx::query(&format!(
+            "CREATE TABLE IF NOT EXISTS {table} (
                  chunk_id   BIGINT PRIMARY KEY,
                  collection TEXT NOT NULL,
                  dims       INTEGER NOT NULL,
                  embedding  vector NOT NULL
-             )",
-        )
+             )"
+        ))
         .execute(&pool)
         .await?;
-        sqlx::query("CREATE INDEX IF NOT EXISTS gai_vectors_collection ON gai_vectors(collection)")
-            .execute(&pool)
-            .await?;
+        sqlx::query(&format!(
+            "CREATE INDEX IF NOT EXISTS {table}_collection ON {table}(collection)"
+        ))
+        .execute(&pool)
+        .await?;
         Ok(Self {
             pool,
+            table: table.to_owned(),
             indexed: Mutex::default(),
         })
     }
@@ -80,8 +98,9 @@ impl PgVectorIndex {
             return Ok(());
         }
         // HNSW needs a fixed size; a partial index per size keeps one table.
+        let t = &self.table;
         sqlx::query(&format!(
-            "CREATE INDEX IF NOT EXISTS gai_vectors_hnsw_{dims} ON gai_vectors
+            "CREATE INDEX IF NOT EXISTS {t}_hnsw_{dims} ON {t}
              USING hnsw ((embedding::vector({dims})) vector_cosine_ops) WHERE dims = {dims}"
         ))
         .execute(&self.pool)
@@ -105,10 +124,11 @@ impl VectorIndex for PgVectorIndex {
                 continue;
             }
             dims.insert(v.len());
-            sqlx::query(
-                "INSERT INTO gai_vectors (chunk_id, collection, dims, embedding) VALUES ($1, $2, $3, $4::vector)
+            sqlx::query(&format!(
+                "INSERT INTO {} (chunk_id, collection, dims, embedding) VALUES ($1, $2, $3, $4::vector)
                  ON CONFLICT (chunk_id) DO UPDATE SET collection = EXCLUDED.collection, dims = EXCLUDED.dims, embedding = EXCLUDED.embedding",
-            )
+                self.table
+            ))
             .bind(id)
             .bind(collection)
             .bind(v.len() as i32)
@@ -127,15 +147,18 @@ impl VectorIndex for PgVectorIndex {
         if ids.is_empty() {
             return Ok(());
         }
-        sqlx::query("DELETE FROM gai_vectors WHERE chunk_id = ANY($1)")
-            .bind(ids)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query(&format!(
+            "DELETE FROM {} WHERE chunk_id = ANY($1)",
+            self.table
+        ))
+        .bind(ids)
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 
     async fn drop_collection(&self, collection: &str) -> Result<()> {
-        sqlx::query("DELETE FROM gai_vectors WHERE collection = $1")
+        sqlx::query(&format!("DELETE FROM {} WHERE collection = $1", self.table))
             .bind(collection)
             .execute(&self.pool)
             .await?;
@@ -163,8 +186,9 @@ impl VectorIndex for PgVectorIndex {
         }
         let rows = sqlx::query(&format!(
             "SELECT chunk_id, 1 - (embedding::vector({d}) <=> $1::vector({d})) AS score
-             FROM gai_vectors WHERE dims = {d} AND collection = ANY($2)
-             ORDER BY embedding::vector({d}) <=> $1::vector({d}) LIMIT $3"
+             FROM {} WHERE dims = {d} AND collection = ANY($2)
+             ORDER BY embedding::vector({d}) <=> $1::vector({d}) LIMIT $3",
+            self.table
         ))
         .bind(literal(query))
         .bind(collections)

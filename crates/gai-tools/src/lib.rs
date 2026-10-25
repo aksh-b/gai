@@ -152,6 +152,10 @@ pub struct ToolSettings {
     pub max_output_chars: usize,
     pub shell_timeout_secs: u64,
     pub http_timeout_secs: u64,
+    /// Set for an organization sharing the server: no private network
+    /// addresses, MCP servers over HTTP only, files only in its own folder.
+    #[serde(skip)]
+    pub confined: bool,
 }
 
 impl Default for ToolSettings {
@@ -161,6 +165,7 @@ impl Default for ToolSettings {
             max_output_chars: 50_000,
             shell_timeout_secs: 120,
             http_timeout_secs: 60,
+            confined: false,
         }
     }
 }

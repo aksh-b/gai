@@ -11,7 +11,6 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
 
-use axum::extract::State;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -29,6 +28,7 @@ use tokio::sync::mpsc;
 use crate::AppState;
 use crate::auth::{Principal, charge};
 use crate::error::{ApiError, ApiResult};
+use crate::orgs::Tenant;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -223,7 +223,7 @@ fn now() -> i64 {
 }
 
 async fn chat_completions(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Extension(p): Extension<Principal>,
     Json(req): Json<ChatCompletionRequest>,
 ) -> ApiResult<Response> {
@@ -429,7 +429,7 @@ async fn agent_completion(
     req: ChatCompletionRequest,
 ) -> ApiResult<Response> {
     let (spec, version) = match agent.as_str() {
-        "" | "default" | "assistant" => (gai::default_agent(), None),
+        "" | "default" | "assistant" => (s.gai.default_agent(), None),
         r => s.gai.find_agent(r).await?,
     };
     let (system, mut messages) = convert(&req.messages);
@@ -532,7 +532,7 @@ fn sse_chunks(
     Sse::new(body).keep_alive(KeepAlive::default())
 }
 
-async fn list_models(State(s): State<AppState>) -> ApiResult<Json<Value>> {
+async fn list_models(Tenant(s): Tenant) -> ApiResult<Json<Value>> {
     let mut data: Vec<Value> = s
         .gai
         .models()

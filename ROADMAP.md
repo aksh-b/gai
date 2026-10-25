@@ -46,7 +46,11 @@ permissions are kept on chunks (`acl`) but enforced only with phase 16.
 
 Done when a server runs on Postgres with an external vector store and synced sources.
 
-## 16. Users, teams and tenants
+## 16. Users, teams and tenants — in progress
+
+Built so far: users with roles, OIDC and proxy sign-in, teams owning
+resources and team keys, organizations each in their own database with
+budgets, rate limits and branding.
 
 - **Users and RBAC** [67]: user accounts with roles (owner, admin, builder, member, viewer) and per-resource permissions, beyond API key scopes.
 - **SSO** [68]: OIDC (and SAML through a proxy) sign-in for the dashboard, with users created on first sign-in.

@@ -1,6 +1,6 @@
 use std::convert::Infallible;
 
-use axum::extract::{Path, Query, State};
+use axum::extract::{Path, Query};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
@@ -26,6 +26,7 @@ use tokio::sync::mpsc;
 use crate::AppState;
 use crate::auth::Principal;
 use crate::error::{ApiError, ApiResult};
+use crate::orgs::Tenant;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -85,6 +86,13 @@ pub struct Me {
     pub auth: String,
     pub budget_usd: Option<f64>,
     pub spent_usd: Option<f64>,
+    /// The organization this request works in.
+    pub org: gai::store::Org,
+    /// A signed-in user, and the organizations they belong to.
+    pub user: Option<gai::store::User>,
+    pub memberships: Vec<gai::store::Membership>,
+    /// The teams the caller acts for.
+    pub teams: Vec<gai::store::Team>,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -220,6 +228,8 @@ pub struct CreateKey {
     #[serde(default = "default_scopes")]
     pub scopes: Vec<Scope>,
     pub budget_usd: Option<f64>,
+    /// A team (id or name): the key changes only what that team owns.
+    pub team: Option<String>,
 }
 
 fn default_scopes() -> Vec<Scope> {
@@ -253,7 +263,7 @@ pub struct LabelBody {
 // ---- handlers ----
 
 async fn auth_label(s: &AppState) -> String {
-    if s.auth.open(s.rt.store()).await {
+    if s.auth.open(s.orgs.control()).await {
         "open"
     } else {
         "keys"
@@ -261,7 +271,7 @@ async fn auth_label(s: &AppState) -> String {
     .to_owned()
 }
 
-async fn health(State(s): State<AppState>) -> Json<Health> {
+async fn health(Tenant(s): Tenant) -> Json<Health> {
     Json(Health {
         status: "ok".into(),
         version: env!("CARGO_PKG_VERSION").into(),
@@ -270,25 +280,47 @@ async fn health(State(s): State<AppState>) -> Json<Health> {
     })
 }
 
-async fn me(State(s): State<AppState>, Extension(p): Extension<Principal>) -> Json<Me> {
+async fn me(Tenant(s): Tenant, Extension(p): Extension<Principal>) -> ApiResult<Json<Me>> {
     let (budget_usd, spent_usd) = p
         .key
         .as_ref()
         .map(|k| (k.budget_usd, Some(k.spent_usd)))
         .unwrap_or((None, None));
-    Json(Me {
+    let control = s.orgs.control();
+    let (user, memberships) = match (&p.user_id, &p.key) {
+        (Some(u), None) => (
+            control.get_user(u).await?,
+            control.user_memberships(u).await?,
+        ),
+        _ => (None, Vec::new()),
+    };
+    let teams = control
+        .list_teams(&p.org_id)
+        .await?
+        .into_iter()
+        .filter(|t| p.teams.contains(&t.id))
+        .collect();
+    let org = control
+        .get_org(&p.org_id)
+        .await?
+        .unwrap_or_else(|| s.org.as_ref().clone());
+    Ok(Json(Me {
         auth: auth_label(&s).await,
         principal: p,
         budget_usd,
         spent_usd,
-    })
+        org,
+        user,
+        memberships,
+        teams,
+    }))
 }
 
-async fn models(State(s): State<AppState>) -> Json<Vec<CatalogEntry>> {
+async fn models(Tenant(s): Tenant) -> Json<Vec<CatalogEntry>> {
     Json(s.gai.models().catalog())
 }
 
-async fn providers(State(s): State<AppState>) -> Json<Vec<ProviderView>> {
+async fn providers(Tenant(s): Tenant) -> Json<Vec<ProviderView>> {
     Json(
         s.gai
             .models()
@@ -304,7 +336,7 @@ async fn providers(State(s): State<AppState>) -> Json<Vec<ProviderView>> {
     )
 }
 
-async fn tools(State(s): State<AppState>) -> Json<Vec<ToolView>> {
+async fn tools(Tenant(s): Tenant) -> Json<Vec<ToolView>> {
     Json(
         s.rt.tool_specs()
             .into_iter()
@@ -313,7 +345,7 @@ async fn tools(State(s): State<AppState>) -> Json<Vec<ToolView>> {
     )
 }
 
-async fn list_agents(State(s): State<AppState>) -> ApiResult<Json<Vec<AgentEntry>>> {
+async fn list_agents(Tenant(s): Tenant) -> ApiResult<Json<Vec<AgentEntry>>> {
     let mut out = Vec::new();
     for summary in s.rt.store().list_agents().await? {
         let spec =
@@ -326,8 +358,8 @@ async fn list_agents(State(s): State<AppState>) -> ApiResult<Json<Vec<AgentEntry
     Ok(Json(out))
 }
 
-async fn default_agent() -> Json<AgentSpec> {
-    Json(gai::default_agent())
+async fn default_agent(Tenant(s): Tenant) -> Json<AgentSpec> {
+    Json(s.gai.default_agent())
 }
 
 #[derive(Deserialize)]
@@ -336,7 +368,7 @@ struct SaveQuery {
 }
 
 async fn save_agent(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Query(q): Query<SaveQuery>,
     Json(spec): Json<AgentSpec>,
 ) -> ApiResult<(StatusCode, Json<Saved>)> {
@@ -356,7 +388,7 @@ struct VersionQuery {
 }
 
 async fn get_agent(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
     Query(q): Query<VersionQuery>,
 ) -> ApiResult<Json<AgentView>> {
@@ -369,16 +401,13 @@ async fn get_agent(
 }
 
 async fn agent_versions(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
 ) -> ApiResult<Json<Vec<AgentVersion>>> {
     Ok(Json(s.rt.store().list_agent_versions(&name).await?))
 }
 
-async fn delete_agent(
-    State(s): State<AppState>,
-    Path(name): Path<String>,
-) -> ApiResult<StatusCode> {
+async fn delete_agent(Tenant(s): Tenant, Path(name): Path<String>) -> ApiResult<StatusCode> {
     if s.rt.store().delete_agent(&name).await? {
         Ok(StatusCode::NO_CONTENT)
     } else {
@@ -387,7 +416,7 @@ async fn delete_agent(
 }
 
 async fn set_label(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path((name, label)): Path<(String, String)>,
     Json(b): Json<LabelBody>,
 ) -> ApiResult<Json<Done>> {
@@ -398,7 +427,7 @@ async fn set_label(
 }
 
 async fn remove_label(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path((name, label)): Path<(String, String)>,
 ) -> ApiResult<Json<Done>> {
     s.rt.store().set_agent_label(&name, &label, None).await?;
@@ -416,7 +445,7 @@ struct ListQuery {
 }
 
 async fn list_sessions(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Query(q): Query<ListQuery>,
 ) -> ApiResult<Json<Vec<Session>>> {
     Ok(Json(
@@ -427,7 +456,7 @@ async fn list_sessions(
 }
 
 async fn create_session(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Json(new): Json<NewSession>,
 ) -> ApiResult<(StatusCode, Json<Session>)> {
     Ok((
@@ -436,10 +465,7 @@ async fn create_session(
     ))
 }
 
-async fn get_session(
-    State(s): State<AppState>,
-    Path(id): Path<String>,
-) -> ApiResult<Json<Session>> {
+async fn get_session(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<Json<Session>> {
     let ses =
         s.rt.store()
             .get_session(&id)
@@ -449,16 +475,13 @@ async fn get_session(
 }
 
 async fn session_messages(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(id): Path<String>,
 ) -> ApiResult<Json<Vec<StoredMessage>>> {
     Ok(Json(s.rt.store().list_messages(&id).await?))
 }
 
-async fn delete_session(
-    State(s): State<AppState>,
-    Path(id): Path<String>,
-) -> ApiResult<StatusCode> {
+async fn delete_session(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<StatusCode> {
     if s.rt.store().delete_session(&id).await? {
         Ok(StatusCode::NO_CONTENT)
     } else {
@@ -467,13 +490,13 @@ async fn delete_session(
 }
 
 async fn create_run(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Extension(p): Extension<Principal>,
     Json(body): Json<CreateRun>,
 ) -> ApiResult<Response> {
     p.check_budget()?;
     let (mut spec, version) = match body.agent {
-        None => (gai::default_agent(), None),
+        None => (s.gai.default_agent(), None),
         Some(AgentRef::Name(r)) => s.gai.find_agent(&r).await?,
         Some(AgentRef::Spec(spec)) => (*spec, None),
     };
@@ -537,10 +560,7 @@ fn slim(mut r: Run) -> Run {
     r
 }
 
-async fn list_runs(
-    State(s): State<AppState>,
-    Query(q): Query<ListQuery>,
-) -> ApiResult<Json<Vec<Run>>> {
+async fn list_runs(Tenant(s): Tenant, Query(q): Query<ListQuery>) -> ApiResult<Json<Vec<Run>>> {
     let runs =
         s.rt.store()
             .list_runs(RunFilter {
@@ -555,7 +575,7 @@ async fn list_runs(
     Ok(Json(runs.into_iter().map(slim).collect()))
 }
 
-async fn get_run(State(s): State<AppState>, Path(id): Path<String>) -> ApiResult<Json<RunView>> {
+async fn get_run(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<Json<RunView>> {
     let run =
         s.rt.store()
             .get_run(&id)
@@ -567,14 +587,11 @@ async fn get_run(State(s): State<AppState>, Path(id): Path<String>) -> ApiResult
     }))
 }
 
-async fn run_steps(
-    State(s): State<AppState>,
-    Path(id): Path<String>,
-) -> ApiResult<Json<Vec<Step>>> {
+async fn run_steps(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<Json<Vec<Step>>> {
     Ok(Json(s.rt.store().list_steps(&id).await?))
 }
 
-async fn run_trace(State(s): State<AppState>, Path(id): Path<String>) -> ApiResult<Json<Trace>> {
+async fn run_trace(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<Json<Trace>> {
     Ok(Json(trace(&s, id, 0).await?))
 }
 
@@ -615,7 +632,7 @@ struct EventsQuery {
 /// Stored events after `after` (or the `Last-Event-ID` header), then live
 /// events while the run is active.
 async fn run_events(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(id): Path<String>,
     Query(q): Query<EventsQuery>,
     headers: HeaderMap,
@@ -704,7 +721,7 @@ pub(crate) fn sse(
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
-async fn cancel_run(State(s): State<AppState>, Path(id): Path<String>) -> ApiResult<Json<Done>> {
+async fn cancel_run(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<Json<Done>> {
     if s.rt.cancel(&id) {
         Ok(Json(Done { ok: true }))
     } else {
@@ -716,7 +733,7 @@ async fn cancel_run(State(s): State<AppState>, Path(id): Path<String>) -> ApiRes
 }
 
 async fn resolve_approval(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path((id, call_id)): Path<(String, String)>,
     Json(decision): Json<Decision>,
 ) -> ApiResult<Json<Done>> {
@@ -725,7 +742,7 @@ async fn resolve_approval(
     Ok(Json(Done { ok: true }))
 }
 
-async fn approvals(State(s): State<AppState>) -> Json<Vec<PendingApproval>> {
+async fn approvals(Tenant(s): Tenant) -> Json<Vec<PendingApproval>> {
     Json(s.rt.approvals().pending(None))
 }
 
@@ -734,19 +751,20 @@ struct UsageQuery {
     since: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-async fn usage(
-    State(s): State<AppState>,
-    Query(q): Query<UsageQuery>,
-) -> ApiResult<Json<Vec<UsageTotal>>> {
+async fn usage(Tenant(s): Tenant, Query(q): Query<UsageQuery>) -> ApiResult<Json<Vec<UsageTotal>>> {
     Ok(Json(s.rt.store().usage_totals(q.since).await?))
 }
 
-async fn list_keys(State(s): State<AppState>) -> ApiResult<Json<Vec<ApiKey>>> {
-    Ok(Json(s.rt.store().list_keys().await?))
+async fn list_keys(
+    Tenant(s): Tenant,
+    Extension(p): Extension<Principal>,
+) -> ApiResult<Json<Vec<ApiKey>>> {
+    Ok(Json(s.orgs.control().list_keys(Some(&p.org_id)).await?))
 }
 
 async fn create_key(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
+    Extension(p): Extension<Principal>,
     Json(b): Json<CreateKey>,
 ) -> ApiResult<(StatusCode, Json<CreatedKey>)> {
     if b.name.trim().is_empty() {
@@ -755,11 +773,31 @@ async fn create_key(
     if b.scopes.is_empty() {
         return Err(ApiError::bad_request("a key needs at least one scope"));
     }
+    // A key can't do more than whoever made it.
+    if let Some(over) = b.scopes.iter().find(|sc| !Scope::allows(&p.scopes, **sc)) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            format!("you can't give a key the {over:?} scope").to_lowercase(),
+        ));
+    }
+    let control = s.orgs.control();
+    let team_id = match &b.team {
+        Some(t) => Some(
+            control
+                .get_team(&p.org_id, t)
+                .await?
+                .ok_or_else(|| ApiError::not_found(format!("team {t}")))?
+                .id,
+        ),
+        None => p.team_id.clone(),
+    };
     let k = keys::generate();
-    let key =
-        s.rt.store()
-            .create_key(b.name.trim(), &k.prefix, &k.hash, &b.scopes, b.budget_usd)
-            .await?;
+    let mut new =
+        gai::store::NewKey::new(b.name.trim(), &k.prefix, &k.hash, &b.scopes, b.budget_usd);
+    new.org_id = p.org_id.clone();
+    new.team_id = team_id;
+    new.user_id = p.user_id.clone();
+    let key = control.create_key(&new).await?;
     Ok((
         StatusCode::CREATED,
         Json(CreatedKey {
@@ -769,15 +807,25 @@ async fn create_key(
     ))
 }
 
-async fn revoke_key(State(s): State<AppState>, Path(id): Path<String>) -> ApiResult<StatusCode> {
-    if s.rt.store().revoke_key(&id).await? {
+async fn revoke_key(
+    Tenant(s): Tenant,
+    Extension(p): Extension<Principal>,
+    Path(id): Path<String>,
+) -> ApiResult<StatusCode> {
+    let control = s.orgs.control();
+    let ours = control
+        .list_keys(Some(&p.org_id))
+        .await?
+        .iter()
+        .any(|k| k.id == id);
+    if ours && control.revoke_key(&id).await? {
         Ok(StatusCode::NO_CONTENT)
     } else {
         Err(ApiError::not_found(format!("key {id}")))
     }
 }
 
-async fn resume_run(State(s): State<AppState>, Path(id): Path<String>) -> ApiResult<Json<RunIds>> {
+async fn resume_run(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<Json<RunIds>> {
     s.rt.resume_any(&id).await?;
     let run =
         s.rt.store()
@@ -790,7 +838,7 @@ async fn resume_run(State(s): State<AppState>, Path(id): Path<String>) -> ApiRes
     }))
 }
 
-async fn list_mcp(State(s): State<AppState>) -> Json<Vec<McpServerInfo>> {
+async fn list_mcp(Tenant(s): Tenant) -> Json<Vec<McpServerInfo>> {
     Json(s.rt.mcp_servers())
 }
 
@@ -805,7 +853,7 @@ fn valid_server_name(name: &str) -> bool {
 /// Add (or replace) an MCP server and connect it. The server is kept even
 /// when the first connection fails; its status says why.
 async fn add_mcp(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Json(b): Json<AddMcpServer>,
 ) -> ApiResult<(StatusCode, Json<McpServerInfo>)> {
     if !valid_server_name(&b.name) {
@@ -814,6 +862,7 @@ async fn add_mcp(
         ));
     }
     b.config.validate().map_err(ApiError::bad_request)?;
+    s.rt.check_mcp(&b.config).map_err(ApiError::bad_request)?;
     if s.gai.config().mcp_servers.contains_key(&b.name) {
         return Err(ApiError::new(
             StatusCode::CONFLICT,
@@ -827,7 +876,7 @@ async fn add_mcp(
     Ok((StatusCode::CREATED, Json(server.info())))
 }
 
-async fn remove_mcp(State(s): State<AppState>, Path(name): Path<String>) -> ApiResult<StatusCode> {
+async fn remove_mcp(Tenant(s): Tenant, Path(name): Path<String>) -> ApiResult<StatusCode> {
     if s.gai.config().mcp_servers.contains_key(&name) {
         return Err(ApiError::new(
             StatusCode::CONFLICT,
@@ -844,7 +893,7 @@ async fn remove_mcp(State(s): State<AppState>, Path(name): Path<String>) -> ApiR
 }
 
 async fn reconnect_mcp(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
 ) -> ApiResult<Json<McpServerInfo>> {
     let server =
@@ -856,16 +905,19 @@ async fn reconnect_mcp(
     Ok(Json(fresh.info()))
 }
 
-async fn hooks(State(s): State<AppState>) -> Json<Vec<String>> {
+async fn hooks(Tenant(s): Tenant) -> Json<Vec<String>> {
     Json(s.rt.hook_names())
 }
 
 async fn mcp_sign_in(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
     Json(b): Json<SignInRequest>,
 ) -> ApiResult<Json<SignInStarted>> {
-    if !b.redirect_uri.ends_with("/v1/mcp/oauth/callback") {
+    // Another organization's callback names it: `...?org=acme`.
+    let path_ok = url::Url::parse(&b.redirect_uri)
+        .is_ok_and(|u| u.path().ends_with("/v1/mcp/oauth/callback"));
+    if !path_ok {
         return Err(ApiError::bad_request(
             "redirect_uri must point at this server's /v1/mcp/oauth/callback",
         ));
@@ -879,7 +931,7 @@ async fn mcp_sign_in(
 }
 
 async fn mcp_sign_out(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
 ) -> ApiResult<Json<McpServerInfo>> {
     let server =
@@ -896,7 +948,7 @@ async fn mcp_sign_out(
 /// carries no API key); the one-time OAuth `state` ties it to a sign-in
 /// an admin started.
 async fn mcp_oauth_callback(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     uri: axum::http::Uri,
 ) -> axum::response::Html<String> {
     let url = format!("http://gai.local{uri}");

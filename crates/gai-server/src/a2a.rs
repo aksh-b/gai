@@ -11,7 +11,7 @@
 use std::convert::Infallible;
 use std::time::Duration;
 
-use axum::extract::{Path, State};
+use axum::extract::Path;
 use axum::http::HeaderMap;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
@@ -27,6 +27,7 @@ use serde_json::{Map, Value, json};
 
 use crate::AppState;
 use crate::auth::Principal;
+use crate::orgs::Tenant;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -96,7 +97,7 @@ fn skill(name: &str, desc: &Option<String>) -> Value {
     })
 }
 
-async fn catalog_card(State(s): State<AppState>, headers: HeaderMap) -> Response {
+async fn catalog_card(Tenant(s): Tenant, headers: HeaderMap) -> Response {
     if !s.gai.config().server.a2a.enabled {
         return axum::http::StatusCode::NOT_FOUND.into_response();
     }
@@ -116,11 +117,7 @@ async fn catalog_card(State(s): State<AppState>, headers: HeaderMap) -> Response
     .into_response()
 }
 
-async fn agent_card(
-    State(s): State<AppState>,
-    Path(agent): Path<String>,
-    headers: HeaderMap,
-) -> Response {
+async fn agent_card(Tenant(s): Tenant, Path(agent): Path<String>, headers: HeaderMap) -> Response {
     if !s.gai.config().server.a2a.enabled {
         return axum::http::StatusCode::NOT_FOUND.into_response();
     }
@@ -152,7 +149,7 @@ const TASK_NOT_FOUND: i64 = -32001;
 const TASK_NOT_CANCELABLE: i64 = -32002;
 
 async fn rpc_default(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Extension(p): Extension<Principal>,
     Json(req): Json<Value>,
 ) -> Response {
@@ -167,7 +164,7 @@ async fn rpc_default(
 }
 
 async fn rpc_agent(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Extension(p): Extension<Principal>,
     Path(agent): Path<String>,
     Json(req): Json<Value>,

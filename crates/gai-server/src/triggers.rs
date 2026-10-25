@@ -1,7 +1,7 @@
 //! Triggers (schedules, webhooks, file watchers) and the webhook receiver.
 
 use axum::body::Bytes;
-use axum::extract::{Path, Query, State};
+use axum::extract::{Path, Query};
 use axum::http::{HeaderMap, StatusCode};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -13,6 +13,7 @@ use serde_json::Value;
 
 use crate::AppState;
 use crate::error::{ApiError, ApiResult};
+use crate::orgs::Tenant;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -79,7 +80,7 @@ async fn engine(s: &AppState) -> ApiResult<&Triggers> {
     Ok(s.gai.triggers().await?)
 }
 
-async fn list(State(s): State<AppState>) -> ApiResult<Json<Vec<TriggerView>>> {
+async fn list(Tenant(s): Tenant) -> ApiResult<Json<Vec<TriggerView>>> {
     Ok(Json(
         s.rt.store()
             .list_triggers()
@@ -91,7 +92,7 @@ async fn list(State(s): State<AppState>) -> ApiResult<Json<Vec<TriggerView>>> {
 }
 
 async fn create(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Json(spec): Json<TriggerSpec>,
 ) -> ApiResult<(StatusCode, Json<CreatedTrigger>)> {
     let rec = engine(&s).await?.create(spec).await?;
@@ -107,7 +108,7 @@ async fn create(
 
 /// Check a trigger without saving it: the spec, its target, and for
 /// schedules the next times it fires.
-async fn preview(State(s): State<AppState>, Json(v): Json<Value>) -> Json<TriggerPreview> {
+async fn preview(Tenant(s): Tenant, Json(v): Json<Value>) -> Json<TriggerPreview> {
     let fail = |e: String| {
         Json(TriggerPreview {
             ok: false,
@@ -144,40 +145,34 @@ async fn preview(State(s): State<AppState>, Json(v): Json<Value>) -> Json<Trigge
     })
 }
 
-async fn get_one(
-    State(s): State<AppState>,
-    Path(id): Path<String>,
-) -> ApiResult<Json<TriggerView>> {
+async fn get_one(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<Json<TriggerView>> {
     Ok(Json(view(engine(&s).await?.get(&id).await?)))
 }
 
 async fn update(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(id): Path<String>,
     Json(spec): Json<TriggerSpec>,
 ) -> ApiResult<Json<TriggerView>> {
     Ok(Json(view(engine(&s).await?.update(&id, spec).await?)))
 }
 
-async fn delete(State(s): State<AppState>, Path(id): Path<String>) -> ApiResult<StatusCode> {
+async fn delete(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<StatusCode> {
     engine(&s).await?.delete(&id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn enable(State(s): State<AppState>, Path(id): Path<String>) -> ApiResult<Json<TriggerView>> {
+async fn enable(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<Json<TriggerView>> {
     Ok(Json(view(engine(&s).await?.set_enabled(&id, true).await?)))
 }
 
-async fn disable(
-    State(s): State<AppState>,
-    Path(id): Path<String>,
-) -> ApiResult<Json<TriggerView>> {
+async fn disable(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<Json<TriggerView>> {
     Ok(Json(view(engine(&s).await?.set_enabled(&id, false).await?)))
 }
 
 /// Fire now, by hand. The body, if any, is the payload templates see.
 async fn fire(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(id): Path<String>,
     body: Bytes,
 ) -> ApiResult<(StatusCode, Json<Fired>)> {
@@ -188,10 +183,7 @@ async fn fire(
     Ok((StatusCode::ACCEPTED, Json(fired)))
 }
 
-async fn secret(
-    State(s): State<AppState>,
-    Path(id): Path<String>,
-) -> ApiResult<Json<TriggerSecret>> {
+async fn secret(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<Json<TriggerSecret>> {
     let rec = engine(&s).await?.get(&id).await?;
     rec.secret
         .map(|secret| Json(TriggerSecret { secret }))
@@ -199,7 +191,7 @@ async fn secret(
 }
 
 async fn events(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(id): Path<String>,
     Query(q): Query<EventsQuery>,
 ) -> ApiResult<Json<Vec<TriggerEvent>>> {
@@ -226,7 +218,7 @@ fn payload_of(body: &[u8]) -> Option<Value> {
 /// `sha256=` and the hex HMAC-SHA256 of the body) or carry it in
 /// `X-Gai-Token`.
 async fn webhook(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(id): Path<String>,
     headers: HeaderMap,
     body: Bytes,

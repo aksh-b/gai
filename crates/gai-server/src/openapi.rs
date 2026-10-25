@@ -19,8 +19,10 @@ use crate::governance::*;
 use crate::knowledge::*;
 use crate::media::*;
 use crate::openai::ChatCompletionRequest;
+use crate::orgs::*;
 use crate::personas::*;
 use crate::setup::*;
+use crate::sso::AuthConfig;
 use crate::triggers::*;
 use crate::versions::*;
 use crate::workflows::*;
@@ -512,6 +514,46 @@ pub fn document() -> Value {
         .body(s::<CreateKey>(&mut g))
         .ok(s::<CreatedKey>(&mut g)),
         op("delete", "/v1/keys/{id}", "keys", "Revoke an API key"),
+        op("get", "/v1/auth/config", "users", "How people sign in: OIDC, a proxy, or keys only")
+            .ok(s::<AuthConfig>(&mut g)),
+        op("get", "/v1/auth/login", "users", "Start an OIDC sign-in (redirects to the identity provider)")
+            .query(&[("return_to", "A path on this server to land on afterwards")]),
+        op("get", "/v1/auth/callback", "users", "Where the identity provider sends the browser back; sets the gai_session cookie"),
+        op("post", "/v1/auth/logout", "users", "Sign this browser out")
+            .ok(s::<Done>(&mut g)),
+        op("get", "/v1/orgs", "users", "Organizations you work in (server admins: all of them)")
+            .ok(list::<OrgView>(&mut g)),
+        op("post", "/v1/orgs", "users", "Create an organization, with a database and files of its own (admins of the default organization)")
+            .body(s::<NewOrg>(&mut g))
+            .ok(s::<gai::store::Org>(&mut g)),
+        op("get", "/v1/orgs/{org}", "users", "An organization").ok(s::<gai::store::Org>(&mut g)),
+        op("patch", "/v1/orgs/{org}", "users", "Rename an organization or change its branding (owners); limits are set by server admins")
+            .body(s::<OrgPatch>(&mut g))
+            .ok(s::<gai::store::Org>(&mut g)),
+        op("delete", "/v1/orgs/{org}", "users", "Delete an organization's members, teams and keys; its data stays on disk")
+            .ok(s::<Done>(&mut g)),
+        op("get", "/v1/members", "users", "Members of this organization and their roles")
+            .ok(list::<gai::store::Membership>(&mut g)),
+        op("put", "/v1/members/{who}", "users", "Add someone by email (they join at their first sign-in) or change their role")
+            .body(s::<SetMember>(&mut g))
+            .ok(s::<gai::store::Membership>(&mut g)),
+        op("delete", "/v1/members/{who}", "users", "Take someone out of this organization").ok(s::<Done>(&mut g)),
+        op("get", "/v1/teams", "users", "Teams and their members").ok(list::<gai::store::Team>(&mut g)),
+        op("post", "/v1/teams", "users", "Create a team")
+            .body(s::<NewTeam>(&mut g))
+            .ok(s::<gai::store::Team>(&mut g)),
+        op("delete", "/v1/teams/{team}", "users", "Delete a team: what it owned goes back to the organization, its keys are revoked")
+            .ok(s::<Done>(&mut g)),
+        op("put", "/v1/teams/{team}/members/{who}", "users", "Put a member in a team").ok(s::<gai::store::Team>(&mut g)),
+        op("delete", "/v1/teams/{team}/members/{who}", "users", "Take a member out of a team").ok(s::<gai::store::Team>(&mut g)),
+        op("get", "/v1/owners", "users", "Which team owns which agent, workflow, collection and so on")
+            .ok(list::<Owner>(&mut g)),
+        op("put", "/v1/owners/{kind}/{name}", "users", "Give a resource to a team (only its builders change it), or back to everyone with team: null")
+            .body(s::<SetOwner>(&mut g)),
+        op("get", "/v1/secrets", "users", "Names of this organization's secrets (sources read them by name)")
+            .ok(list::<String>(&mut g)),
+        op("put", "/v1/secrets/{name}", "users", "Save a secret").body(s::<SecretValue>(&mut g)).ok(s::<Done>(&mut g)),
+        op("delete", "/v1/secrets/{name}", "users", "Delete a secret").ok(s::<Done>(&mut g)),
         op(
             "get",
             "/v1/collections",

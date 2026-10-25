@@ -1,6 +1,6 @@
 //! Workflows: storing them and running them.
 
-use axum::extract::{Path, Query, State};
+use axum::extract::{Path, Query};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -16,6 +16,7 @@ use crate::AppState;
 use crate::api::{Mode, RunIds, Saved, sse};
 use crate::auth::Principal;
 use crate::error::{ApiError, ApiResult};
+use crate::orgs::Tenant;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -76,7 +77,7 @@ pub struct RunInlineWorkflow {
     pub run: RunWorkflow,
 }
 
-async fn list(State(s): State<AppState>) -> ApiResult<Json<Vec<WorkflowEntry>>> {
+async fn list(Tenant(s): Tenant) -> ApiResult<Json<Vec<WorkflowEntry>>> {
     let mut out: Vec<WorkflowEntry> =
         s.rt.store()
             .list_workflows()
@@ -116,7 +117,7 @@ struct SaveQuery {
 }
 
 async fn save(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Query(q): Query<SaveQuery>,
     Json(spec): Json<WorkflowSpec>,
 ) -> ApiResult<(StatusCode, Json<Saved>)> {
@@ -151,7 +152,7 @@ struct VersionQuery {
 }
 
 async fn get_one(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
     Query(q): Query<VersionQuery>,
 ) -> ApiResult<Json<WorkflowView>> {
@@ -170,13 +171,13 @@ async fn get_one(
 }
 
 async fn versions(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
 ) -> ApiResult<Json<Vec<WorkflowVersion>>> {
     Ok(Json(s.rt.store().list_workflow_versions(&name).await?))
 }
 
-async fn delete(State(s): State<AppState>, Path(name): Path<String>) -> ApiResult<StatusCode> {
+async fn delete(Tenant(s): Tenant, Path(name): Path<String>) -> ApiResult<StatusCode> {
     if s.rt.store().delete_workflow(&name).await? {
         Ok(StatusCode::NO_CONTENT)
     } else {
@@ -185,7 +186,7 @@ async fn delete(State(s): State<AppState>, Path(name): Path<String>) -> ApiResul
 }
 
 async fn run_named(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Extension(p): Extension<Principal>,
     Path(name): Path<String>,
     Json(b): Json<RunWorkflow>,
@@ -199,7 +200,7 @@ async fn run_named(
 }
 
 async fn run_inline(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Extension(p): Extension<Principal>,
     Json(b): Json<RunInlineWorkflow>,
 ) -> ApiResult<Response> {

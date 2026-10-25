@@ -72,6 +72,9 @@ pub struct Config {
     pub persona: gai_agent::PersonaDefaults,
     #[serde(flatten)]
     pub llm: LlmConfig,
+    /// Set on an organization's instance (see `Gai::for_org`): its slug.
+    #[serde(skip)]
+    pub org: Option<String>,
 }
 
 /// ```toml
@@ -122,6 +125,9 @@ pub struct ServerSettings {
     pub mcp: McpServeSettings,
     /// gai agents over A2A, at `/a2a/{agent}` with cards under `.well-known`.
     pub a2a: A2aServeSettings,
+    /// Signing in to the dashboard as a user: OIDC, or a trusted header
+    /// from a proxy that did the sign-in (SAML and the like).
+    pub sso: SsoSettings,
 }
 
 impl Default for ServerSettings {
@@ -132,8 +138,72 @@ impl Default for ServerSettings {
             max_background_runs: 4,
             mcp: McpServeSettings::default(),
             a2a: A2aServeSettings::default(),
+            sso: SsoSettings::default(),
         }
     }
+}
+
+/// Users sign in through an identity provider and get the roles their
+/// organizations gave them.
+///
+/// ```toml
+/// [server.sso]
+/// admins = ["ada@example.com"]     # owners of the default organization
+/// default_role = "member"          # others join the default organization as this (default: invited only)
+/// allowed_domains = ["example.com"]
+///
+/// [server.sso.oidc]
+/// issuer = "https://accounts.example.com"
+/// client_id = "gai"
+/// client_secret_env = "GAI_OIDC_CLIENT_SECRET"
+/// redirect_url = "https://gai.example.com/v1/auth/callback"
+/// ```
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SsoSettings {
+    pub oidc: Option<OidcSettings>,
+    /// Behind a proxy that signs people in (oauth2-proxy, a SAML gateway):
+    /// the header carrying the signed-in email. Only set this when the
+    /// proxy removes the header from incoming requests.
+    pub trusted_header: Option<TrustedHeader>,
+    /// Emails that become owners of the default organization when they
+    /// sign in.
+    pub admins: Vec<String>,
+    /// The role people who weren't invited get in the default organization
+    /// at their first sign-in. None: they must be invited.
+    pub default_role: Option<gai_store::Role>,
+    /// Only emails at these domains may sign in (empty: any).
+    pub allowed_domains: Vec<String>,
+    /// How long a sign-in lasts, in hours (default 168, a week).
+    pub session_hours: Option<u32>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct OidcSettings {
+    /// The provider's issuer URL; its `/.well-known/openid-configuration`
+    /// says the rest.
+    pub issuer: String,
+    pub client_id: String,
+    /// Environment variable holding the client secret (none for a public
+    /// client, which uses PKCE alone).
+    pub client_secret_env: Option<String>,
+    /// This server's `/v1/auth/callback`, as the provider redirects to it.
+    /// Defaults to the request's own address.
+    pub redirect_url: Option<String>,
+    /// Defaults to `openid email profile`.
+    pub scopes: Option<String>,
+    /// The button's label (default "Sign in with SSO").
+    pub label: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TrustedHeader {
+    /// e.g. `X-Forwarded-Email`.
+    pub email: String,
+    /// e.g. `X-Forwarded-User`.
+    pub name: Option<String>,
 }
 
 /// What gai offers other agents over A2A.

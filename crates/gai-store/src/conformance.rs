@@ -165,7 +165,7 @@ pub async fn settings_round_trip(s: SharedStore) {
 pub async fn concurrent_writers_wait_instead_of_failing(s: SharedStore) {
     let ses = s.create_session(NewSession::default()).await.unwrap();
     let k = s
-        .create_key("k", "p", "h", &[Scope::Run], None)
+        .create_key(&NewKey::new("k", "p", "h", &[Scope::Run], None))
         .await
         .unwrap();
     let mut jobs = Vec::new();
@@ -217,14 +217,21 @@ pub async fn mcp_servers_round_trip(s: SharedStore) {
 pub async fn api_keys_lifecycle(s: SharedStore) {
     assert!(!s.has_keys().await.unwrap());
     let k = s
-        .create_key("ci", "gai_ab12", "hash1", &[Scope::Run], Some(5.0))
+        .create_key(&NewKey::new(
+            "ci",
+            "gai_ab12",
+            "hash1",
+            &[Scope::Run],
+            Some(5.0),
+        ))
         .await
         .unwrap();
     assert!(s.has_keys().await.unwrap());
     assert_eq!(s.find_key("hash1").await.unwrap().unwrap().id, k.id);
     s.add_key_spend(&k.id, 1.5).await.unwrap();
     s.touch_key(&k.id).await.unwrap();
-    let listed = &s.list_keys().await.unwrap()[0];
+    let listed = &s.list_keys(None).await.unwrap()[0];
+    assert_eq!(listed.org_id, DEFAULT_ORG);
     assert_eq!(listed.spent_usd, 1.5);
     assert!(listed.last_used_at.is_some());
     assert!(s.revoke_key(&k.id).await.unwrap());
@@ -233,6 +240,9 @@ pub async fn api_keys_lifecycle(s: SharedStore) {
     assert!(Scope::allows(&[Scope::Run], Scope::Read));
     assert!(!Scope::allows(&[Scope::Read], Scope::Run));
     assert!(Scope::allows(&[Scope::Admin], Scope::Run));
+    assert!(Scope::allows(&[Scope::Build], Scope::Run));
+    assert!(!Scope::allows(&[Scope::Build], Scope::Admin));
+    assert_eq!(Role::Builder.scope(), Scope::Build);
 }
 
 pub async fn agents_are_versioned_and_labelled(s: SharedStore) {
@@ -909,6 +919,196 @@ pub async fn workflows_are_versioned(s: SharedStore) {
     assert!(s.get_workflow("w", None).await.unwrap().is_none());
 }
 
+pub async fn directory_orgs_users_and_teams(s: SharedStore) {
+    // The default organization is always there and can't be deleted.
+    assert_eq!(
+        s.get_org(DEFAULT_ORG).await.unwrap().unwrap().slug,
+        "default"
+    );
+    assert!(s.delete_org(DEFAULT_ORG).await.is_err());
+    let acme = s.create_org("acme", "Acme").await.unwrap();
+    assert!(matches!(
+        s.create_org("acme", "Again").await,
+        Err(StoreError::Conflict(_))
+    ));
+    assert_eq!(s.get_org("acme").await.unwrap().unwrap().id, acme.id);
+    let acme = s
+        .update_org(
+            &acme.id,
+            None,
+            Some(&json!({"branding": {"name": "Acme AI"}})),
+        )
+        .await
+        .unwrap();
+    assert_eq!(acme.name, "Acme");
+    assert_eq!(acme.settings["branding"]["name"], "Acme AI");
+    assert_eq!(s.list_orgs().await.unwrap().len(), 2);
+
+    // An invitation, then the first sign-in claims it by email.
+    let ada = s.create_user("Ada@Example.com", Some("Ada")).await.unwrap();
+    assert_eq!(ada.email, "ada@example.com");
+    assert_eq!(
+        s.create_user("ada@example.com", None).await.unwrap().id,
+        ada.id
+    );
+    let signed = s
+        .sign_in_user("https://idp|1", "ada@example.com", None)
+        .await
+        .unwrap();
+    assert_eq!(signed.id, ada.id);
+    assert_eq!(signed.name.as_deref(), Some("Ada"));
+    assert!(signed.last_seen_at.is_some());
+    let again = s
+        .sign_in_user("https://idp|1", "ada@example.com", Some("Ada L"))
+        .await
+        .unwrap();
+    assert_eq!(again.id, ada.id);
+    // Another identity can't take an email that is already claimed.
+    assert!(matches!(
+        s.sign_in_user("https://idp|2", "ADA@example.com", None)
+            .await,
+        Err(StoreError::Conflict(_))
+    ));
+    let bob = s
+        .sign_in_user("https://idp|3", "bob@example.com", Some("Bob"))
+        .await
+        .unwrap();
+    assert_ne!(bob.id, ada.id);
+    assert_eq!(
+        s.find_user_by_email("BOB@example.com")
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        bob.id
+    );
+    assert_eq!(s.list_users().await.unwrap().len(), 2);
+
+    s.set_membership(&acme.id, &ada.id, Role::Owner)
+        .await
+        .unwrap();
+    s.set_membership(&acme.id, &bob.id, Role::Member)
+        .await
+        .unwrap();
+    s.set_membership(&acme.id, &bob.id, Role::Builder)
+        .await
+        .unwrap();
+    s.set_membership(DEFAULT_ORG, &bob.id, Role::Viewer)
+        .await
+        .unwrap();
+    let members = s.list_members(&acme.id).await.unwrap();
+    assert_eq!(
+        members
+            .iter()
+            .map(|m| (m.email.as_str(), m.role))
+            .collect::<Vec<_>>(),
+        [
+            ("ada@example.com", Role::Owner),
+            ("bob@example.com", Role::Builder)
+        ]
+    );
+    let bobs = s.user_memberships(&bob.id).await.unwrap();
+    assert_eq!(bobs.len(), 2);
+    assert_eq!(bobs[0].org_slug, "default");
+    assert_eq!(bobs[1].org_name, "Acme");
+
+    let eng = s.create_team(&acme.id, "eng").await.unwrap();
+    assert!(matches!(
+        s.create_team(&acme.id, "eng").await,
+        Err(StoreError::Conflict(_))
+    ));
+    s.create_team(DEFAULT_ORG, "eng").await.unwrap();
+    s.add_team_member(&eng.id, &bob.id).await.unwrap();
+    s.add_team_member(&eng.id, &bob.id).await.unwrap();
+    assert_eq!(
+        s.get_team(&acme.id, "eng").await.unwrap().unwrap().members,
+        std::slice::from_ref(&bob.id)
+    );
+    assert!(s.get_team(DEFAULT_ORG, &eng.id).await.unwrap().is_none());
+    assert_eq!(s.list_teams(&acme.id).await.unwrap().len(), 1);
+
+    s.set_owner(&acme.id, "agent", "helper", Some(&eng.id))
+        .await
+        .unwrap();
+    assert_eq!(
+        s.get_owner(&acme.id, "agent", "helper").await.unwrap(),
+        Some(eng.id.clone())
+    );
+    assert_eq!(
+        s.get_owner(DEFAULT_ORG, "agent", "helper").await.unwrap(),
+        None
+    );
+    assert_eq!(
+        s.list_owners(&acme.id).await.unwrap(),
+        [("agent".to_owned(), "helper".to_owned(), eng.id.clone())]
+    );
+    // Only the organization's own teams.
+    let other = s.list_teams(DEFAULT_ORG).await.unwrap()[0].id.clone();
+    assert!(
+        s.set_owner(&acme.id, "agent", "x", Some(&other))
+            .await
+            .is_err()
+    );
+    s.set_owner(&acme.id, "agent", "helper", None)
+        .await
+        .unwrap();
+    assert_eq!(
+        s.get_owner(&acme.id, "agent", "helper").await.unwrap(),
+        None
+    );
+    s.set_owner(&acme.id, "collection", "docs", Some(&eng.id))
+        .await
+        .unwrap();
+
+    // Leaving the organization leaves its teams.
+    assert!(s.remove_membership(&acme.id, &bob.id).await.unwrap());
+    assert!(
+        s.get_team(&acme.id, "eng")
+            .await
+            .unwrap()
+            .unwrap()
+            .members
+            .is_empty()
+    );
+    assert!(!s.remove_membership(&acme.id, &bob.id).await.unwrap());
+
+    // Keys belong to an organization; a deleted team's keys stop working.
+    let mut k = NewKey::new("ci", "gai_x", "hash-acme", &[Scope::Run], None);
+    k.org_id = acme.id.clone();
+    k.team_id = Some(eng.id.clone());
+    let key = s.create_key(&k).await.unwrap();
+    assert_eq!(key.team_id.as_deref(), Some(eng.id.as_str()));
+    assert_eq!(s.list_keys(Some(&acme.id)).await.unwrap().len(), 1);
+    assert!(s.list_keys(Some(DEFAULT_ORG)).await.unwrap().is_empty());
+    assert!(s.delete_team(&acme.id, &eng.id).await.unwrap());
+    assert!(s.find_key("hash-acme").await.unwrap().is_none());
+    assert!(s.list_owners(&acme.id).await.unwrap().is_empty());
+
+    // Sign-ins expire, and end when the user is disabled.
+    let later = Utc::now() + Duration::hours(1);
+    s.create_login("login1", &ada.id, later).await.unwrap();
+    s.create_login("old", &ada.id, Utc::now() - Duration::seconds(1))
+        .await
+        .unwrap();
+    assert_eq!(s.find_login("login1").await.unwrap().unwrap().1.id, ada.id);
+    assert!(s.find_login("old").await.unwrap().is_none());
+    assert!(s.find_login("nope").await.unwrap().is_none());
+    assert!(s.set_user_disabled(&ada.id, true).await.unwrap());
+    assert!(s.find_login("login1").await.unwrap().is_none());
+    s.set_user_disabled(&ada.id, false).await.unwrap();
+    s.create_login("login2", &ada.id, later).await.unwrap();
+    s.delete_login("login2").await.unwrap();
+    assert!(s.find_login("login2").await.unwrap().is_none());
+
+    let mut k = NewKey::new("ci2", "gai_y", "hash-acme2", &[Scope::Run], None);
+    k.org_id = acme.id.clone();
+    s.create_key(&k).await.unwrap();
+    assert!(s.delete_org(&acme.id).await.unwrap());
+    assert!(s.get_org("acme").await.unwrap().is_none());
+    assert!(s.find_key("hash-acme2").await.unwrap().is_none());
+    assert_eq!(s.user_memberships(&ada.id).await.unwrap().len(), 0);
+}
+
 pub async fn sources_keep_their_sync_state(s: SharedStore) {
     let spec = json!({"kind": "folder", "path": "/docs"});
     s.put_source("docs", "handbook", "folder", &spec)
@@ -969,6 +1169,12 @@ pub async fn sources_keep_their_sync_state(s: SharedStore) {
 #[macro_export]
 macro_rules! conformance_tests {
     ($make:expr) => {
+        #[tokio::test]
+        async fn directory_orgs_users_and_teams() {
+            if let Some(s) = $make.await {
+                $crate::conformance::directory_orgs_users_and_teams(s).await;
+            }
+        }
         #[tokio::test]
         async fn sources_keep_their_sync_state() {
             if let Some(s) = $make.await {

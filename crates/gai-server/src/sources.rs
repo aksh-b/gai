@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::extract::{Path, Query, State};
+use axum::extract::{Path, Query};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -15,6 +15,7 @@ use serde_json::Value;
 use crate::AppState;
 use crate::api::Done;
 use crate::error::{ApiError, ApiResult};
+use crate::orgs::Tenant;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -23,13 +24,13 @@ pub fn routes() -> Router<AppState> {
         .route("/v1/sources/{name}/sync", post(sync))
 }
 
-async fn list(State(s): State<AppState>) -> ApiResult<Json<Vec<SourceRecord>>> {
+async fn list(Tenant(s): Tenant) -> ApiResult<Json<Vec<SourceRecord>>> {
     Ok(Json(s.rt.store().list_sources().await?))
 }
 
 /// The body is a source spec as JSON, or `{"yaml": "..."}`.
 async fn save(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Json(body): Json<Value>,
 ) -> ApiResult<(StatusCode, Json<SourceRecord>)> {
     let value = match body.get("yaml").and_then(Value::as_str) {
@@ -46,14 +47,11 @@ async fn save(
     Ok((StatusCode::CREATED, Json(src.get(&spec.name).await?)))
 }
 
-async fn get_one(
-    State(s): State<AppState>,
-    Path(name): Path<String>,
-) -> ApiResult<Json<SourceRecord>> {
+async fn get_one(Tenant(s): Tenant, Path(name): Path<String>) -> ApiResult<Json<SourceRecord>> {
     Ok(Json(s.gai.sources().await?.get(&name).await?))
 }
 
-async fn delete(State(s): State<AppState>, Path(name): Path<String>) -> ApiResult<Json<Done>> {
+async fn delete(Tenant(s): Tenant, Path(name): Path<String>) -> ApiResult<Json<Done>> {
     if !s.rt.store().delete_source(&name).await? {
         return Err(ApiError::not_found(format!("source {name}")));
     }
@@ -70,7 +68,7 @@ struct SyncQuery {
 /// Sync now: in the background (202), or with `?wait=true` (200 and the
 /// counts).
 async fn sync(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
     Query(q): Query<SyncQuery>,
 ) -> ApiResult<(StatusCode, Json<Option<SyncStats>>)> {

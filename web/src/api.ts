@@ -11,6 +11,14 @@ export type Session = Schemas['Session'];
 export type Step = Schemas['Step'];
 export type UsageTotal = Schemas['UsageTotal'];
 export type ApiKey = Schemas['ApiKey'];
+export type Org = Schemas['Org'];
+export type OrgView = Schemas['OrgView'];
+export type Membership = Schemas['Membership'];
+export type Team = Schemas['Team'];
+export type OrgRole = Schemas['Role'];
+export type Owner = Schemas['Owner'];
+export type Me = Schemas['Me'];
+export type AuthConfig = Schemas['AuthConfig'];
 export type AgentSummary = Schemas['AgentSummary'];
 export type PendingApproval = Schemas['PendingApproval'];
 export type McpServerInfo = Schemas['McpServerInfo'];
@@ -325,7 +333,13 @@ export interface Template {
   installed: boolean;
 }
 
-export type Scope = 'admin' | 'run' | 'read';
+export type Scope = Schemas['Scope'];
+
+/** An organization's branding and limits (its `settings`). */
+export interface OrgSettings {
+  branding?: { product_name?: string | null; logo_url?: string | null; accent?: string | null };
+  limits?: { budget_usd_per_month?: number | null; requests_per_minute?: number | null };
+}
 
 
 
@@ -339,6 +353,25 @@ export class ApiError extends Error {
 }
 
 const KEY_STORAGE = 'gai.apiKey';
+const ORG_STORAGE = 'gai.org';
+
+/** The organization a signed-in user works in (a key has its own). */
+export function getOrg(): string | null {
+  try {
+    return localStorage.getItem(ORG_STORAGE);
+  } catch {
+    return null;
+  }
+}
+
+export function setOrg(slug: string | null) {
+  try {
+    if (slug) localStorage.setItem(ORG_STORAGE, slug);
+    else localStorage.removeItem(ORG_STORAGE);
+  } catch {
+    /* storage unavailable */
+  }
+}
 
 /** The API key this browser uses, if any. */
 export function getApiKey(): string | null {
@@ -363,6 +396,9 @@ function headers(json: boolean): HeadersInit {
   if (json) h['content-type'] = 'application/json';
   const key = getApiKey();
   if (key) h.authorization = `Bearer ${key}`;
+  // A key belongs to one organization; a sign-in picks one.
+  const org = getOrg();
+  if (!key && org) h['x-gai-org'] = org;
   return h;
 }
 
@@ -422,10 +458,31 @@ export const api = {
   installTemplate: (id: string) =>
     request<{ kind: string; name: string; also: string[] }>('POST', `/v1/templates/${encodeURIComponent(id)}/install`),
   health: () => get<{ status: string; version: string; default_model: string | null; auth: 'open' | 'keys' }>('/v1/health'),
-  me: () => get<{ principal: { id: string; name: string; scopes: Scope[] }; auth: string; budget_usd: number | null; spent_usd: number | null }>('/v1/me'),
+  me: () => get<Me>('/v1/me'),
+  authConfig: () => get<AuthConfig>('/v1/auth/config'),
+  logout: () => request<{ ok: boolean }>('POST', '/v1/auth/logout'),
+  orgs: () => get<OrgView[]>('/v1/orgs'),
+  createOrg: (slug: string, name: string, owner_email?: string) => request<Org>('POST', '/v1/orgs', { slug, name, owner_email }),
+  updateOrg: (slug: string, body: { name?: string; settings?: OrgSettings }) => request<Org>('PATCH', `/v1/orgs/${encodeURIComponent(slug)}`, body),
+  deleteOrg: (slug: string) => request<{ ok: boolean }>('DELETE', `/v1/orgs/${encodeURIComponent(slug)}`),
+  members: () => get<Membership[]>('/v1/members'),
+  setMember: (who: string, role: OrgRole) => request<Membership>('PUT', `/v1/members/${encodeURIComponent(who)}`, { role }),
+  removeMember: (who: string) => request<{ ok: boolean }>('DELETE', `/v1/members/${encodeURIComponent(who)}`),
+  teams: () => get<Team[]>('/v1/teams'),
+  createTeam: (name: string) => request<Team>('POST', '/v1/teams', { name }),
+  deleteTeam: (team: string) => request<{ ok: boolean }>('DELETE', `/v1/teams/${encodeURIComponent(team)}`),
+  addTeamMember: (team: string, who: string) => request<Team>('PUT', `/v1/teams/${encodeURIComponent(team)}/members/${encodeURIComponent(who)}`),
+  removeTeamMember: (team: string, who: string) =>
+    request<Team>('DELETE', `/v1/teams/${encodeURIComponent(team)}/members/${encodeURIComponent(who)}`),
+  owners: () => get<Owner[]>('/v1/owners'),
+  setOwner: (kind: string, name: string, team: string | null) =>
+    request<unknown>('PUT', `/v1/owners/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`, { team }),
+  secrets: () => get<string[]>('/v1/secrets'),
+  putSecret: (name: string, value: string) => request<{ ok: boolean }>('PUT', `/v1/secrets/${encodeURIComponent(name)}`, { value }),
+  deleteSecret: (name: string) => request<{ ok: boolean }>('DELETE', `/v1/secrets/${encodeURIComponent(name)}`),
   keys: () => get<ApiKey[]>('/v1/keys'),
-  createKey: (name: string, scopes: Scope[], budget_usd?: number) =>
-    request<{ key: ApiKey; secret: string }>('POST', '/v1/keys', { name, scopes, budget_usd }),
+  createKey: (name: string, scopes: Scope[], budget_usd?: number, team?: string) =>
+    request<{ key: ApiKey; secret: string }>('POST', '/v1/keys', { name, scopes, budget_usd, team }),
   revokeKey: (id: string) => request<void>('DELETE', `/v1/keys/${id}`),
   models: () => get<CatalogEntry[]>('/v1/models'),
   providers: () => get<Provider[]>('/v1/providers'),

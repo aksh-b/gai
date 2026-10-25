@@ -198,7 +198,13 @@ async fn memory_blocks_and_skills() {
         let k = keys::generate();
         let store = s.gai.runtime().await.unwrap().store().clone();
         store
-            .create_key("a", &k.prefix, &k.hash, &[Scope::Admin], None)
+            .create_key(&gai::store::NewKey::new(
+                "a",
+                &k.prefix,
+                &k.hash,
+                &[Scope::Admin],
+                None,
+            ))
             .await
             .unwrap();
         k.secret
@@ -207,7 +213,13 @@ async fn memory_blocks_and_skills() {
         let k = keys::generate();
         let store = s.gai.runtime().await.unwrap().store().clone();
         store
-            .create_key("r", &k.prefix, &k.hash, &[Scope::Run], None)
+            .create_key(&gai::store::NewKey::new(
+                "r",
+                &k.prefix,
+                &k.hash,
+                &[Scope::Run],
+                None,
+            ))
             .await
             .unwrap();
         k.secret
@@ -373,7 +385,13 @@ async fn workflows_are_saved_validated_and_run() {
     for scope in [Scope::Admin, Scope::Run] {
         let k = keys::generate();
         store
-            .create_key("k", &k.prefix, &k.hash, &[scope], None)
+            .create_key(&gai::store::NewKey::new(
+                "k",
+                &k.prefix,
+                &k.hash,
+                &[scope],
+                None,
+            ))
             .await
             .unwrap();
         keys_by_scope.push(k.secret);

@@ -28,7 +28,8 @@ import { ago, money, useLoad } from '../util';
 const SCOPES: { id: Scope; label: string; description: string }[] = [
   { id: 'read', label: 'Read', description: 'View runs, sessions, agents and usage' },
   { id: 'run', label: 'Run', description: 'Start runs, chat and answer approvals' },
-  { id: 'admin', label: 'Admin', description: 'Everything, including agents and keys' },
+  { id: 'build', label: 'Build', description: 'Also change assistants, workflows, knowledge and tests' },
+  { id: 'admin', label: 'Admin', description: 'Everything, including keys, connections and people' },
 ];
 
 export function Keys() {

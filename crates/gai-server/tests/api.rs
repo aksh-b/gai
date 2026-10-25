@@ -51,7 +51,9 @@ impl Server {
         let k = keys::generate();
         let store = self.gai.runtime().await.unwrap().store().clone();
         let rec = store
-            .create_key("test", &k.prefix, &k.hash, scopes, budget)
+            .create_key(&gai::store::NewKey::new(
+                "test", &k.prefix, &k.hash, scopes, budget,
+            ))
             .await
             .unwrap();
         (k.secret, rec.id)

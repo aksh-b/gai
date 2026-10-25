@@ -27,6 +27,7 @@ mod notion;
 mod web;
 
 use std::collections::BTreeMap;
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -183,6 +184,9 @@ pub struct SyncStats {
     pub errors: Vec<String>,
 }
 
+/// Settings holding an organization's secrets: `secret:<NAME>`.
+pub const SECRET_PREFIX: &str = "secret:";
+
 pub(crate) fn env(var: &str) -> Result<String> {
     std::env::var(var)
         .ok()
@@ -194,62 +198,68 @@ pub(crate) fn invalid(e: impl std::fmt::Display) -> MemoryError {
     MemoryError::Invalid(e.to_string())
 }
 
-fn connector(spec: &SourceSpec, http: &reqwest::Client) -> Result<Box<dyn Connector>> {
-    Ok(match &spec.kind {
-        SourceKind::Folder { path, recursive } => Box::new(folder::Folder::new(path, *recursive)),
-        SourceKind::Web {
-            urls,
-            sitemap,
-            depth,
-            max_pages,
-            allow_private,
-        } => Box::new(web::Web::new(
-            http.clone(),
-            urls.clone(),
-            sitemap.clone(),
-            *depth,
-            *max_pages,
-            *allow_private,
-        )),
-        SourceKind::Github {
-            repo,
-            branch,
-            path,
-            token_env,
-            api_url,
-        } => Box::new(github::Github::new(
-            http.clone(),
-            repo,
-            branch.clone(),
-            path.clone(),
-            token_env.as_deref().map(env).transpose()?,
-            api_url.clone(),
-        )?),
-        SourceKind::Confluence {
-            base_url,
-            space,
-            email_env,
-            token_env,
-        } => Box::new(confluence::Confluence::new(
-            http.clone(),
-            base_url,
-            space,
-            email_env.as_deref().map(env).transpose()?,
-            env(token_env)?,
-        )),
-        SourceKind::Notion {
-            token_env,
-            database_id,
-            page_ids,
-            api_url,
-        } => Box::new(notion::Notion::new(
-            http.clone(),
-            env(token_env)?,
-            database_id.clone(),
-            page_ids.clone(),
-            api_url.clone(),
-        )),
-    })
+impl Sources {
+    async fn connector(&self, spec: &SourceSpec) -> Result<Box<dyn Connector>> {
+        let http = &self.http;
+        Ok(match &spec.kind {
+            SourceKind::Folder { path, recursive } => {
+                let path = self.folder_path(path)?;
+                Box::new(folder::Folder::new(&path.to_string_lossy(), *recursive))
+            }
+            SourceKind::Web {
+                urls,
+                sitemap,
+                depth,
+                max_pages,
+                allow_private,
+            } => Box::new(web::Web::new(
+                http.clone(),
+                urls.clone(),
+                sitemap.clone(),
+                *depth,
+                *max_pages,
+                *allow_private && self.confined.is_none(),
+            )),
+            SourceKind::Github {
+                repo,
+                branch,
+                path,
+                token_env,
+                api_url,
+            } => Box::new(github::Github::new(
+                http.clone(),
+                repo,
+                branch.clone(),
+                path.clone(),
+                self.secret_opt(token_env.as_deref()).await?,
+                api_url.clone(),
+            )?),
+            SourceKind::Confluence {
+                base_url,
+                space,
+                email_env,
+                token_env,
+            } => Box::new(confluence::Confluence::new(
+                http.clone(),
+                base_url,
+                space,
+                self.secret_opt(email_env.as_deref()).await?,
+                self.secret(token_env).await?,
+            )),
+            SourceKind::Notion {
+                token_env,
+                database_id,
+                page_ids,
+                api_url,
+            } => Box::new(notion::Notion::new(
+                http.clone(),
+                self.secret(token_env).await?,
+                database_id.clone(),
+                page_ids.clone(),
+                api_url.clone(),
+            )),
+        })
+    }
 }
 
 /// Sources: saving them, and syncing them into knowledge.
@@ -257,6 +267,10 @@ fn connector(spec: &SourceSpec, http: &reqwest::Client) -> Result<Box<dyn Connec
 pub struct Sources {
     knowledge: Arc<Knowledge>,
     http: reqwest::Client,
+    /// Set for an organization sharing the server: folders only under this
+    /// one, no private addresses, and tokens from the organization's
+    /// secrets instead of the server's environment.
+    confined: Option<PathBuf>,
 }
 
 impl Sources {
@@ -268,6 +282,54 @@ impl Sources {
                 .timeout(std::time::Duration::from_secs(60))
                 .build()
                 .expect("http client"),
+            confined: None,
+        }
+    }
+
+    /// Confine sources to `root` (see [`Sources`]).
+    pub fn confined(mut self, root: PathBuf) -> Self {
+        self.confined = Some(root);
+        self
+    }
+
+    /// Where a folder source reads. Confined, it is a path inside the
+    /// root (relative, or absolute under it), without `..`.
+    fn folder_path(&self, path: &str) -> Result<PathBuf> {
+        let Some(root) = &self.confined else {
+            return Ok(PathBuf::from(path));
+        };
+        let p = Path::new(path);
+        let rel = p.strip_prefix(root).unwrap_or(p);
+        if rel
+            .components()
+            .any(|c| !matches!(c, Component::Normal(_) | Component::CurDir))
+        {
+            return Err(invalid(format!(
+                "folder {path}: use a folder inside {} (relative paths start there)",
+                root.display()
+            )));
+        }
+        Ok(root.join(rel))
+    }
+
+    /// A token or account named by a `*_env` field: the environment
+    /// variable, or, confined, the organization's secret of that name.
+    async fn secret(&self, var: &str) -> Result<String> {
+        if self.confined.is_none() {
+            return env(var);
+        }
+        self.knowledge
+            .store()
+            .get_setting(&format!("{SECRET_PREFIX}{var}"))
+            .await?
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| invalid(format!("save a secret named {var} for this source")))
+    }
+
+    async fn secret_opt(&self, var: Option<&str>) -> Result<Option<String>> {
+        match var {
+            Some(v) => self.secret(v).await.map(Some),
+            None => Ok(None),
         }
     }
 
@@ -282,6 +344,22 @@ impl Sources {
     pub async fn save(&self, spec: &SourceSpec) -> Result<()> {
         Knowledge::validate_name(&spec.name)?;
         Knowledge::validate_name(&spec.collection)?;
+        if self.confined.is_some() {
+            match &spec.kind {
+                SourceKind::Folder { path, .. } => {
+                    self.folder_path(path)?;
+                }
+                SourceKind::Web {
+                    allow_private: true,
+                    ..
+                } => {
+                    return Err(invalid(
+                        "allow_private isn't available to this organization",
+                    ));
+                }
+                _ => {}
+            }
+        }
         let value = serde_json::to_value(spec).expect("serializable spec");
         Ok(self
             .knowledge
@@ -338,7 +416,7 @@ impl Sources {
             &format!("Synced from the {} source {}", spec.kind.name(), spec.name),
         )
         .await?;
-        let conn = connector(spec, &self.http)?;
+        let conn = self.connector(spec).await?;
         let mut items = conn.list().await?;
         if let Some(max) = spec.max_items {
             items.truncate(max);

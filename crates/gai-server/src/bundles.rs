@@ -1,7 +1,7 @@
 //! `.gaibundle` export and import over HTTP.
 
 use axum::body::Bytes;
-use axum::extract::{DefaultBodyLimit, Query, State};
+use axum::extract::{DefaultBodyLimit, Query};
 use axum::http::{HeaderValue, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
@@ -10,6 +10,7 @@ use gai::bundle::{ExportOptions, ImportOptions, ImportReport};
 
 use crate::AppState;
 use crate::error::ApiResult;
+use crate::orgs::Tenant;
 
 /// Largest bundle accepted.
 const MAX_BUNDLE: usize = 200 << 20;
@@ -22,7 +23,7 @@ pub fn routes() -> Router<AppState> {
         .layer(DefaultBodyLimit::max(MAX_BUNDLE))
 }
 
-async fn export(State(s): State<AppState>, Json(opts): Json<ExportOptions>) -> ApiResult<Response> {
+async fn export(Tenant(s): Tenant, Json(opts): Json<ExportOptions>) -> ApiResult<Response> {
     let bytes = gai::bundle::export(&s.gai, &opts).await?;
     let stem: String = opts
         .name
@@ -49,12 +50,12 @@ async fn export(State(s): State<AppState>, Json(opts): Json<ExportOptions>) -> A
     Ok(resp)
 }
 
-async fn inspect(State(s): State<AppState>, body: Bytes) -> ApiResult<Json<ImportReport>> {
+async fn inspect(Tenant(s): Tenant, body: Bytes) -> ApiResult<Json<ImportReport>> {
     Ok(Json(gai::bundle::inspect(&s.gai, &body).await?))
 }
 
 async fn import(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Query(opts): Query<ImportOptions>,
     body: Bytes,
 ) -> ApiResult<Json<ImportReport>> {

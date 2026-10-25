@@ -192,25 +192,39 @@ pub struct StoredEvent {
     pub created_at: DateTime<Utc>,
 }
 
-/// What an API key may do. `admin` implies the others; `run` implies `read`.
+/// What an API key may do. Each implies the ones after it: `admin`,
+/// `build` (change agents, workflows, knowledge and the like), `run`,
+/// `read`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Scope {
     Admin,
+    Build,
     Run,
     Read,
 }
 
 impl Scope {
+    fn rank(self) -> u8 {
+        match self {
+            Scope::Read => 0,
+            Scope::Run => 1,
+            Scope::Build => 2,
+            Scope::Admin => 3,
+        }
+    }
+
     pub fn allows(granted: &[Scope], needed: Scope) -> bool {
-        granted.iter().any(|g| {
-            matches!(
-                (g, needed),
-                (Scope::Admin, _)
-                    | (Scope::Run, Scope::Run | Scope::Read)
-                    | (Scope::Read, Scope::Read)
-            )
-        })
+        granted.iter().any(|g| g.rank() >= needed.rank())
+    }
+
+    /// The widest of `granted`, or `read` when empty.
+    pub fn highest(granted: &[Scope]) -> Scope {
+        granted
+            .iter()
+            .copied()
+            .max_by_key(|s| s.rank())
+            .unwrap_or(Scope::Read)
     }
 }
 
@@ -223,6 +237,9 @@ pub struct ApiKey {
     pub scopes: Vec<Scope>,
     pub budget_usd: Option<f64>,
     pub spent_usd: f64,
+    pub org_id: String,
+    pub team_id: Option<String>,
+    pub user_id: Option<String>,
     pub created_at: DateTime<Utc>,
     pub last_used_at: Option<DateTime<Utc>>,
     pub revoked_at: Option<DateTime<Utc>>,
@@ -648,4 +665,150 @@ pub struct SourceRecord {
     pub last_sync_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+/// A new API key. The plaintext never reaches the store, only its hash.
+#[derive(Clone, Debug)]
+pub struct NewKey {
+    pub name: String,
+    pub prefix: String,
+    pub hash: String,
+    pub scopes: Vec<Scope>,
+    pub budget_usd: Option<f64>,
+    /// The organization the key acts in.
+    pub org_id: String,
+    /// A team key may only change resources its team owns (or no team does).
+    pub team_id: Option<String>,
+    /// The user who created it, when a signed-in user did.
+    pub user_id: Option<String>,
+}
+
+impl NewKey {
+    /// A key in the default organization.
+    pub fn new(
+        name: &str,
+        prefix: &str,
+        hash: &str,
+        scopes: &[Scope],
+        budget_usd: Option<f64>,
+    ) -> Self {
+        Self {
+            name: name.to_owned(),
+            prefix: prefix.to_owned(),
+            hash: hash.to_owned(),
+            scopes: scopes.to_vec(),
+            budget_usd,
+            org_id: DEFAULT_ORG.into(),
+            team_id: None,
+            user_id: None,
+        }
+    }
+}
+
+/// The organization every server starts with. Its data lives in the main
+/// database; other organizations each get a database of their own.
+pub const DEFAULT_ORG: &str = "default";
+
+/// What a member of an organization may do.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum Role {
+    /// Reads everything in the organization.
+    Viewer,
+    /// Also chats with and runs agents and workflows.
+    Member,
+    /// Also builds: agents, personas, workflows, skills, knowledge,
+    /// triggers, sources and evals.
+    Builder,
+    /// Also keys, MCP servers, providers, settings, members and teams,
+    /// the audit log and data deletion.
+    Admin,
+    /// Also renames or deletes the organization and names other owners.
+    Owner,
+}
+
+impl Role {
+    pub fn scope(self) -> Scope {
+        match self {
+            Role::Viewer => Scope::Read,
+            Role::Member => Scope::Run,
+            Role::Builder => Scope::Build,
+            Role::Admin | Role::Owner => Scope::Admin,
+        }
+    }
+}
+
+impl std::str::FromStr for Role {
+    type Err = String;
+    fn from_str(s: &str) -> std::result::Result<Self, String> {
+        serde_json::from_value(Value::String(s.to_ascii_lowercase()))
+            .map_err(|_| format!("unknown role {s:?}: use owner, admin, builder, member or viewer"))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Org {
+    pub id: String,
+    /// Letters, digits and `-`; picks the organization in URLs and headers.
+    pub slug: String,
+    pub name: String,
+    /// Branding and limits; see the server's org settings.
+    pub settings: Value,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct User {
+    pub id: String,
+    pub email: String,
+    pub name: Option<String>,
+    /// The identity provider's `issuer|subject`, once they have signed in.
+    #[serde(skip_serializing)]
+    pub subject: Option<String>,
+    pub disabled: bool,
+    pub created_at: DateTime<Utc>,
+    pub last_seen_at: Option<DateTime<Utc>>,
+}
+
+/// A user's place in an organization.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Membership {
+    pub org_id: String,
+    pub org_slug: String,
+    pub org_name: String,
+    pub user_id: String,
+    pub email: String,
+    pub name: Option<String>,
+    pub role: Role,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Team {
+    pub id: String,
+    pub org_id: String,
+    pub name: String,
+    /// User ids.
+    pub members: Vec<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// A signed-in browser.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Login {
+    pub user_id: String,
+    pub created_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
 }

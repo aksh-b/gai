@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use axum::extract::{DefaultBodyLimit, Path, Query, State};
+use axum::extract::{DefaultBodyLimit, Path, Query};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
@@ -19,6 +19,7 @@ use serde_json::{Map, Value};
 use crate::AppState;
 use crate::auth::Principal;
 use crate::error::{ApiError, ApiResult};
+use crate::orgs::Tenant;
 
 /// Largest request body for document uploads.
 const UPLOAD_LIMIT: usize = 64 * 1024 * 1024;
@@ -152,7 +153,7 @@ struct CollectionsQuery {
 }
 
 async fn list_collections(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Query(q): Query<CollectionsQuery>,
 ) -> ApiResult<Json<Vec<Collection>>> {
     let all = s.rt.store().list_collections().await?;
@@ -164,7 +165,7 @@ async fn list_collections(
 }
 
 async fn create_collection(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Json(new): Json<NewCollection>,
 ) -> ApiResult<(StatusCode, Json<Collection>)> {
     let c = s.rt.knowledge().create_collection(new).await?;
@@ -172,7 +173,7 @@ async fn create_collection(
 }
 
 async fn get_collection(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
 ) -> ApiResult<Json<Collection>> {
     Ok(Json(s.rt.knowledge().collection(&name).await?))
@@ -186,10 +187,7 @@ pub struct Reindexed {
 }
 
 /// Copy a collection's stored vectors into the vector index.
-async fn reindex(
-    State(s): State<AppState>,
-    Path(name): Path<String>,
-) -> ApiResult<Json<Reindexed>> {
+async fn reindex(Tenant(s): Tenant, Path(name): Path<String>) -> ApiResult<Json<Reindexed>> {
     let k = s.rt.knowledge();
     let vectors = k.reindex(&name).await?;
     Ok(Json(Reindexed {
@@ -198,10 +196,7 @@ async fn reindex(
     }))
 }
 
-async fn delete_collection(
-    State(s): State<AppState>,
-    Path(name): Path<String>,
-) -> ApiResult<StatusCode> {
+async fn delete_collection(Tenant(s): Tenant, Path(name): Path<String>) -> ApiResult<StatusCode> {
     if s.rt.knowledge().delete_collection(&name).await? {
         Ok(StatusCode::NO_CONTENT)
     } else {
@@ -216,7 +211,7 @@ struct PageQuery {
 }
 
 async fn list_documents(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
     Query(q): Query<PageQuery>,
 ) -> ApiResult<Json<Vec<Document>>> {
@@ -281,7 +276,7 @@ async fn fetch(s: &AppState, url: &str) -> ApiResult<(String, Option<String>, Ve
 }
 
 async fn add_document(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
     Json(b): Json<AddDocument>,
 ) -> ApiResult<(StatusCode, Json<Ingested>)> {
@@ -347,7 +342,7 @@ async fn add_document(
 }
 
 async fn get_document(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path((name, id)): Path<(String, String)>,
 ) -> ApiResult<Json<DocumentView>> {
     let document =
@@ -361,7 +356,7 @@ async fn get_document(
 }
 
 async fn delete_document(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path((name, id)): Path<(String, String)>,
 ) -> ApiResult<StatusCode> {
     let found =
@@ -377,7 +372,7 @@ async fn delete_document(
 }
 
 async fn search(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
     Json(b): Json<SearchRequest>,
 ) -> ApiResult<Json<Vec<SearchHit>>> {
@@ -411,14 +406,14 @@ fn check_scope(scope: &str) -> ApiResult<()> {
 }
 
 async fn list_blocks(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Query(q): Query<ScopeQuery>,
 ) -> ApiResult<Json<Vec<MemoryBlock>>> {
     Ok(Json(s.rt.store().list_blocks(q.scope.as_deref()).await?))
 }
 
 async fn create_block(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Extension(p): Extension<Principal>,
     Json(new): Json<NewBlock>,
 ) -> ApiResult<(StatusCode, Json<MemoryBlock>)> {
@@ -443,17 +438,14 @@ fn actor(p: &Principal) -> String {
     }
 }
 
-async fn get_block(
-    State(s): State<AppState>,
-    Path(id): Path<String>,
-) -> ApiResult<Json<MemoryBlock>> {
+async fn get_block(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<Json<MemoryBlock>> {
     Ok(Json(s.rt.store().get_block(&id).await?.ok_or_else(
         || ApiError::not_found(format!("memory block {id}")),
     )?))
 }
 
 async fn edit_block(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Extension(p): Extension<Principal>,
     Path(id): Path<String>,
     Json(b): Json<EditBlock>,
@@ -495,7 +487,7 @@ async fn edit_block(
     Ok(Json(block))
 }
 
-async fn delete_block(State(s): State<AppState>, Path(id): Path<String>) -> ApiResult<StatusCode> {
+async fn delete_block(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<StatusCode> {
     if s.rt.store().delete_block(&id).await? {
         Ok(StatusCode::NO_CONTENT)
     } else {
@@ -504,7 +496,7 @@ async fn delete_block(State(s): State<AppState>, Path(id): Path<String>) -> ApiR
 }
 
 async fn block_history(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(id): Path<String>,
 ) -> ApiResult<Json<Vec<BlockRevision>>> {
     Ok(Json(s.rt.store().block_history(&id).await?))
@@ -512,14 +504,11 @@ async fn block_history(
 
 // ---- skills ----
 
-async fn list_skills(State(s): State<AppState>) -> ApiResult<Json<Vec<SkillView>>> {
+async fn list_skills(Tenant(s): Tenant) -> ApiResult<Json<Vec<SkillView>>> {
     Ok(Json(s.rt.skills().list().await?.iter().map(view).collect()))
 }
 
-async fn get_skill(
-    State(s): State<AppState>,
-    Path(name): Path<String>,
-) -> ApiResult<Json<SkillDetail>> {
+async fn get_skill(Tenant(s): Tenant, Path(name): Path<String>) -> ApiResult<Json<SkillDetail>> {
     let sk =
         s.rt.skills()
             .get(&name)
@@ -533,17 +522,14 @@ async fn get_skill(
 }
 
 async fn save_skill(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Json(b): Json<SaveSkill>,
 ) -> ApiResult<(StatusCode, Json<SavedSkill>)> {
     let (name, version) = s.rt.skills().save(&b.content, b.files).await?;
     Ok((StatusCode::CREATED, Json(SavedSkill { name, version })))
 }
 
-async fn delete_skill(
-    State(s): State<AppState>,
-    Path(name): Path<String>,
-) -> ApiResult<StatusCode> {
+async fn delete_skill(Tenant(s): Tenant, Path(name): Path<String>) -> ApiResult<StatusCode> {
     if s.rt.skills().delete(&name).await? {
         Ok(StatusCode::NO_CONTENT)
     } else if s.rt.skills().get(&name).await?.is_some() {

@@ -6,6 +6,7 @@ mod governance;
 mod knowledge;
 mod manage;
 mod media;
+mod orgs;
 mod replay;
 mod run;
 mod sources;
@@ -62,6 +63,15 @@ enum Command {
     /// Manage API keys for the server
     #[command(subcommand)]
     Keys(manage::KeysCmd),
+    /// Organizations sharing this server
+    #[command(subcommand)]
+    Orgs(orgs::OrgsCmd),
+    /// People in an organization and their roles
+    #[command(subcommand)]
+    Members(orgs::MembersCmd),
+    /// Teams in an organization
+    #[command(subcommand)]
+    Teams(orgs::TeamsCmd),
     /// Manage MCP servers whose tools agents can use
     #[command(subcommand)]
     Mcp(manage::McpCmd),
@@ -222,6 +232,9 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
         Command::Triggers(cmd) => triggers::triggers(&gai, cmd).await,
         Command::Bundle(cmd) => bundle::bundle(&gai, cmd).await,
         Command::Eval(cmd) => eval::eval(&gai, cmd).await,
+        Command::Orgs(cmd) => orgs::orgs(&gai, cmd).await,
+        Command::Members(cmd) => orgs::members(&gai, cmd).await,
+        Command::Teams(cmd) => orgs::teams(&gai, cmd).await,
         Command::Sources(cmd) => sources::run(&gai, cmd).await,
         Command::Audit(args) => governance::audit(&gai, args).await,
         Command::Retention(cmd) => governance::retention(&gai, cmd).await,

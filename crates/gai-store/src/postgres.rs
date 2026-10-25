@@ -19,6 +19,8 @@ use crate::*;
 
 #[path = "pg_blobs.rs"]
 mod blobs;
+#[path = "pg_directory.rs"]
+mod directory;
 #[path = "pg_governance.rs"]
 mod governance;
 #[path = "pg_memory.rs"]
@@ -49,6 +51,30 @@ impl PostgresStore {
         let opts =
             PgConnectOptions::from_str(url).map_err(|e| StoreError::Database(e.to_string()))?;
         Self::connect_with(opts).await
+    }
+
+    /// The store in a schema of its own (created if missing), for an
+    /// organization sharing the database. Only that schema is searched, so
+    /// nothing resolves to another organization's tables.
+    pub async fn connect_schema(url: &str, schema: &str) -> Result<Self> {
+        if schema.is_empty()
+            || !schema
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
+            return Err(StoreError::Database(format!("bad schema name {schema:?}")));
+        }
+        let opts =
+            PgConnectOptions::from_str(url).map_err(|e| StoreError::Database(e.to_string()))?;
+        let admin = PgPoolOptions::new()
+            .max_connections(1)
+            .connect_with(opts.clone())
+            .await?;
+        sqlx::query(&format!("CREATE SCHEMA IF NOT EXISTS {schema}"))
+            .execute(&admin)
+            .await?;
+        admin.close().await;
+        Self::connect_with(opts.options([("search_path", schema)])).await
     }
 
     /// Like [`connect`](Self::connect), with options (e.g. a `search_path`).
@@ -746,6 +772,9 @@ fn api_key(r: &PgRow) -> Result<ApiKey> {
         scopes: parse(&r.try_get::<String, _>("scopes")?)?,
         budget_usd: r.try_get("budget_usd")?,
         spent_usd: r.try_get("spent_usd")?,
+        org_id: r.try_get("org_id")?,
+        team_id: r.try_get("team_id")?,
+        user_id: r.try_get("user_id")?,
         created_at: r.try_get("created_at")?,
         last_used_at: r.try_get("last_used_at")?,
         revoked_at: r.try_get("revoked_at")?,
@@ -754,24 +783,20 @@ fn api_key(r: &PgRow) -> Result<ApiKey> {
 
 #[async_trait]
 impl KeyStore for PostgresStore {
-    async fn create_key(
-        &self,
-        name: &str,
-        prefix: &str,
-        hash: &str,
-        scopes: &[Scope],
-        budget_usd: Option<f64>,
-    ) -> Result<ApiKey> {
+    async fn create_key(&self, k: &NewKey) -> Result<ApiKey> {
         let id = gai_core::new_id("key");
         sqlx::query(
-            "INSERT INTO api_keys (id, name, prefix, hash, scopes, budget_usd, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            "INSERT INTO api_keys (id, name, prefix, hash, scopes, budget_usd, org_id, team_id, user_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
         )
         .bind(&id)
-        .bind(name)
-        .bind(prefix)
-        .bind(hash)
-        .bind(json(&scopes))
-        .bind(budget_usd)
+        .bind(&k.name)
+        .bind(&k.prefix)
+        .bind(&k.hash)
+        .bind(json(&k.scopes))
+        .bind(k.budget_usd)
+        .bind(&k.org_id)
+        .bind(&k.team_id)
+        .bind(&k.user_id)
         .bind(now())
         .execute(&self.pool)
         .await?;
@@ -790,10 +815,13 @@ impl KeyStore for PostgresStore {
         row.as_ref().map(api_key).transpose()
     }
 
-    async fn list_keys(&self) -> Result<Vec<ApiKey>> {
-        let rows = sqlx::query("SELECT * FROM api_keys ORDER BY created_at DESC")
-            .fetch_all(&self.pool)
-            .await?;
+    async fn list_keys(&self, org_id: Option<&str>) -> Result<Vec<ApiKey>> {
+        let rows = sqlx::query(
+            "SELECT * FROM api_keys WHERE $1::TEXT IS NULL OR org_id = $1 ORDER BY created_at DESC",
+        )
+        .bind(org_id)
+        .fetch_all(&self.pool)
+        .await?;
         rows.iter().map(api_key).collect()
     }
 

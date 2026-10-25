@@ -228,6 +228,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Where the identity provider sends the browser back; sets the gai_session cookie */
+        get: operations["get_v1_auth_callback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How people sign in: OIDC, a proxy, or keys only */
+        get: operations["get_v1_auth_config"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Start an OIDC sign-in (redirects to the identity provider) */
+        get: operations["get_v1_auth_login"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign this browser out */
+        post: operations["post_v1_auth_logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/blobs": {
         parameters: {
             query?: never;
@@ -785,6 +853,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Members of this organization and their roles */
+        get: operations["get_v1_members"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/members/{who}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Add someone by email (they join at their first sign-in) or change their role */
+        put: operations["put_v1_members__who_"];
+        post?: never;
+        /** Take someone out of this organization */
+        delete: operations["delete_v1_members__who_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/memory/blocks": {
         parameters: {
             query?: never;
@@ -849,6 +952,77 @@ export interface paths {
         /** Model catalog */
         get: operations["get_v1_models"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/orgs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Organizations you work in (server admins: all of them) */
+        get: operations["get_v1_orgs"];
+        put?: never;
+        /** Create an organization, with a database and files of its own (admins of the default organization) */
+        post: operations["post_v1_orgs"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/orgs/{org}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An organization */
+        get: operations["get_v1_orgs__org_"];
+        put?: never;
+        post?: never;
+        /** Delete an organization's members, teams and keys; its data stays on disk */
+        delete: operations["delete_v1_orgs__org_"];
+        options?: never;
+        head?: never;
+        /** Rename an organization or change its branding (owners); limits are set by server admins */
+        patch: operations["patch_v1_orgs__org_"];
+        trace?: never;
+    };
+    "/v1/owners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Which team owns which agent, workflow, collection and so on */
+        get: operations["get_v1_owners"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/owners/{kind}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Give a resource to a team (only its builders change it), or back to everyone with team: null */
+        put: operations["put_v1_owners__kind___name_"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1306,6 +1480,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Names of this organization's secrets (sources read them by name) */
+        get: operations["get_v1_secrets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/secrets/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save a secret */
+        put: operations["put_v1_secrets__name_"];
+        post?: never;
+        /** Delete a secret */
+        delete: operations["delete_v1_secrets__name_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions": {
         parameters: {
             query?: never;
@@ -1495,6 +1704,59 @@ export interface paths {
         /** Sync now: only new, changed and removed items. 202 in the background, or ?wait=true for the counts (gai serve also syncs sources with every_minutes) */
         post: operations["post_v1_sources__name__sync"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Teams and their members */
+        get: operations["get_v1_teams"];
+        put?: never;
+        /** Create a team */
+        post: operations["post_v1_teams"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/teams/{team}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a team: what it owned goes back to the organization, its keys are revoked */
+        delete: operations["delete_v1_teams__team_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/teams/{team}/members/{who}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put a member in a team */
+        put: operations["put_v1_teams__team__members__who_"];
+        post?: never;
+        /** Take a member out of a team */
+        delete: operations["delete_v1_teams__team__members__who_"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2065,6 +2327,7 @@ export interface components {
             /** Format: date-time */
             last_used_at?: string | null;
             name: string;
+            org_id: string;
             /** @description The first characters of the key, to tell keys apart. */
             prefix: string;
             /** Format: date-time */
@@ -2072,6 +2335,8 @@ export interface components {
             scopes: components["schemas"]["Scope"][];
             /** Format: double */
             spent_usd: number;
+            team_id?: string | null;
+            user_id?: string | null;
         };
         /** @enum {string} */
         ArchivalScope: "agent" | "user";
@@ -2095,6 +2360,14 @@ export interface components {
             status: number;
             /** @description What it touched, e.g. `agents/researcher`. */
             target: string;
+        };
+        AuthConfig: {
+            /** @description The sign-in button's label. */
+            label: string;
+            /** @description Signing in with OIDC is set up. */
+            oidc: boolean;
+            /** @description A proxy signs people in. */
+            proxy: boolean;
         };
         /** @description Stored media: everything but the bytes. */
         Blob: {
@@ -2145,6 +2418,27 @@ export interface components {
             scope: string;
             /** @description Starting value, used when the block does not exist yet. */
             value?: string;
+        };
+        /**
+         * @description How the dashboard looks for an organization (in its settings, under
+         *     `branding`).
+         */
+        Branding: {
+            /**
+             * @description A CSS colour for buttons and links, like `#5b5bd6`.
+             * @default null
+             */
+            accent: string | null;
+            /**
+             * @description An https URL or a `data:` image.
+             * @default null
+             */
+            logo_url: string | null;
+            /**
+             * @description Shown instead of "gai".
+             * @default null
+             */
+            product_name: string | null;
         };
         /**
          * @description What a model can do. Unknown fields default to what most chat models
@@ -2448,6 +2742,8 @@ export interface components {
              *     ]
              */
             scopes: components["schemas"]["Scope"][];
+            /** @description A team (id or name): the key changes only what that team owns. */
+            team?: string | null;
         };
         CreateRun: {
             /** @description Defaults to the built-in general assistant. */
@@ -3067,6 +3363,21 @@ export interface components {
              */
             timeout_secs?: number | null;
         };
+        /** @description An organization's limits (in its settings, under `limits`). */
+        Limits2: {
+            /**
+             * Format: double
+             * @description Stop starting runs once this much was spent this month (USD).
+             * @default null
+             */
+            budget_usd_per_month: number | null;
+            /**
+             * Format: uint32
+             * @description Requests per minute for the whole organization.
+             * @default null
+             */
+            requests_per_minute: number | null;
+        };
         /** @description `bundle.toml`. */
         Manifest: {
             /**
@@ -3161,9 +3472,16 @@ export interface components {
             auth: string;
             /** Format: double */
             budget_usd?: number | null;
+            memberships: components["schemas"]["Membership"][];
+            /** @description The organization this request works in. */
+            org: components["schemas"]["Org"];
             principal: components["schemas"]["Principal"];
             /** Format: double */
             spent_usd?: number | null;
+            /** @description The teams the caller acts for. */
+            teams: components["schemas"]["Team"][];
+            /** @description A signed-in user, and the organizations they belong to. */
+            user?: components["schemas"]["User"] | null;
         };
         MediaDefaults: {
             image?: string | null;
@@ -3236,6 +3554,18 @@ export interface components {
             kind: "blob";
             media_type: string;
         };
+        /** @description A user's place in an organization. */
+        Membership: {
+            /** Format: date-time */
+            created_at: string;
+            email: string;
+            name?: string | null;
+            org_id: string;
+            org_name: string;
+            org_slug: string;
+            role: components["schemas"]["Role"];
+            user_id: string;
+        };
         /** @description A named, size-limited piece of text an agent always sees and can edit. */
         MemoryBlock: {
             /** Format: date-time */
@@ -3292,7 +3622,7 @@ export interface components {
         };
         Message: {
             content: components["schemas"]["ContentBlock"][];
-            role: components["schemas"]["Role"];
+            role: components["schemas"]["Role2"];
         };
         Mode: "wait" | "stream" | "background";
         ModelKind: ("chat" | "embedding") | "transcription" | "speech" | "image";
@@ -3330,12 +3660,22 @@ export interface components {
             metadata: unknown;
             name: string;
         };
+        NewOrg: {
+            name: string;
+            /** @description Made its owner (invited if they haven't signed in yet). */
+            owner_email?: string | null;
+            /** @description Lowercase letters, digits and `-`. */
+            slug: string;
+        };
         NewSession: {
             agent?: string | null;
             /** @default null */
             metadata: unknown;
             title?: string | null;
             user_id?: string | null;
+        };
+        NewTeam: {
+            name: string;
         };
         /**
          * @description What a node does.
@@ -3439,6 +3779,57 @@ export interface components {
             /** @description Installed models, by Ollama name. */
             models: string[];
             reachable: boolean;
+        };
+        Org: {
+            /** Format: date-time */
+            created_at: string;
+            id: string;
+            name: string;
+            /** @description Branding and limits; see the server's org settings. */
+            settings: unknown;
+            /** @description Letters, digits and `-`; picks the organization in URLs and headers. */
+            slug: string;
+        };
+        OrgPatch: {
+            name?: string | null;
+            /** @description Replaces the settings: branding and limits. */
+            settings?: components["schemas"]["OrgSettings"] | null;
+        };
+        /** @description What an organization's settings hold. */
+        OrgSettings: {
+            /**
+             * @default {
+             *       "accent": null,
+             *       "logo_url": null,
+             *       "product_name": null
+             *     }
+             */
+            branding: components["schemas"]["Branding"];
+            /**
+             * @default {
+             *       "budget_usd_per_month": null,
+             *       "requests_per_minute": null
+             *     }
+             */
+            limits: components["schemas"]["Limits2"];
+        };
+        OrgView: {
+            /** Format: date-time */
+            created_at: string;
+            id: string;
+            name: string;
+            /** @description Your role there, when you are a member. */
+            role?: components["schemas"]["Role"] | null;
+            /** @description Branding and limits; see the server's org settings. */
+            settings: unknown;
+            /** @description Letters, digits and `-`; picks the organization in URLs and headers. */
+            slug: string;
+        };
+        Owner: {
+            kind: string;
+            name: string;
+            team: string;
+            team_id: string;
         };
         PendingApproval: {
             call_id: string;
@@ -3585,10 +3976,24 @@ export interface components {
         };
         /** @description Who is calling. */
         Principal: {
-            /** @description The key id, or `anonymous` when authentication is open. */
+            /** @description The key id, the user id, or `anonymous` when authentication is open. */
             id: string;
+            /** @description The key's name, or the user's email. */
             name: string;
+            /** @description The organization this request works in. */
+            org_id: string;
+            org_slug: string;
+            /** @description A signed-in user's role there. */
+            role?: components["schemas"]["Role"] | null;
             scopes: components["schemas"]["Scope"][];
+            /** @description Set for a team's key. */
+            team_id?: string | null;
+            /**
+             * @description The teams the caller acts for: a user's teams in the organization,
+             *     or a team key's team.
+             */
+            teams: string[];
+            user_id?: string | null;
         };
         ProviderKey: {
             key: string;
@@ -3726,12 +4131,14 @@ export interface components {
              */
             models: string[];
         };
+        /** @description What a member of an organization may do. */
+        Role: "viewer" | "member" | "builder" | "admin" | "owner";
         /**
          * @description Who authored a message. System prompts are carried separately on the
          *     request, so a conversation only alternates between these two.
          * @enum {string}
          */
-        Role: "user" | "assistant";
+        Role2: "user" | "assistant";
         Rollback: {
             note?: string | null;
             /**
@@ -3925,10 +4332,12 @@ export interface components {
             version: number;
         };
         /**
-         * @description What an API key may do. `admin` implies the others; `run` implies `read`.
+         * @description What an API key may do. Each implies the ones after it: `admin`,
+         *     `build` (change agents, workflows, knowledge and the like), `run`,
+         *     `read`.
          * @enum {string}
          */
-        Scope: "admin" | "run" | "read";
+        Scope: "admin" | "build" | "run" | "read";
         /**
          * @description How one aspect of an answer is judged. Written as a one-key map in YAML:
          *     `- contains: [30 days]`, `- judge: Is polite`, `- max_steps: 4`.
@@ -4003,6 +4412,9 @@ export interface components {
             mode: components["schemas"]["SearchMode"];
             query: string;
         };
+        SecretValue: {
+            value: string;
+        };
         Session: {
             agent?: string | null;
             /** Format: date-time */
@@ -4013,6 +4425,14 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
             user_id?: string | null;
+        };
+        SetMember: {
+            name?: string | null;
+            role: components["schemas"]["Role"];
+        };
+        SetOwner: {
+            /** @description A team (id or name), or null for the whole organization. */
+            team?: string | null;
         };
         Settings: {
             /**
@@ -4350,6 +4770,15 @@ export interface components {
         } | {
             workflow: string;
         };
+        Team: {
+            /** Format: date-time */
+            created_at: string;
+            id: string;
+            /** @description User ids. */
+            members: string[];
+            name: string;
+            org_id: string;
+        };
         TemplateView: {
             description: string;
             id: string;
@@ -4593,6 +5022,18 @@ export interface components {
             cost: number;
             model: string;
             usage: components["schemas"]["Usage"];
+        };
+        User: {
+            /** Format: date-time */
+            created_at: string;
+            disabled: boolean;
+            email: string;
+            id: string;
+            /** Format: date-time */
+            last_seen_at?: string | null;
+            name?: string | null;
+            /** @description The identity provider's `issuer|subject`, once they have signed in. */
+            subject?: string | null;
         };
         Validation: {
             error?: string | null;
@@ -5236,6 +5677,121 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditEntry"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_auth_callback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_auth_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthConfig"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_auth_login: {
+        parameters: {
+            query?: {
+                /** @description A path on this server to land on afterwards */
+                return_to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_auth_logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Done"];
                 };
             };
             /** @description Error */
@@ -6664,6 +7220,101 @@ export interface operations {
             };
         };
     };
+    get_v1_members: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Membership"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put_v1_members__who_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                who: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetMember"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Membership"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_members__who_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                who: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Done"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get_v1_memory_blocks: {
         parameters: {
             query?: {
@@ -6872,6 +7523,228 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CatalogEntry"][];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_orgs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgView"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_orgs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewOrg"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Org"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_orgs__org_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Org"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_orgs__org_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Done"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    patch_v1_orgs__org_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrgPatch"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Org"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_owners: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Owner"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put_v1_owners__kind___name_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetOwner"];
+            };
+        };
+        responses: {
+            /** @description Done */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -7986,6 +8859,101 @@ export interface operations {
             };
         };
     };
+    get_v1_secrets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put_v1_secrets__name_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretValue"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Done"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_secrets__name_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Done"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get_v1_sessions: {
         parameters: {
             query?: {
@@ -8529,6 +9497,163 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SyncStats"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_teams: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_teams: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewTeam"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_teams__team_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                team: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Done"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put_v1_teams__team__members__who_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                team: string;
+                who: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_teams__team__members__who_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                team: string;
+                who: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
                 };
             };
             /** @description Error */

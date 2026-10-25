@@ -85,6 +85,9 @@ impl Triggers {
     /// Check a spec, including that its target exists.
     pub async fn check(&self, spec: &TriggerSpec) -> Result<(), TriggerError> {
         spec.validate().map_err(TriggerError::Invalid)?;
+        if let Source::File { path, .. } = &spec.source {
+            self.watch_path(path).map_err(TriggerError::Invalid)?;
+        }
         match &spec.target {
             Target::Agent(r) => {
                 self.inner.rt.resolve_agent(r).await?;
@@ -94,6 +97,30 @@ impl Triggers {
             }
         }
         Ok(())
+    }
+
+    /// The folder a file trigger watches. A confined organization watches
+    /// only inside its own data folder (relative paths start there).
+    fn watch_path(&self, path: &str) -> Result<PathBuf, String> {
+        let config = self.inner.rt.config();
+        if !config.tools.confined {
+            return Ok(PathBuf::from(path));
+        }
+        let root = config.data_dir.join("files");
+        let p = std::path::Path::new(path);
+        let rel = p.strip_prefix(&root).unwrap_or(p);
+        if rel.components().any(|c| {
+            !matches!(
+                c,
+                std::path::Component::Normal(_) | std::path::Component::CurDir
+            )
+        }) {
+            return Err(format!(
+                "watch a folder inside {} (relative paths start there)",
+                root.display()
+            ));
+        }
+        Ok(root.join(rel))
     }
 
     /// Store a new trigger. Webhooks get a signing secret.
@@ -427,7 +454,7 @@ impl Triggers {
         else {
             return Err("not a file trigger".into());
         };
-        let root = PathBuf::from(path);
+        let root = self.watch_path(path)?;
         let (tx, mut rx) = mpsc::unbounded_channel::<(PathBuf, &'static str)>();
         let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
             let Ok(ev) = res else { return };

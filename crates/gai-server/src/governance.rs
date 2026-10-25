@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use axum::body::{Body, Bytes};
-use axum::extract::{Path, Query, Request, State};
+use axum::extract::{Path, Query, Request};
 use axum::http::{HeaderValue, Method, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
@@ -18,6 +18,7 @@ use serde_json::Value;
 use crate::AppState;
 use crate::auth::Principal;
 use crate::error::{ApiError, ApiResult};
+use crate::orgs::Tenant;
 
 /// Bodies read for the audit detail; bigger ones are recorded without it.
 const DETAIL_BODY_LIMIT: usize = 256 << 10;
@@ -103,7 +104,7 @@ fn detail(path: &str, body: &Value) -> Value {
 }
 
 /// Middleware: record changes in the audit log after they are answered.
-pub async fn record(State(s): State<AppState>, req: Request, next: Next) -> Response {
+pub async fn record(Tenant(s): Tenant, req: Request, next: Next) -> Response {
     let method = req.method().clone();
     let path = req.uri().path().to_owned();
     if !audited(&method, &path) {
@@ -160,7 +161,7 @@ struct AuditQuery {
     format: Option<String>,
 }
 
-async fn list(State(s): State<AppState>, Query(q): Query<AuditQuery>) -> ApiResult<Response> {
+async fn list(Tenant(s): Tenant, Query(q): Query<AuditQuery>) -> ApiResult<Response> {
     let rows =
         s.rt.store()
             .list_audit(AuditFilter {
@@ -202,7 +203,7 @@ async fn list(State(s): State<AppState>, Query(q): Query<AuditQuery>) -> ApiResu
     Ok(Json::<Vec<AuditEntry>>(rows).into_response())
 }
 
-async fn forget(State(s): State<AppState>, Path(id): Path<String>) -> ApiResult<Json<Deleted>> {
+async fn forget(Tenant(s): Tenant, Path(id): Path<String>) -> ApiResult<Json<Deleted>> {
     if id.trim().is_empty() {
         return Err(ApiError::bad_request("give a user id"));
     }
@@ -222,7 +223,7 @@ pub struct SweptAgent {
     pub deleted: Deleted,
 }
 
-async fn sweep(State(s): State<AppState>) -> ApiResult<Json<Swept>> {
+async fn sweep(Tenant(s): Tenant) -> ApiResult<Json<Swept>> {
     let agents = s
         .gai
         .sweep_retention()

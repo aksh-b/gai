@@ -15,6 +15,8 @@ use crate::*;
 
 #[path = "sqlite_blobs.rs"]
 mod blobs;
+#[path = "sqlite_directory.rs"]
+mod directory;
 #[path = "sqlite_governance.rs"]
 mod governance;
 #[path = "sqlite_memory.rs"]
@@ -774,6 +776,9 @@ fn api_key(r: &SqliteRow) -> Result<ApiKey> {
         scopes: parse(&r.try_get::<String, _>("scopes")?)?,
         budget_usd: r.try_get("budget_usd")?,
         spent_usd: r.try_get("spent_usd")?,
+        org_id: r.try_get("org_id")?,
+        team_id: r.try_get("team_id")?,
+        user_id: r.try_get("user_id")?,
         created_at: r.try_get("created_at")?,
         last_used_at: r.try_get("last_used_at")?,
         revoked_at: r.try_get("revoked_at")?,
@@ -782,24 +787,20 @@ fn api_key(r: &SqliteRow) -> Result<ApiKey> {
 
 #[async_trait]
 impl KeyStore for SqliteStore {
-    async fn create_key(
-        &self,
-        name: &str,
-        prefix: &str,
-        hash: &str,
-        scopes: &[Scope],
-        budget_usd: Option<f64>,
-    ) -> Result<ApiKey> {
+    async fn create_key(&self, k: &NewKey) -> Result<ApiKey> {
         let id = gai_core::new_id("key");
         sqlx::query(
-            "INSERT INTO api_keys (id, name, prefix, hash, scopes, budget_usd, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO api_keys (id, name, prefix, hash, scopes, budget_usd, org_id, team_id, user_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&id)
-        .bind(name)
-        .bind(prefix)
-        .bind(hash)
-        .bind(json(&scopes))
-        .bind(budget_usd)
+        .bind(&k.name)
+        .bind(&k.prefix)
+        .bind(&k.hash)
+        .bind(json(&k.scopes))
+        .bind(k.budget_usd)
+        .bind(&k.org_id)
+        .bind(&k.team_id)
+        .bind(&k.user_id)
         .bind(now())
         .execute(&self.pool)
         .await?;
@@ -818,10 +819,14 @@ impl KeyStore for SqliteStore {
         row.as_ref().map(api_key).transpose()
     }
 
-    async fn list_keys(&self) -> Result<Vec<ApiKey>> {
-        let rows = sqlx::query("SELECT * FROM api_keys ORDER BY created_at DESC")
-            .fetch_all(&self.pool)
-            .await?;
+    async fn list_keys(&self, org_id: Option<&str>) -> Result<Vec<ApiKey>> {
+        let rows = sqlx::query(
+            "SELECT * FROM api_keys WHERE ? IS NULL OR org_id = ? ORDER BY created_at DESC",
+        )
+        .bind(org_id)
+        .bind(org_id)
+        .fetch_all(&self.pool)
+        .await?;
         rows.iter().map(api_key).collect()
     }
 

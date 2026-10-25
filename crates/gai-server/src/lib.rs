@@ -14,9 +14,11 @@ pub mod mcp_server;
 mod media;
 mod openai;
 mod openapi;
+mod orgs;
 mod personas;
 mod setup;
 mod sources;
+mod sso;
 mod triggers;
 mod ui;
 mod versions;
@@ -33,15 +35,21 @@ use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
 pub use auth::{AuthPolicy, Principal, required_scope};
+pub use orgs::{Instance, Orgs, Tenant};
 pub use ui::Dashboard;
 pub use versions::{spec_yaml, unified_diff};
 
+/// What handlers work with: the request's organization's gai, runtime and
+/// workflows (see [`Tenant`]), plus every organization and the policy.
 #[derive(Clone)]
 pub struct AppState {
     pub gai: Arc<Gai>,
     pub rt: Runtime,
     pub wf: gai::orchestra::Workflows,
     pub auth: AuthPolicy,
+    pub orgs: Orgs,
+    /// The organization this state belongs to.
+    pub org: Arc<gai::store::Org>,
 }
 
 pub struct ServeOptions {
@@ -63,40 +71,24 @@ pub async fn router(
     auth: AuthPolicy,
     dashboard: impl Into<Dashboard>,
 ) -> Result<Router, gai::Error> {
-    let rt = gai.runtime().await?.clone();
-    // Before recovery: the workflow engine must be registered to pick up
-    // its own unfinished and queued runs.
-    let wf = gai.workflows().await?.clone();
-    // A server is long-lived: connect MCP servers now so their status and
-    // tools show up, and pick up runs a previous process left unfinished.
-    rt.ensure_mcp();
-    let resumed = rt.recover().await;
-    if !resumed.is_empty() {
-        tracing::info!(runs = ?resumed, "resumed unfinished runs");
-    }
-    rt.start_queue(gai.config().server.max_background_runs);
-    // Schedules and file watchers start runs on their own from now on.
-    gai.triggers().await?.start_loops();
-    // Runs started with an API key are charged to it when they end, however
-    // they were started and whichever process finishes them.
-    let store = rt.store().clone();
-    rt.set_finish_hook(
-        "charge-key",
-        Arc::new(move |o: gai::agent::RunOutcome| {
-            let store = store.clone();
-            Box::pin(async move {
-                if let Ok(Some(run)) = store.get_run(&o.run_id).await
-                    // A workflow's cost is its agent runs', which are charged themselves.
-                    && run.metadata["kind"] != "workflow"
-                    && let Some(key) = run.metadata["key_id"].as_str()
-                {
-                    auth::charge(&store, Some(key), o.cost).await;
-                }
-            })
-        }),
-    );
+    let control = gai.runtime().await?.store().clone();
+    let root = orgs::start(gai.clone(), control.clone()).await?;
+    let org = control
+        .get_org(gai::store::DEFAULT_ORG)
+        .await?
+        .ok_or_else(|| gai::Error::Invalid("the default organization is missing".into()))?;
+    let orgs = Orgs::new(root.clone());
+    // Other organizations' schedules and watchers run from the start.
+    orgs.open_all().await;
     let mcp = gai.config().server.mcp.clone();
-    let state = AppState { gai, rt, wf, auth };
+    let state = AppState {
+        gai,
+        rt: root.rt,
+        wf: root.wf,
+        auth,
+        orgs,
+        org: Arc::new(org),
+    };
     let mut routes = api::routes();
     if mcp.enabled {
         let handler =
@@ -112,6 +104,8 @@ pub async fn router(
         .merge(evals::routes())
         .merge(governance::routes())
         .merge(sources::routes())
+        .merge(orgs::routes())
+        .merge(sso::routes())
         .merge(media::routes())
         .merge(triggers::routes())
         .merge(setup::routes())

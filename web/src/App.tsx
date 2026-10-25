@@ -24,7 +24,8 @@ import {
 } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/sonner';
 import { Spinner } from '@/components/ui/spinner';
-import { api, getApiKey, setApiKey } from './api';
+import { api, getApiKey, getOrg, setApiKey, setOrg, type Me, type OrgSettings } from './api';
+import { SelectField } from '@/components/fields';
 import { KeyDialog } from './KeyDialog';
 import { modelLabel } from './labels';
 import { applyTheme, isDark, setDevMode, useDevMode, useTheme, type Theme } from './prefs';
@@ -47,6 +48,7 @@ import { Memory } from './pages/Memory';
 import { Personas } from './pages/Personas';
 import { Evals } from './pages/Evals';
 import { Audit } from './pages/Audit';
+import { People } from './pages/People';
 import { Skills } from './pages/Skills';
 import { Workflows } from './pages/Workflows';
 import { Welcome, welcomeDone } from './pages/Welcome';
@@ -96,11 +98,12 @@ const NAV: { id: string; label: string; icon: Icon; routes: string[]; tabs?: { i
     id: 'settings',
     label: 'Settings',
     icon: IconGear,
-    routes: ['settings', 'models', 'tools', 'media', 'keys', 'audit', 'connect', 'preferences'],
+    routes: ['settings', 'models', 'tools', 'media', 'people', 'keys', 'audit', 'connect', 'preferences'],
     tabs: [
       { id: 'settings', label: 'AI models' },
       { id: 'tools', label: 'Tools & connections' },
       { id: 'media', label: 'Voice & images' },
+      { id: 'people', label: 'People & teams' },
       { id: 'keys', label: 'Access keys' },
       { id: 'audit', label: 'Audit & data' },
       { id: 'connect', label: 'Use from other apps' },
@@ -130,6 +133,7 @@ export function App() {
   const [palette, setPalette] = useState(false);
   const [agents, setAgents] = useState<string[]>([]);
   const [dev] = useDevMode();
+  const [me, setMe] = useState<Me>();
   const [theme, setTheme] = useTheme();
 
   useEffect(() => {
@@ -166,6 +170,20 @@ export function App() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Who this is, and how their organization brands the dashboard.
+  useEffect(() => {
+    if (boot !== 'ready') return;
+    api
+      .me()
+      .then((m) => {
+        setMe(m);
+        const accent = (m.org.settings as OrgSettings | null)?.branding?.accent;
+        if (accent && CSS.supports('color', accent)) document.documentElement.style.setProperty('--primary', accent);
+        document.title = brandName(m);
+      })
+      .catch(() => {});
+  }, [boot]);
 
   useEffect(() => {
     if (boot !== 'ready') return;
@@ -321,6 +339,9 @@ export function App() {
       case 'usage':
         page = <UsagePage />;
         break;
+      case 'people':
+        page = <People />;
+        break;
       case 'keys':
         page = <Keys />;
         break;
@@ -350,7 +371,11 @@ export function App() {
     />
   );
 
-  const signedIn = !!getApiKey();
+  const signedIn = !!getApiKey() || !!me?.user;
+  const brand = brandName(me);
+  const logo = (me?.org.settings as OrgSettings | null)?.branding?.logo_url;
+  // A signed-in user in several organizations picks one; a key has its own.
+  const orgChoices = !getApiKey() && me && me.memberships.length > 1 ? me.memberships : null;
 
   return (
     <SidebarProvider>
@@ -361,12 +386,32 @@ export function App() {
               <SidebarMenuButton size="lg" asChild>
                 <a href="#/chat">
                   <Avatar className="rounded-lg">
-                    <AvatarFallback className="rounded-lg bg-primary font-semibold text-primary-foreground">g</AvatarFallback>
+                    {logo ? (
+                      <img src={logo} alt="" className="size-full rounded-lg object-contain" />
+                    ) : (
+                      <AvatarFallback className="rounded-lg bg-primary font-semibold text-primary-foreground">
+                        {brand.charAt(0).toLowerCase()}
+                      </AvatarFallback>
+                    )}
                   </Avatar>
-                  <span className="text-base font-semibold">gai</span>
+                  <span className="truncate text-base font-semibold">{brand}</span>
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>
+            {orgChoices && (
+              <SidebarMenuItem>
+                <SelectField
+                  aria-label="Organization"
+                  options={orgChoices.map((m) => ({ value: m.org_slug, label: m.org_name }))}
+                  value={getOrg() ?? me?.org.slug ?? ''}
+                  onValueChange={(v) => {
+                    setOrg(String(v));
+                    location.assign('#/chat');
+                    location.reload();
+                  }}
+                />
+              </SidebarMenuItem>
+            )}
             <SidebarMenuItem>
               <SidebarMenuButton variant="outline" onClick={() => setPalette(true)}>
                 <IconSearch />
@@ -426,6 +471,7 @@ export function App() {
                   </a>
                 </ItemDescription>
               )}
+              {me?.user && <ItemDescription className="truncate">{me.user.email}</ItemDescription>}
               {dev && (
                 <ItemDescription>
                   {health.version && `v${health.version} · `}
@@ -434,12 +480,14 @@ export function App() {
               )}
             </ItemContent>
             <ItemActions>
-              {dev && signedIn && (
+              {((dev && getApiKey()) || me?.user) && (
                 <Button
                   variant="link"
                   size="xs"
-                  onClick={() => {
+                  onClick={async () => {
                     setApiKey(null);
+                    setOrg(null);
+                    if (me?.user) await api.logout().catch(() => {});
                     location.reload();
                   }}
                 >
@@ -462,7 +510,7 @@ export function App() {
       <SidebarInset className="min-w-0">
         <header className="flex h-12 items-center gap-2 border-b px-3 md:hidden">
           <SidebarTrigger />
-          <span className="font-semibold">gai</span>
+          <span className="font-semibold">{brand}</span>
         </header>
         {tabs && <div className="sticky top-0 z-10 border-b bg-background px-6 pt-2 md:px-8">{tabs}</div>}
         {page}
@@ -472,4 +520,9 @@ export function App() {
       <KeyDialog />
     </SidebarProvider>
   );
+}
+
+/** The product name the organization shows, else gai. */
+function brandName(me?: Me) {
+  return (me?.org.settings as OrgSettings | null)?.branding?.product_name?.trim() || 'gai';
 }

@@ -45,7 +45,9 @@ async fn webhook_triggers_start_runs_and_need_their_secret() {
         async move {
             let k = keys::generate();
             store
-                .create_key("t", &k.prefix, &k.hash, scopes, None)
+                .create_key(&gai::store::NewKey::new(
+                    "t", &k.prefix, &k.hash, scopes, None,
+                ))
                 .await
                 .unwrap();
             k.secret

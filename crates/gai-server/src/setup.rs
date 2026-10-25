@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
-use axum::extract::{Path, State};
+use axum::extract::Path;
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
@@ -21,6 +21,7 @@ use serde_json::{Value, json};
 
 use crate::AppState;
 use crate::error::{ApiError, ApiResult};
+use crate::orgs::Tenant;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -140,7 +141,7 @@ pub struct CloudProvider {
     pub suggested_model: Option<String>,
 }
 
-async fn status(State(s): State<AppState>, headers: HeaderMap) -> ApiResult<Json<SetupStatus>> {
+async fn status(Tenant(s): Tenant, headers: HeaderMap) -> ApiResult<Json<SetupStatus>> {
     let store = s.rt.store();
     let needs_key = !s.auth.open(store).await && !has_valid_key(&s, &headers).await;
     let models = s.gai.models();
@@ -274,14 +275,21 @@ async fn ensure_chat_model(s: &AppState, provider: &str) -> Option<String> {
     Some(format!("{provider}/{pick}"))
 }
 
+/// Whether the request is signed in: a valid key, a sign-in (cookie or
+/// token), or a trusted proxy's header.
 async fn has_valid_key(s: &AppState, headers: &HeaderMap) -> bool {
-    let Some(token) = crate::auth::header_token(headers) else {
-        return false;
+    let control = s.orgs.control();
+    let login = match crate::auth::header_token(headers) {
+        Some(t) if !t.starts_with(crate::sso::LOGIN_PREFIX) => {
+            return matches!(control.find_key(&keys::hash(&t)).await, Ok(Some(_)));
+        }
+        Some(t) => Some(t),
+        None => crate::auth::cookie(headers, crate::auth::SESSION_COOKIE),
     };
-    matches!(
-        s.rt.store().find_key(&keys::hash(&token)).await,
-        Ok(Some(_))
-    )
+    if let Some(t) = login {
+        return matches!(control.find_login(&keys::hash(&t)).await, Ok(Some(_)));
+    }
+    matches!(crate::sso::trusted_user(s, headers).await, Ok(Some(_)))
 }
 
 /// A browser on this machine, on the dashboard's own page, may get a key
@@ -326,10 +334,7 @@ pub struct Claimed {
     pub secret: String,
 }
 
-async fn claim(
-    State(s): State<AppState>,
-    headers: HeaderMap,
-) -> ApiResult<(StatusCode, Json<Claimed>)> {
+async fn claim(Tenant(s): Tenant, headers: HeaderMap) -> ApiResult<(StatusCode, Json<Claimed>)> {
     if !can_claim(&s, &headers, true) {
         return Err(ApiError::new(
             StatusCode::FORBIDDEN,
@@ -343,7 +348,13 @@ async fn claim(
     );
     let key =
         s.rt.store()
-            .create_key(&name, &k.prefix, &k.hash, &[Scope::Admin], None)
+            .create_key(&gai::store::NewKey::new(
+                &name,
+                &k.prefix,
+                &k.hash,
+                &[Scope::Admin],
+                None,
+            ))
             .await?;
     Ok((
         StatusCode::CREATED,
@@ -382,14 +393,11 @@ fn settings_view(s: &AppState) -> SettingsView {
     }
 }
 
-async fn get_settings(State(s): State<AppState>) -> Json<SettingsView> {
+async fn get_settings(Tenant(s): Tenant) -> Json<SettingsView> {
     Json(settings_view(&s))
 }
 
-async fn put_settings(
-    State(s): State<AppState>,
-    Json(b): Json<Settings>,
-) -> ApiResult<Json<SettingsView>> {
+async fn put_settings(Tenant(s): Tenant, Json(b): Json<Settings>) -> ApiResult<Json<SettingsView>> {
     let model = b
         .default_model
         .map(|m| m.trim().to_owned())
@@ -421,7 +429,7 @@ fn key_view(s: &AppState, provider: &str) -> ProviderKeyView {
 }
 
 async fn put_provider_key(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
     Json(b): Json<ProviderKey>,
 ) -> ApiResult<Json<ProviderKeyView>> {
@@ -439,7 +447,7 @@ async fn put_provider_key(
 }
 
 async fn delete_provider_key(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
 ) -> ApiResult<Json<ProviderKeyView>> {
     s.gai
@@ -465,7 +473,7 @@ pub struct TestResult {
 }
 
 async fn test_provider(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
     body: Option<Json<TestRequest>>,
 ) -> ApiResult<Json<TestResult>> {
@@ -662,7 +670,7 @@ pub struct OllamaLibrary {
     pub models: Vec<LibraryModel>,
 }
 
-async fn ollama_library(State(s): State<AppState>) -> Json<OllamaLibrary> {
+async fn ollama_library(Tenant(s): Tenant) -> Json<OllamaLibrary> {
     let status = ollama_status(&s).await;
     let models = OLLAMA_LIBRARY
         .iter()
@@ -712,7 +720,7 @@ pub struct PullRequest {
 /// Start downloading a model into Ollama. Progress is at
 /// `GET /v1/providers/ollama/pulls`.
 async fn ollama_pull(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Json(b): Json<PullRequest>,
 ) -> ApiResult<(StatusCode, Json<PullProgress>)> {
     let model = b.model.trim().to_owned();
@@ -974,7 +982,7 @@ async fn exists(s: &AppState, kind: &str, name: &str) -> bool {
     }
 }
 
-async fn list_templates(State(s): State<AppState>) -> Json<Vec<TemplateView>> {
+async fn list_templates(Tenant(s): Tenant) -> Json<Vec<TemplateView>> {
     let mut out = Vec::new();
     for t in TEMPLATES {
         let description = match t.kind {
@@ -1007,7 +1015,7 @@ pub struct Installed {
 /// Save a template (and the agents it uses, when missing). An agent or
 /// workflow that already exists under the template's name is kept as is.
 async fn install_template(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(id): Path<String>,
 ) -> ApiResult<(StatusCode, Json<Installed>)> {
     let t = TEMPLATES

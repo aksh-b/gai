@@ -16,6 +16,23 @@ initial development and will ship as 0.1.0.
 
 ### Added
 
+- **Organizations.** One server can host several organizations that never
+  see each other's data: each gets its own database (a SQLite file, or a
+  Postgres schema) and files, and is confined (no `shell`, no private
+  addresses, HTTP MCP servers only, files only in its own folder, tokens
+  from its own secrets). `gai orgs`, `/v1/orgs`, monthly budgets and rate
+  limits per organization, and branding (name, logo, colour) in the
+  dashboard. See [docs/users.md](docs/users.md).
+- **Users, roles and teams.** People sign in with OIDC
+  (`[server.sso.oidc]`) or through a proxy header, and are viewers,
+  members, builders, admins or owners of each organization. Teams own
+  assistants, workflows, knowledge and the rest, so only their builders
+  change them; team keys are limited the same way. `gai members`,
+  `gai teams`, **Settings › People & teams**.
+- **Build scope.** Keys get a `build` scope between `run` and `admin`:
+  changing agents, personas, workflows, skills, triggers, sources and evals
+  now needs `build` (admin keys still can). **Breaking** for scripts that
+  check exact scope names in `/v1/me`.
 - **Safety settings** (`[safety]` in gai.toml, `safety:` per agent, and a
   Safety section on each assistant). Personal data (emails, phones, card
   numbers, IBANs, SSNs, IPs, Aadhaar and PAN) can be noted, masked before

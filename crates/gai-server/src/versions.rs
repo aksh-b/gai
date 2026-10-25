@@ -1,7 +1,7 @@
 //! Versions of agents and workflows (diff, rollback, workflow labels) and
 //! replaying runs.
 
-use axum::extract::{Path, Query, State};
+use axum::extract::{Path, Query};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -16,6 +16,7 @@ use crate::AppState;
 use crate::api::{Done, LabelBody, Mode, RunIds, Saved, sse};
 use crate::auth::Principal;
 use crate::error::{ApiError, ApiResult};
+use crate::orgs::Tenant;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -113,7 +114,7 @@ pub(crate) fn diff_of(name: String, from: (u32, &Value), to: (u32, &Value)) -> V
 }
 
 async fn agent_diff(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
     Query(q): Query<DiffQuery>,
 ) -> ApiResult<Json<VersionDiff>> {
@@ -137,7 +138,7 @@ async fn agent_diff(
 }
 
 async fn agent_rollback(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
     Json(b): Json<Rollback>,
 ) -> ApiResult<(StatusCode, Json<Saved>)> {
@@ -154,7 +155,7 @@ async fn agent_rollback(
 }
 
 async fn workflow_diff(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
     Query(q): Query<DiffQuery>,
 ) -> ApiResult<Json<VersionDiff>> {
@@ -178,7 +179,7 @@ async fn workflow_diff(
 }
 
 async fn workflow_rollback(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path(name): Path<String>,
     Json(b): Json<Rollback>,
 ) -> ApiResult<(StatusCode, Json<Saved>)> {
@@ -195,7 +196,7 @@ async fn workflow_rollback(
 }
 
 async fn set_workflow_label(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path((name, label)): Path<(String, String)>,
     Json(b): Json<LabelBody>,
 ) -> ApiResult<Json<Done>> {
@@ -206,7 +207,7 @@ async fn set_workflow_label(
 }
 
 async fn remove_workflow_label(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Path((name, label)): Path<(String, String)>,
 ) -> ApiResult<Json<Done>> {
     s.rt.store().set_workflow_label(&name, &label, None).await?;
@@ -216,7 +217,7 @@ async fn remove_workflow_label(
 /// Fork a run: replay its steps before `from_step` from the recording and
 /// run the rest live, with any overrides.
 async fn replay(
-    State(s): State<AppState>,
+    Tenant(s): Tenant,
     Extension(p): Extension<Principal>,
     Path(id): Path<String>,
     Json(b): Json<ReplayRun>,
