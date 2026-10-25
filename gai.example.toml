@@ -67,6 +67,14 @@
 # deny_domains = ["facebook.com"]
 # allow_private_network = false
 
+# ---- safety: personal data, prompt injection, guardrails, retention ----
+# Agents override these in their own `safety:`. See docs/safety.md.
+# [safety]
+# pii = "mask"                  # off | warn | mask | block
+# injection = "warn"            # off | warn | strip | block
+# deny_topics = ["medical advice"]
+# retention_days = 90
+
 # ---- the server ----
 # [server]
 # auth = "auto"                      # auto | required | off

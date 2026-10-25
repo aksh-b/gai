@@ -15,6 +15,7 @@ use serde_json::{Map, Value, json};
 
 use crate::api::*;
 use crate::evals::*;
+use crate::governance::*;
 use crate::knowledge::*;
 use crate::media::*;
 use crate::openai::ChatCompletionRequest;
@@ -233,6 +234,13 @@ pub fn document() -> Value {
             "Receive a webhook (no API key: sign the body with the trigger's secret, X-Gai-Signature: sha256=<hex>, or send X-Gai-Token)",
         )
         .ok(s::<gai::triggers::Fired>(&mut g)),
+        op("get", "/v1/audit", "governance", "Changes made through the API, newest first: who, what, when and the answer's status")
+            .ok(list::<gai::store::AuditEntry>(&mut g))
+            .query(&[("actor", "API key name"), ("target", "Targets starting with this, e.g. agents/"), ("since", "RFC 3339 time"), ("until", "RFC 3339 time"), ("limit", "Max rows"), ("format", "csv for a download")]),
+        op("delete", "/v1/users/{id}", "governance", "Delete everything kept about a user: conversations, runs, files, memory blocks, archival memory and ratings")
+            .ok(s::<gai::store::Deleted>(&mut g)),
+        op("post", "/v1/retention/sweep", "governance", "Delete conversations older than each agent's safety.retention_days now (gai serve also does this hourly)")
+            .ok(s::<Swept>(&mut g)),
         op("post", "/v1/runs/{id}/feedback", "feedback", "Rate a reply: 1 good, -1 bad, with an optional comment and tags. Rating again replaces your rating")
             .body(s::<Rate>(&mut g))
             .ok(s::<gai::store::Feedback>(&mut g)),

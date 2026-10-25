@@ -57,6 +57,9 @@ pub struct ExportOptions {
     /// Leave out what the chosen items use (delegates, personas, skills,
     /// knowledge, MCP servers, agents in workflows).
     pub no_dependencies: bool,
+    /// Mask personal data (emails, phone and card numbers, ...) in memory
+    /// blocks and knowledge documents.
+    pub redact_pii: bool,
 }
 
 /// `bundle.toml`.
@@ -176,6 +179,13 @@ pub async fn export(gai: &Gai, opts: &ExportOptions) -> Result<Vec<u8>, Error> {
     let mut env: BTreeSet<EnvVar> = BTreeSet::new();
     let mut models: BTreeSet<String> = BTreeSet::new();
     let deps = !opts.no_dependencies;
+    let redact = |text: &str| -> String {
+        if opts.redact_pii {
+            gai_agent::safety::mask_pii(text, &gai_agent::safety::PiiKind::ALL).0
+        } else {
+            text.to_owned()
+        }
+    };
 
     // Workflows first: they can pull in agents.
     let mut done_workflows = BTreeSet::new();
@@ -292,7 +302,7 @@ pub async fn export(gai: &Gai, opts: &ExportOptions) -> Result<Vec<u8>, Error> {
                 scope: b.scope,
                 label: b.label,
                 description: b.description,
-                value: b.value,
+                value: redact(&b.value),
                 limit: b.limit,
                 read_only: b.read_only,
             });
@@ -335,7 +345,7 @@ pub async fn export(gai: &Gai, opts: &ExportOptions) -> Result<Vec<u8>, Error> {
             offset += docs.len() as u32;
             for d in docs {
                 let chunks = store.document_chunks(&d.id).await?;
-                let text = rejoin(chunks.iter().map(|c| c.text.as_str()));
+                let text = redact(&rejoin(chunks.iter().map(|c| c.text.as_str())));
                 let front = serde_json::json!({"source": d.source, "title": d.title, "metadata": d.metadata});
                 n += 1;
                 files.insert(

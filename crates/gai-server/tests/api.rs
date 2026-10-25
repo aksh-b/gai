@@ -520,7 +520,7 @@ async fn mcp_servers_are_managed_over_the_api() {
         .json()
         .await
         .unwrap();
-    assert_eq!(hooks, json!(["redact_secrets", "deny_shell"]));
+    assert_eq!(hooks, json!(["safety", "redact_secrets", "deny_shell"]));
 }
 
 #[tokio::test]

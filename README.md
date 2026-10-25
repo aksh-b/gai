@@ -4,7 +4,7 @@ A self-hostable agentic AI platform in Rust. You define agents in YAML or in Rus
 
 Website: https://aksh-b.github.io/gai
 
-> Status: early and moving fast (v0.1, unreleased). Phases 1–13 are built (see [ROADMAP.md](ROADMAP.md) for what's next); Postgres support is groundwork only. See [STATUS.md](STATUS.md) for details and known gaps, and [CHANGELOG.md](CHANGELOG.md) for what is coming.
+> Status: early and moving fast (v0.1, unreleased). Phases 1–14 are built (see [ROADMAP.md](ROADMAP.md) for what's next); Postgres support is groundwork only. See [STATUS.md](STATUS.md) for details and known gaps, and [CHANGELOG.md](CHANGELOG.md) for what is coming.
 
 ## Features
 
@@ -17,6 +17,7 @@ Website: https://aksh-b.github.io/gai
 - **Memory and RAG.** Self-editing memory blocks, archival memory, and knowledge collections with hybrid search (vector + FTS5, fused with RRF) over text, Markdown, HTML and PDF.
 - **Agent Skills.** `SKILL.md` folders or uploaded skills, loaded on demand.
 - **Multi-agent.** Delegation through `ask_<agent>` tools, and YAML DAG workflows with parallel nodes, `map` fan-out, `if`, retries, human approval steps and checkpoints.
+- **Safety and governance.** Personal-data masking, prompt-injection checks on tool results, topic and output guardrails, an audit log of every change, retention, and deleting a person's data on request.
 - **Evaluations.** Eval sets with rule, LLM-judge, grounding and citation scorers; benchmark models, compare versions and gate CI with `gai eval run`. Thumbs up/down on replies, and disliked replies become test cases.
 - **Versioning and replay.** Every save of an agent, workflow or persona is a version (diff, label, roll back). Any run can be forked from a step with a different model, prompt or tools, then compared side by side.
 - **Bundles.** Share agents and everything they use (personas, skills, workflows, knowledge, MCP servers) as a `.gaibundle` file. Bundles never contain keys.
@@ -159,6 +160,7 @@ Settings chosen in the dashboard (default model, provider keys, pulled Ollama mo
 | `gai runs`, `gai sessions`, `gai replay` | Inspect and resume runs; fork a run from any step |
 | `gai ingest`, `gai collections`, `gai memory`, `gai skills` | Knowledge, memory and skills |
 | `gai eval` | Run eval sets, benchmark models, compare and gate CI |
+| `gai audit`, `gai retention`, `gai forget-user` | Who changed what; delete old conversations; delete a person's data |
 | `gai bundle` | Export, inspect and import `.gaibundle` files |
 | `gai triggers` | Cron, webhook and file triggers |
 | `gai mcp` | Manage MCP servers, or `gai mcp serve` to expose gai over stdio |
@@ -173,6 +175,7 @@ Run `gai <command> --help` for details.
 - [Tools](docs/tools.md): built-ins, the code sandbox, the browser, MCP and custom tools
 - [Rust SDK](docs/sdk.md): the builder, agent handles, `#[gai::tool]` and the HTTP client
 - [Evaluations and feedback](docs/evals.md): eval sets, scorers, benchmarks, CI gates and ratings
+- [Safety and governance](docs/safety.md): personal data, prompt injection, guardrails, audit log, retention
 - [Bundles](docs/bundles.md): sharing agents between servers
 - [Deploying](docs/deploy.md): Docker, auth and keys, data and backups
 - [API reference](http://localhost:8484/docs): served by every gai server at `/docs`

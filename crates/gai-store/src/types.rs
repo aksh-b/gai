@@ -579,3 +579,51 @@ pub struct EvalResult {
     pub latency_ms: u64,
     pub error: Option<String>,
 }
+
+/// One change recorded in the audit log.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct AuditEntry {
+    pub id: i64,
+    pub at: DateTime<Utc>,
+    /// The API key's name, or `anonymous`.
+    pub actor: String,
+    pub actor_id: String,
+    /// The request, e.g. `POST /v1/agents`.
+    pub action: String,
+    /// What it touched, e.g. `agents/researcher`.
+    pub target: String,
+    /// The HTTP status of the answer.
+    pub status: u16,
+    /// Extra facts, e.g. an approval's decision.
+    pub detail: Value,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct NewAudit {
+    pub actor: String,
+    pub actor_id: String,
+    pub action: String,
+    pub target: String,
+    pub status: u16,
+    pub detail: Value,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct AuditFilter {
+    pub actor: Option<String>,
+    /// Targets starting with this, e.g. `agents/`.
+    pub target: Option<String>,
+    pub since: Option<DateTime<Utc>>,
+    pub until: Option<DateTime<Utc>>,
+    pub limit: u32,
+}
+
+/// What a deletion removed.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Deleted {
+    pub sessions: u64,
+    pub runs: u64,
+    pub blobs: u64,
+    pub memory_blocks: u64,
+    pub feedback: u64,
+}

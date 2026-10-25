@@ -39,6 +39,9 @@ pub enum BundleCmd {
         /// Only the items named, not what they use
         #[arg(long)]
         no_deps: bool,
+        /// Mask personal data in memory blocks and knowledge documents
+        #[arg(long)]
+        redact_pii: bool,
         /// Shown to whoever imports it
         #[arg(long)]
         name: Option<String>,
@@ -69,6 +72,7 @@ pub async fn bundle(gai: &Gai, cmd: BundleCmd) -> anyhow::Result<()> {
             all,
             all_knowledge,
             no_deps,
+            redact_pii,
             name,
             description,
         } => {
@@ -84,6 +88,7 @@ pub async fn bundle(gai: &Gai, cmd: BundleCmd) -> anyhow::Result<()> {
                 all,
                 knowledge_all: all_knowledge,
                 no_dependencies: no_deps,
+                redact_pii,
             };
             let bytes = gai::bundle::export(gai, &opts).await?;
             std::fs::write(&output, &bytes)?;

@@ -79,6 +79,10 @@ pub struct AgentSpec {
     /// the runtime's `[media]` defaults.
     #[serde(skip_serializing_if = "crate::media::MediaSettings::is_empty")]
     pub media: crate::media::MediaSettings,
+    /// Personal data, prompt injection, guardrails and retention, over the
+    /// runtime's `[safety]` settings field by field.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub safety: Option<crate::safety::Safety>,
     /// Free-form data for UIs and integrations.
     #[serde(skip_serializing_if = "Value::is_null")]
     pub metadata: Value,
@@ -162,6 +166,9 @@ impl AgentSpec {
     pub fn validate(&self) -> Result<(), String> {
         if self.name.trim().is_empty() {
             return Err("agent name is empty".into());
+        }
+        if let Some(s) = &self.safety {
+            s.validate()?;
         }
         if !self
             .name

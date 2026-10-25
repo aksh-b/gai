@@ -92,6 +92,9 @@ pub enum Error {
     Workflow(#[from] gai_orchestra::WorkflowError),
     #[error(transparent)]
     Eval(#[from] gai_eval::EvalError),
+    /// A setting that doesn't make sense.
+    #[error("{0}")]
+    Invalid(String),
     /// A `.gaibundle` that can't be written or read.
     #[error("bundle: {0}")]
     Bundle(String),
@@ -142,6 +145,7 @@ impl Gai {
     }
 
     pub fn from_config(config: Config, config_path: Option<PathBuf>) -> Result<Self, Error> {
+        config.safety.validate().map_err(Error::Invalid)?;
         let models = Arc::new(ModelRegistry::from_config(config.llm.clone())?);
         Ok(Self {
             config,
@@ -328,6 +332,7 @@ impl Gai {
                     record_requests: self.config.record_requests.unwrap_or(true),
                     media: self.config.media.clone(),
                     persona: self.config.persona.clone(),
+                    safety: self.config.safety.clone(),
                 };
                 for (name, key) in store.list_settings(SETTING_PROVIDER_KEY).await? {
                     let provider = &name[SETTING_PROVIDER_KEY.len()..];
@@ -450,6 +455,47 @@ impl Gai {
     /// their results.
     pub async fn evals(&self) -> Result<gai_eval::Evaluator, Error> {
         Ok(gai_eval::Evaluator::new(self.runtime().await?.clone()))
+    }
+
+    /// Apply retention: delete conversations older than each agent's
+    /// `retention_days` (from `[safety]`, overridden by the agent's own
+    /// `safety:`). Returns what was deleted, per agent.
+    pub async fn sweep_retention(&self) -> Result<Vec<(String, gai_store::Deleted)>, Error> {
+        let rt = self.runtime().await?;
+        let mut out = Vec::new();
+        for agent in rt.store().session_agents().await? {
+            let own = rt
+                .resolve_agent(&agent)
+                .await
+                .ok()
+                .and_then(|(s, _)| s.safety);
+            let Some(days) = self.config.safety.merged(own.as_ref()).retention_days else {
+                continue;
+            };
+            let before = chrono::Utc::now() - chrono::Duration::days(i64::from(days));
+            let deleted = rt.store().prune_sessions(&agent, before).await?;
+            if deleted.sessions > 0 {
+                tracing::info!(
+                    agent,
+                    days,
+                    sessions = deleted.sessions,
+                    "retention: deleted old conversations"
+                );
+                out.push((agent, deleted));
+            }
+        }
+        Ok(out)
+    }
+
+    /// Delete everything kept about a user: conversations, runs and their
+    /// files, memory blocks, archival memory and ratings.
+    pub async fn forget_user(&self, user_id: &str) -> Result<gai_store::Deleted, Error> {
+        let rt = self.runtime().await?;
+        let deleted = rt.store().forget_user(user_id).await?;
+        rt.store()
+            .delete_collection(&format!("memory:user:{user_id}"))
+            .await?;
+        Ok(deleted)
     }
 
     /// Workflows: stored and file workflows, and running them. Registers

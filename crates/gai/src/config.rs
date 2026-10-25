@@ -61,6 +61,9 @@ pub struct Config {
     pub media: gai_agent::MediaSettings,
     /// Where `code_exec` runs code: a container per call by default.
     pub sandbox: gai_sandbox::SandboxSettings,
+    /// Personal data, prompt injection, guardrails and retention for every
+    /// agent (agents override fields in their own `safety:`).
+    pub safety: gai_agent::safety::Safety,
     /// The browser tools: which Chrome, which sites, and limits.
     pub browser: gai_browser::BrowserSettings,
     /// The persona runs speak as when neither the run nor its agent picks

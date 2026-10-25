@@ -16,6 +16,21 @@ initial development and will ship as 0.1.0.
 
 ### Added
 
+- **Safety settings** (`[safety]` in gai.toml, `safety:` per agent, and a
+  Safety section on each assistant). Personal data (emails, phones, card
+  numbers, IBANs, SSNs, IPs, Aadhaar and PAN) can be noted, masked before
+  the model sees it, or refused. Tool results that try to give the model
+  instructions (prompt injection) are flagged, stripped or withheld, and
+  the model is told that tool results are data. `deny_topics`,
+  `deny_output` and `max_tool_calls` add guardrails. Warnings show in the
+  run's events. Hooks get `HookCtx::warn` and the run's safety settings.
+- **Audit log** of every change made through the API and dashboard: who,
+  what, when, the status and safe details (never secrets). `gai audit`
+  (also `--csv`), `GET /v1/audit`, and Settings › Audit & data.
+- **Retention and forgetting people.** `retention_days` deletes old
+  conversations hourly (`gai retention sweep` to do it now); `gai
+  forget-user <id>` and `DELETE /v1/users/{id}` delete everything kept about
+  a person. `gai bundle export --redact-pii` masks personal data in bundles.
 - **Evaluations.** An eval set (YAML) lists cases, each an input and how
   to judge the answer: `contains`, `regex`, `equals`, `json` field checks,
   `tool_called`, step/cost/latency limits, an LLM `judge` with a rubric,

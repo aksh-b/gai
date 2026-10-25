@@ -15,6 +15,7 @@ mod multi;
 mod persona;
 mod replay;
 mod runtime;
+pub mod safety;
 mod spec;
 
 pub use approval::{ApprovalHub, Decision, PendingApproval};

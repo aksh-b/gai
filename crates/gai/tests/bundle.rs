@@ -210,6 +210,42 @@ async fn bundles_round_trip_without_secrets() {
     .unwrap();
     assert!(again.installed.is_empty(), "{:?}", again.installed);
 
+    // Personal data can be masked on the way out.
+    store
+        .set_block_value(
+            &store
+                .find_block("agent:main", "notes")
+                .await
+                .unwrap()
+                .unwrap()
+                .id,
+            "call ada on +44 20 7946 0958",
+            None,
+            "replace",
+            None,
+        )
+        .await
+        .unwrap();
+    let redacted = gai::bundle::export(
+        &src,
+        &ExportOptions {
+            agents: vec!["main".into()],
+            redact_pii: true,
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    let blocks = &files(&redacted)
+        .into_iter()
+        .find(|(n, _)| n == "memory/blocks.json")
+        .unwrap()
+        .1;
+    assert!(
+        blocks.contains("[phone]") && !blocks.contains("7946"),
+        "{blocks}"
+    );
+
     // Not a bundle, or a hostile one.
     assert!(gai::bundle::inspect(&dst, b"not a zip").await.is_err());
 }

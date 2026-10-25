@@ -431,6 +431,26 @@ pub trait EvalStore: Send + Sync {
     async fn list_eval_results(&self, eval_run_id: &str) -> Result<Vec<EvalResult>>;
 }
 
+/// The audit log, retention and deleting a person's data.
+#[async_trait]
+pub trait GovernanceStore: Send + Sync {
+    async fn add_audit(&self, entry: NewAudit) -> Result<i64>;
+    /// Newest first.
+    async fn list_audit(&self, filter: AuditFilter) -> Result<Vec<AuditEntry>>;
+    /// Agents that have conversations, for retention sweeps.
+    async fn session_agents(&self) -> Result<Vec<String>>;
+    /// Delete `agent`'s conversations (and their runs, steps, events and
+    /// files) last active before `before`.
+    async fn prune_sessions(
+        &self,
+        agent: &str,
+        before: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Deleted>;
+    /// Delete everything kept about a user: their conversations (with runs
+    /// and files), their memory blocks and their ratings.
+    async fn forget_user(&self, user_id: &str) -> Result<Deleted>;
+}
+
 /// Everything gai stores.
 pub trait Store:
     AgentStore
@@ -448,6 +468,7 @@ pub trait Store:
     + TriggerStore
     + FeedbackStore
     + EvalStore
+    + GovernanceStore
 {
 }
 impl<T> Store for T where
@@ -466,6 +487,7 @@ impl<T> Store for T where
         + TriggerStore
         + FeedbackStore
         + EvalStore
+        + GovernanceStore
 {
 }
 

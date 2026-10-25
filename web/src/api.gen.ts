@@ -211,6 +211,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Changes made through the API, newest first: who, what, when and the answer's status */
+        get: operations["get_v1_audit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/blobs": {
         parameters: {
             query?: never;
@@ -1099,6 +1116,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/retention/sweep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete conversations older than each agent's safety.retention_days now (gai serve also does this hourly) */
+        post: operations["post_v1_retention_sweep"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs": {
         parameters: {
             query?: never;
@@ -1620,6 +1654,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete everything kept about a user: conversations, runs, files, memory blocks, archival memory and ratings */
+        delete: operations["delete_v1_users__id_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/webhooks/{id}": {
         parameters: {
             query?: never;
@@ -1797,6 +1848,8 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description What to do when something is found. */
+        Action: "off" | "warn" | "mask" | "strip" | "block";
         AddDocument: {
             /** @description A file, base64-encoded (text, Markdown, HTML or PDF). Needs `filename`. */
             content_base64?: string | null;
@@ -1895,6 +1948,11 @@ export interface components {
              */
             persona_placement?: components["schemas"]["Placement"] | null;
             reasoning?: components["schemas"]["Reasoning"] | null;
+            /**
+             * @description Personal data, prompt injection, guardrails and retention, over the
+             *     runtime's `[safety]` settings field by field.
+             */
+            safety?: components["schemas"]["Safety"] | null;
             /** @description Skills the agent can load: names, or prefixes ending in `*`. */
             skills?: string[];
             /**
@@ -1964,6 +2022,27 @@ export interface components {
         };
         /** @enum {string} */
         ArchivalScope: "agent" | "user";
+        /** @description One change recorded in the audit log. */
+        AuditEntry: {
+            /** @description The request, e.g. `POST /v1/agents`. */
+            action: string;
+            /** @description The API key's name, or `anonymous`. */
+            actor: string;
+            actor_id: string;
+            /** Format: date-time */
+            at: string;
+            /** @description Extra facts, e.g. an approval's decision. */
+            detail: unknown;
+            /** Format: int64 */
+            id: number;
+            /**
+             * Format: uint16
+             * @description The HTTP status of the answer.
+             */
+            status: number;
+            /** @description What it touched, e.g. `agents/researcher`. */
+            target: string;
+        };
         /** @description Stored media: everything but the bytes. */
         Blob: {
             /** Format: date-time */
@@ -2396,6 +2475,19 @@ export interface components {
             /** @description Tool name suffix; defaults to the agent's name. */
             name?: string | null;
         };
+        /** @description What a deletion removed. */
+        Deleted: {
+            /** Format: uint64 */
+            blobs: number;
+            /** Format: uint64 */
+            feedback: number;
+            /** Format: uint64 */
+            memory_blocks: number;
+            /** Format: uint64 */
+            runs: number;
+            /** Format: uint64 */
+            sessions: number;
+        };
         Document: {
             /** Format: uint64 */
             chars: number;
@@ -2726,6 +2818,12 @@ export interface components {
             no_dependencies: boolean;
             /** @default [] */
             personas: string[];
+            /**
+             * @description Mask personal data (emails, phone and card numbers, ...) in memory
+             *     blocks and knowledge documents.
+             * @default false
+             */
+            redact_pii: boolean;
             /** @default [] */
             skills: string[];
             /** @default [] */
@@ -3404,6 +3502,13 @@ export interface components {
             version: number;
         };
         /**
+         * @description Kinds of personal data the detectors know.
+         * @enum {string}
+         */
+        PiiKind: "email" | "phone" | "card" | "iban" | "ssn" | "ip" | "aadhaar" | "pan";
+        /** @description Where personal data is checked. */
+        Place: "input" | "output" | "tools";
+        /**
          * @description Where the persona goes when the agent's prompt doesn't place it with
          *     `{{ persona }}`.
          */
@@ -3689,6 +3794,61 @@ export interface components {
              * @description A stored version to run instead of the latest.
              */
             version?: number | null;
+        };
+        /**
+         * @description Safety settings. Every field is optional so an agent can override some
+         *     of the global ones and inherit the rest.
+         *
+         *     ```yaml
+         *     safety:
+         *       pii: mask                     # off | warn | mask | block
+         *       pii_types: [email, phone, card]
+         *       injection: warn               # off | warn | strip | block
+         *       deny_topics: [medical advice, "/\\bbitcoin\\b/"]
+         *       deny_output: ['(?i)internal use only']
+         *       max_tool_calls: { http_fetch: 5 }
+         *       retention_days: 30
+         *     ```
+         */
+        Safety: {
+            /** @description Replies matching these regular expressions are stopped. */
+            deny_output?: string[] | null;
+            /**
+             * @description Requests mentioning these are refused: phrases (case-insensitive) or
+             *     `/regex/`.
+             */
+            deny_topics?: string[] | null;
+            /**
+             * @description Prompt injection in tool results: `off`, `warn` (default), `strip`
+             *     or `block`.
+             */
+            injection?: components["schemas"]["Action"] | null;
+            /**
+             * @description A model to double-check suspicious tool results, beyond the built-in
+             *     patterns.
+             */
+            injection_model?: string | null;
+            /**
+             * @description Tools whose results come from outside (names or prefixes ending in
+             *     `*`). Default: web, files, knowledge, MCP and A2A tools.
+             */
+            injection_tools?: string[] | null;
+            /** @description Most calls of each tool in one run. */
+            max_tool_calls?: {
+                [key: string]: number;
+            } | null;
+            /** @description Personal data: `off` (default), `warn`, `mask` or `block`. */
+            pii?: components["schemas"]["Action"] | null;
+            /** @description Where to look (default input, output and tools). */
+            pii_in?: components["schemas"]["Place"][] | null;
+            /** @description Which kinds to look for (default all). */
+            pii_types?: components["schemas"]["PiiKind"][] | null;
+            /**
+             * Format: uint32
+             * @description Delete this agent's conversations (and their runs) after this many
+             *     days. Applied by `gai serve` once an hour.
+             */
+            retention_days?: number | null;
         };
         SaveSkill: {
             /** @description The SKILL.md, front matter included. */
@@ -3992,6 +4152,24 @@ export interface components {
             threshold: number;
             /** Format: uint32 */
             total: number;
+        };
+        Swept: {
+            /** @description What was deleted, per agent with a retention period. */
+            agents: components["schemas"]["SweptAgent"][];
+        };
+        /** @description What a deletion removed. */
+        SweptAgent: {
+            agent: string;
+            /** Format: uint64 */
+            blobs: number;
+            /** Format: uint64 */
+            feedback: number;
+            /** Format: uint64 */
+            memory_blocks: number;
+            /** Format: uint64 */
+            runs: number;
+            /** Format: uint64 */
+            sessions: number;
         };
         /** @description What a trigger starts. */
         Target: {
@@ -4843,6 +5021,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TranscribeResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_audit: {
+        parameters: {
+            query?: {
+                /** @description API key name */
+                actor?: string;
+                /** @description Targets starting with this, e.g. agents/ */
+                target?: string;
+                /** @description RFC 3339 time */
+                since?: string;
+                /** @description RFC 3339 time */
+                until?: string;
+                /** @description Max rows */
+                limit?: string;
+                /** @description csv for a download */
+                format?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEntry"][];
                 };
             };
             /** @description Error */
@@ -7136,6 +7356,35 @@ export interface operations {
             };
         };
     };
+    post_v1_retention_sweep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Swept"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get_v1_runs: {
         parameters: {
             query?: {
@@ -8416,6 +8665,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UsageTotal"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_users__id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deleted"];
                 };
             };
             /** @description Error */

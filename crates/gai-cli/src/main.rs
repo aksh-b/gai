@@ -2,6 +2,7 @@ mod ask;
 mod bundle;
 mod chat;
 mod eval;
+mod governance;
 mod knowledge;
 mod manage;
 mod media;
@@ -108,6 +109,14 @@ enum Command {
     /// Evaluate agents on eval sets, compare models and gate CI
     #[command(subcommand)]
     Eval(eval::EvalCmd),
+    /// Changes made through the API: who changed what, and when
+    Audit(governance::AuditArgs),
+    /// Apply data retention (agents' safety.retention_days)
+    #[command(subcommand)]
+    Retention(governance::RetentionCmd),
+    /// Delete everything kept about a user: conversations, runs, files,
+    /// memory and ratings
+    ForgetUser { user: String },
     /// Export and import .gaibundle files (agents and what they use)
     #[command(subcommand)]
     Bundle(bundle::BundleCmd),
@@ -209,6 +218,9 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
         Command::Triggers(cmd) => triggers::triggers(&gai, cmd).await,
         Command::Bundle(cmd) => bundle::bundle(&gai, cmd).await,
         Command::Eval(cmd) => eval::eval(&gai, cmd).await,
+        Command::Audit(args) => governance::audit(&gai, args).await,
+        Command::Retention(cmd) => governance::retention(&gai, cmd).await,
+        Command::ForgetUser { user } => governance::forget_user(&gai, &user).await,
         Command::Models {
             provider,
             remote,

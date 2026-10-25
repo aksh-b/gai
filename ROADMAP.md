@@ -22,7 +22,7 @@ as links in chat.
 
 Done when an agent version can be evaluated, compared and blocked in CI from the CLI and the dashboard.
 
-## 14. Safety and governance
+## 14. Safety and governance (done, 2026-10-25)
 
 - **Prompt-injection protection** [71]: tool output and fetched pages are marked as untrusted, with a detector hook (heuristics plus an optional classifier model) that can warn, strip or stop.
 - **Sensitive data detection** [70]: PII detectors (emails, phones, cards, IDs) on inputs, outputs and tool results, with mask, block or allow per agent.

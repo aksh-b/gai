@@ -7,6 +7,9 @@
 //!   running the tool;
 //! - blocking `after_tool` replaces the tool's output with the reason.
 
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
 use async_trait::async_trait;
 use gai_llm::{ChatRequest, ChatResponse};
 use gai_tools::ToolOutput;
@@ -20,6 +23,33 @@ pub struct HookCtx {
     pub session_id: String,
     pub agent: String,
     pub step: u32,
+    /// The run's safety settings: `[safety]` with the agent's overrides.
+    pub safety: Arc<crate::safety::Safety>,
+    /// Warnings for the run's events; see [`HookCtx::warn`].
+    pub warnings: Arc<Mutex<Vec<String>>>,
+    /// Calls of each tool so far in this run.
+    pub tool_calls: Arc<Mutex<HashMap<String, u32>>>,
+}
+
+impl HookCtx {
+    /// A context for tests and calls outside a run.
+    pub fn new(run_id: &str, agent: &str) -> Self {
+        Self {
+            run_id: run_id.into(),
+            session_id: String::new(),
+            agent: agent.into(),
+            step: 0,
+            safety: Arc::default(),
+            warnings: Arc::default(),
+            tool_calls: Arc::default(),
+        }
+    }
+
+    /// Report something in the run's events (as a `warning`) without
+    /// stopping anything.
+    pub fn warn(&self, message: impl Into<String>) {
+        self.warnings.lock().unwrap().push(message.into());
+    }
 }
 
 /// A tool call as hooks see it; `input` may be rewritten.
@@ -176,12 +206,7 @@ mod tests {
     use serde_json::json;
 
     fn ctx() -> HookCtx {
-        HookCtx {
-            run_id: "r".into(),
-            session_id: "s".into(),
-            agent: "a".into(),
-            step: 1,
-        }
+        HookCtx::new("r", "a")
     }
 
     #[tokio::test]

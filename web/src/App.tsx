@@ -46,6 +46,7 @@ import { Knowledge } from './pages/Knowledge';
 import { Memory } from './pages/Memory';
 import { Personas } from './pages/Personas';
 import { Evals } from './pages/Evals';
+import { Audit } from './pages/Audit';
 import { Skills } from './pages/Skills';
 import { Workflows } from './pages/Workflows';
 import { Welcome, welcomeDone } from './pages/Welcome';
@@ -95,12 +96,13 @@ const NAV: { id: string; label: string; icon: Icon; routes: string[]; tabs?: { i
     id: 'settings',
     label: 'Settings',
     icon: IconGear,
-    routes: ['settings', 'models', 'tools', 'media', 'keys', 'connect', 'preferences'],
+    routes: ['settings', 'models', 'tools', 'media', 'keys', 'audit', 'connect', 'preferences'],
     tabs: [
       { id: 'settings', label: 'AI models' },
       { id: 'tools', label: 'Tools & connections' },
       { id: 'media', label: 'Voice & images' },
       { id: 'keys', label: 'Access keys' },
+      { id: 'audit', label: 'Audit & data' },
       { id: 'connect', label: 'Use from other apps' },
       { id: 'preferences', label: 'Preferences' },
     ],
@@ -321,6 +323,9 @@ export function App() {
         break;
       case 'keys':
         page = <Keys />;
+        break;
+      case 'audit':
+        page = <Audit />;
         break;
       case 'approvals':
         page = <Approvals />;

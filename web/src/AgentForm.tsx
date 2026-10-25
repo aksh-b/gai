@@ -358,6 +358,57 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
         </Field>
       </Section>
 
+      <Section
+        title="Safety"
+        hint="Applies on top of the server's settings. Leave a field on “Server default” to keep what gai.toml says."
+      >
+        <SelectField
+          label="Personal data"
+          description="Emails, phone and card numbers, IBANs, IDs and IP addresses in messages, replies and tool results."
+          options={[
+            { value: '', label: 'Server default' },
+            { value: 'off', label: 'Allow' },
+            { value: 'warn', label: 'Allow, but note it' },
+            { value: 'mask', label: 'Mask it before the model sees it' },
+            { value: 'block', label: 'Refuse messages that contain it' },
+          ]}
+          value={spec.safety?.pii ?? ''}
+          onValueChange={(v) => set(['safety', 'pii'], v || undefined)}
+        />
+        <SelectField
+          label="Instructions hidden in web pages and files"
+          description="Text in tool results that tries to give the assistant orders (prompt injection)."
+          options={[
+            { value: '', label: 'Server default (warn the assistant)' },
+            { value: 'warn', label: 'Warn the assistant' },
+            { value: 'strip', label: 'Remove those lines' },
+            { value: 'block', label: 'Withhold the whole result' },
+            { value: 'off', label: 'Don’t check' },
+          ]}
+          value={spec.safety?.injection ?? ''}
+          onValueChange={(v) => set(['safety', 'injection'], v || undefined)}
+        />
+        <TextField
+          label="Refuse requests about"
+          description="Comma-separated topics, e.g. medical advice, legal advice."
+          value={(spec.safety?.deny_topics ?? []).join(', ')}
+          onChange={(e) => {
+            const t = e.target.value
+              .split(',')
+              .map((x) => x.trim())
+              .filter(Boolean);
+            set(['safety', 'deny_topics'], t.length ? t : undefined);
+          }}
+        />
+        <NumberInput
+          label="Keep conversations for (days)"
+          description="Older conversations with this assistant are deleted. Empty keeps them."
+          min={0}
+          value={spec.safety?.retention_days ?? undefined}
+          onChange={(v) => set(['safety', 'retention_days'], v)}
+        />
+      </Section>
+
       <Disclosure summary="Advanced: memory, limits, reasoning and answer format" open={dev}>
         <div className="flex flex-col gap-4">
           <Section

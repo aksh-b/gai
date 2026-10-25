@@ -129,7 +129,11 @@ pub fn required_scope(method: &Method, path: &str) -> Scope {
         || path.starts_with("/v1/eval-runs/")
         || workflow_admin)
         && method != Method::GET;
-    if path.starts_with("/v1/keys") || admin_write {
+    // The audit log, forgetting users and retention: admin, reads included.
+    let governance = path.starts_with("/v1/audit")
+        || path.starts_with("/v1/users")
+        || path.starts_with("/v1/retention");
+    if path.starts_with("/v1/keys") || admin_write || governance {
         Scope::Admin
     } else if method == Method::GET || method == Method::HEAD {
         Scope::Read

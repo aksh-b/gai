@@ -73,6 +73,8 @@ pub struct RuntimeConfig {
     pub media: crate::media::MediaSettings,
     /// Persona for runs whose agent and request pick none.
     pub persona: PersonaDefaults,
+    /// Safety settings for every run; agents override them field by field.
+    pub safety: crate::safety::Safety,
 }
 
 impl Default for RuntimeConfig {
@@ -87,6 +89,7 @@ impl Default for RuntimeConfig {
             record_requests: true,
             media: Default::default(),
             persona: PersonaDefaults::default(),
+            safety: Default::default(),
         }
     }
 }
@@ -258,6 +261,7 @@ impl Runtime {
             config.knowledge.clone(),
         ));
         let skills = Skills::new(config.skills_dirs.clone(), store.clone());
+        let models_for_guard = models.clone();
         Self {
             inner: Arc::new(Inner {
                 models,
@@ -278,7 +282,9 @@ impl Runtime {
                     .expect("http client"),
                 approvals: ApprovalHub::default(),
                 active: Mutex::new(HashMap::new()),
-                hooks: RwLock::new(Vec::new()),
+                hooks: RwLock::new(vec![
+                    Arc::new(crate::safety::Guard::new(Some(models_for_guard))) as Arc<dyn RunHook>,
+                ]),
                 mcp: McpManager::default(),
                 mcp_started: AtomicBool::new(false),
             }),
@@ -1009,6 +1015,7 @@ impl Runtime {
             http: self.inner.http.clone(),
             settings: Arc::new(self.inner.config.tools.clone()),
         };
+        let safety = Arc::new(self.inner.config.safety.merged(l.spec.safety.as_ref()));
         let task = RunTask {
             rt: self.clone(),
             run_id: l.run_id.clone(),
@@ -1026,6 +1033,9 @@ impl Runtime {
             auto_approve: l.auto_approve,
             journal: AtomicU32::new(resume.journal_seq),
             waiting: AtomicUsize::new(0),
+            safety,
+            hook_warnings: Arc::default(),
+            tool_calls: Arc::default(),
             steps: resume.steps,
             usage: resume.usage,
             cost: resume.cost,
@@ -1517,6 +1527,11 @@ struct RunTask {
     journal: AtomicU32,
     /// Tool calls currently waiting for approval.
     waiting: AtomicUsize,
+    /// `[safety]` with the agent's overrides.
+    safety: Arc<crate::safety::Safety>,
+    /// Warnings hooks raised, emitted after each hook round.
+    hook_warnings: Arc<Mutex<Vec<String>>>,
+    tool_calls: Arc<Mutex<HashMap<String, u32>>>,
     steps: u32,
     usage: Usage,
     cost: f64,
@@ -1744,6 +1759,17 @@ impl RunTask {
             session_id: self.session_id.clone(),
             agent: self.spec.name.clone(),
             step: self.steps,
+            safety: self.safety.clone(),
+            warnings: self.hook_warnings.clone(),
+            tool_calls: self.tool_calls.clone(),
+        }
+    }
+
+    /// Emit what hooks reported with [`HookCtx::warn`].
+    async fn hook_warnings(&self) {
+        let notes = std::mem::take(&mut *self.hook_warnings.lock().expect("warnings lock"));
+        for message in notes {
+            self.emit(RunEvent::Warning { message }).await;
         }
     }
 
@@ -1944,12 +1970,14 @@ impl RunTask {
     ) -> Result<Option<(gai_llm::ChatResponse, String, Option<f64>)>, Finish> {
         for h in &self.hooks {
             if let Err(Blocked(why)) = h.before_model(hook_ctx, &mut req).await {
+                self.hook_warnings().await;
                 return Err(Finish::Failed(format!(
                     "blocked by the {} hook: {why}",
                     h.name()
                 )));
             }
         }
+        self.hook_warnings().await;
         let seq = self.next_journal();
         let mut input = json!({"messages": sent, "step": step});
         if self.rt.inner.config.record_requests {
@@ -2003,12 +2031,14 @@ impl RunTask {
         };
         for h in &self.hooks {
             if let Err(Blocked(why)) = h.after_model(hook_ctx, &mut resp).await {
+                self.hook_warnings().await;
                 return Err(Finish::Failed(format!(
                     "blocked by the {} hook: {why}",
                     h.name()
                 )));
             }
         }
+        self.hook_warnings().await;
         let (model_id, cost) = match &routed {
             Some(r) => (
                 r.model.clone(),
@@ -2435,9 +2465,11 @@ impl RunTask {
         };
         for h in &self.hooks {
             if let Err(Blocked(why)) = h.before_tool(&hook_ctx, &mut call).await {
+                self.hook_warnings().await;
                 return ToolOutput::error(format!("Blocked by the {} hook: {why}", h.name()));
             }
         }
+        self.hook_warnings().await;
         match policy {
             ToolPolicy::Deny => {
                 return ToolOutput::error(format!("Calling {name} is not allowed for this agent."));
@@ -2488,6 +2520,7 @@ impl RunTask {
                 out = ToolOutput::error(format!("Output withheld by the {} hook: {why}", h.name()));
             }
         }
+        self.hook_warnings().await;
         let status = if out.is_error {
             StepStatus::Failed
         } else {

@@ -148,8 +148,13 @@ export interface AgentSpec {
   max_tokens?: number;
   temperature?: number;
   limits?: { max_steps?: number; max_tokens?: number; max_cost_usd?: number; timeout_secs?: number };
+  safety?: Safety;
   [k: string]: unknown;
 }
+
+export type Safety = Schemas['Safety'];
+export type AuditEntry = Schemas['AuditEntry'];
+export type Deleted = Schemas['Deleted'];
 
 
 export interface AgentVersion {
@@ -577,6 +582,22 @@ export const api = {
     if (!res.ok) throw new ApiError(res.status, await res.text());
     return res.json();
   },
+  audit: (q: { actor?: string; target?: string; limit?: number } = {}) => {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(q)) if (v) p.set(k, String(v));
+    return get<AuditEntry[]>(`/v1/audit?${p}`);
+  },
+  /** The audit log as CSV, fetched with the key so it can be saved. */
+  auditCsv: async (q: { actor?: string; target?: string } = {}): Promise<Blob> => {
+    const p = new URLSearchParams({ format: 'csv', limit: '10000' });
+    for (const [k, v] of Object.entries(q)) if (v) p.set(k, String(v));
+    const res = await fetch(`/v1/audit?${p}`, { headers: headers(false) });
+    unauthorized(res);
+    if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
+    return res.blob();
+  },
+  forgetUser: (id: string) => request<Deleted>('DELETE', `/v1/users/${encodeURIComponent(id)}`),
+  sweepRetention: () => request<{ agents: (Deleted & { agent: string })[] }>('POST', '/v1/retention/sweep'),
   rate: (runId: string, rating: 1 | -1, comment?: string, tags: string[] = []) =>
     request<Feedback>('POST', `/v1/runs/${runId}/feedback`, { rating, comment, tags }),
   unrate: (runId: string) => request<{ ok: boolean }>('DELETE', `/v1/runs/${runId}/feedback`),

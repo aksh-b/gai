@@ -8,6 +8,7 @@ mod auth;
 mod bundles;
 mod error;
 mod evals;
+mod governance;
 mod knowledge;
 pub mod mcp_server;
 mod media;
@@ -108,6 +109,7 @@ pub async fn router(
         .merge(personas::routes())
         .merge(bundles::routes())
         .merge(evals::routes())
+        .merge(governance::routes())
         .merge(media::routes())
         .merge(triggers::routes())
         .merge(setup::routes())
@@ -115,6 +117,11 @@ pub async fn router(
         .merge(openai::routes())
         .route("/openapi.json", get(openapi::spec))
         .route("/docs", get(openapi::docs))
+        // Inside authentication, so the audit log knows who it was.
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            governance::record,
+        ))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             auth::authenticate,
@@ -136,6 +143,7 @@ pub async fn serve(
         tracing::warn!(bind = %opts.bind, "authentication is off on a non-local address");
     }
     let policy = AuthPolicy::new(mode, local, settings.rate_limit_per_minute);
+    governance::start_retention(gai.clone());
     let app = router(gai, policy, opts.dashboard).await?;
     let listener = tokio::net::TcpListener::bind(opts.bind).await?;
     axum::serve(listener, app)

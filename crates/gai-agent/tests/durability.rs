@@ -291,7 +291,11 @@ async fn hooks_guard_model_and_tool_calls() {
     rt.add_hook(Arc::new(NoSecretsPlease));
     rt.add_hook(Arc::new(RedactSecrets::new(&[]).unwrap()));
     rt.add_hook(Arc::new(DenyShell::new(&[r"rm\s+-rf".into()]).unwrap()));
-    assert_eq!(rt.hook_names(), ["policy", "redact_secrets", "deny_shell"]);
+    // The built-in safety hook comes first.
+    assert_eq!(
+        rt.hook_names(),
+        ["safety", "policy", "redact_secrets", "deny_shell"]
+    );
     let agent = AgentSpec::new("h")
         .model("mock/echo")
         .tools(["shell", "fs_write", "fs_read"]);

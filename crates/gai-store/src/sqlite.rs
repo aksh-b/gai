@@ -15,6 +15,8 @@ use crate::*;
 
 #[path = "sqlite_blobs.rs"]
 mod blobs;
+#[path = "sqlite_governance.rs"]
+mod governance;
 #[path = "sqlite_memory.rs"]
 mod memory;
 #[path = "sqlite_personas.rs"]
