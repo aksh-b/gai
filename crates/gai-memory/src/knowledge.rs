@@ -4,10 +4,10 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use gai_llm::ModelRegistry;
-use gai_store::{Collection, Document, NewChunk, NewDocument, SharedStore};
+use gai_store::{Collection, Document, NewChunk, NewDocument, SharedStore, SharedVectorIndex};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -27,6 +27,9 @@ pub const FALLBACK_EMBEDDING_MODEL: &str = "mock/hash";
 /// embedding_model = "openai/text-embedding-3-small"   # or ollama/nomic-embed-text
 /// chunk_tokens = 400
 /// chunk_overlap = 60
+/// [knowledge.vector_index]
+/// backend = "qdrant"                 # builtin (default) | qdrant | pgvector
+/// url = "http://localhost:6333"
 /// ```
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
@@ -41,6 +44,36 @@ pub struct KnowledgeSettings {
     pub embed_batch: usize,
     /// Largest file read when ingesting, in bytes.
     pub max_file_bytes: u64,
+    /// Where vector searches run: the store itself (`builtin`, exact, fine
+    /// up to about 100k chunks), Qdrant or pgvector.
+    pub vector_index: VectorIndexSettings,
+    /// Rerank the best fused results with a rerank API or a chat model.
+    pub rerank: crate::rerank::RerankSettings,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum VectorBackend {
+    #[default]
+    Builtin,
+    Qdrant,
+    Pgvector,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct VectorIndexSettings {
+    pub backend: VectorBackend,
+    /// Qdrant's URL (`http://localhost:6333`), or a Postgres URL with
+    /// pgvector (default: the database, when it is Postgres).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    /// Environment variable holding Qdrant's API key.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key_env: Option<String>,
+    /// Prefix of Qdrant collection names (default `gai_`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prefix: Option<String>,
 }
 
 impl Default for KnowledgeSettings {
@@ -51,6 +84,8 @@ impl Default for KnowledgeSettings {
             chunk_overlap: 60,
             embed_batch: 64,
             max_file_bytes: 50 * 1024 * 1024,
+            vector_index: VectorIndexSettings::default(),
+            rerank: Default::default(),
         }
     }
 }
@@ -115,6 +150,9 @@ pub struct SearchHit {
     pub vector_score: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text_score: Option<f32>,
+    /// From the reranker, when one is configured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rerank_score: Option<f32>,
 }
 
 /// Collections, ingestion and search over the store.
@@ -122,6 +160,10 @@ pub struct Knowledge {
     store: SharedStore,
     models: Arc<ModelRegistry>,
     settings: KnowledgeSettings,
+    /// A separate vector index, when configured.
+    index: RwLock<Option<SharedVectorIndex>>,
+    /// For rerank APIs.
+    http: reqwest::Client,
 }
 
 /// Rank constant for reciprocal rank fusion; 60 is the usual choice.
@@ -135,15 +177,96 @@ impl Knowledge {
         models: Arc<ModelRegistry>,
         settings: KnowledgeSettings,
     ) -> Self {
+        // Qdrant is reached over HTTP and set up here; pgvector needs a
+        // Postgres pool and is attached with `set_index`.
+        let index: Option<SharedVectorIndex> =
+            match (&settings.vector_index.backend, &settings.vector_index.url) {
+                (VectorBackend::Qdrant, url) => {
+                    let key = settings
+                        .vector_index
+                        .api_key_env
+                        .as_deref()
+                        .and_then(|v| std::env::var(v).ok());
+                    Some(Arc::new(crate::qdrant::Qdrant::new(
+                        url.as_deref().unwrap_or("http://localhost:6333"),
+                        key,
+                        settings.vector_index.prefix.as_deref().unwrap_or("gai_"),
+                    )))
+                }
+                _ => None,
+            };
         Self {
             store,
             models,
             settings,
+            index: RwLock::new(index),
+            http: reqwest::Client::new(),
         }
     }
 
     pub fn store(&self) -> &SharedStore {
         &self.store
+    }
+
+    /// Search vectors in this index instead of the store.
+    pub fn set_index(&self, index: Option<SharedVectorIndex>) {
+        *self.index.write().expect("index lock") = index;
+    }
+
+    /// The vector index in use: `builtin`, `qdrant`, `pgvector`.
+    pub fn index_backend(&self) -> &'static str {
+        self.index().map(|i| i.backend()).unwrap_or("builtin")
+    }
+
+    fn index(&self) -> Option<SharedVectorIndex> {
+        self.index.read().expect("index lock").clone()
+    }
+
+    /// Delete a document, from the store and the vector index.
+    pub async fn delete_document(&self, id: &str) -> Result<bool> {
+        if let Some(index) = self.index()
+            && let Some(doc) = self.store.get_document(id).await?
+        {
+            let ids: Vec<i64> = self
+                .store
+                .chunk_vectors(&doc.collection, Some(id), 0, 0)
+                .await?
+                .into_iter()
+                .map(|(i, _)| i)
+                .collect();
+            index.remove(&doc.collection, &ids).await?;
+        }
+        Ok(self.store.delete_document(id).await?)
+    }
+
+    /// Delete a collection with its documents, from the store and the
+    /// vector index.
+    pub async fn delete_collection(&self, name: &str) -> Result<bool> {
+        if let Some(index) = self.index() {
+            index.drop_collection(name).await?;
+        }
+        Ok(self.store.delete_collection(name).await?)
+    }
+
+    /// Copy a collection's stored vectors into the vector index (after
+    /// switching backends or losing the index). Returns how many.
+    pub async fn reindex(&self, name: &str) -> Result<u64> {
+        let Some(index) = self.index() else {
+            return Ok(0);
+        };
+        self.collection(name).await?;
+        index.drop_collection(name).await?;
+        let (mut after, mut n) = (0i64, 0u64);
+        loop {
+            let page = self.store.chunk_vectors(name, None, after, 500).await?;
+            let Some(last) = page.last().map(|(id, _)| *id) else {
+                break;
+            };
+            index.upsert(name, &page).await?;
+            n += page.len() as u64;
+            after = last;
+        }
+        Ok(n)
     }
 
     pub fn settings(&self) -> &KnowledgeSettings {
@@ -249,15 +372,28 @@ impl Knowledge {
             return Err(MemoryError::Invalid(format!("{} has no text", doc.source)));
         }
         let hash = format!("{:x}", Sha256::digest(doc.text.as_bytes()));
-        if let Some(existing) = self.store.find_document(collection, &doc.source).await?
+        let existing = self.store.find_document(collection, &doc.source).await?;
+        if let Some(existing) = &existing
             && existing.content_hash == hash
             && existing.title == doc.title
         {
             return Ok(Ingested {
-                document: existing,
+                document: existing.clone(),
                 unchanged: true,
             });
         }
+        let index = self.index();
+        // The old version's vectors leave the index with it.
+        let replaced: Vec<i64> = match (&index, &existing) {
+            (Some(_), Some(old)) => self
+                .store
+                .chunk_vectors(collection, Some(&old.id), 0, 0)
+                .await?
+                .into_iter()
+                .map(|(i, _)| i)
+                .collect(),
+            _ => Vec::new(),
+        };
         let pieces = chunk_text(&doc.text, c.chunk_tokens as usize, c.chunk_overlap as usize);
         let inputs: Vec<String> = pieces
             .iter()
@@ -294,6 +430,14 @@ impl Knowledge {
                 chunks,
             )
             .await?;
+        if let Some(index) = index {
+            index.remove(collection, &replaced).await?;
+            let points = self
+                .store
+                .chunk_vectors(collection, Some(&document.id), 0, 0)
+                .await?;
+            index.upsert(collection, &points).await?;
+        }
         Ok(Ingested {
             document,
             unchanged: false,
@@ -473,7 +617,18 @@ impl Knowledge {
                     .unwrap_or_default();
                 let resp = m.embed(&[format!("{prefix}{query}")]).await?;
                 if let Some(q) = resp.vectors.first() {
-                    vector.extend(self.store.vector_search(names, q, pool).await?);
+                    let found = match self.index() {
+                        Some(index) => match index.search(names, q, pool).await {
+                            Ok(scored) => self.store.chunk_hits(scored).await?,
+                            Err(e) => {
+                                // A missing index shouldn't break search.
+                                tracing::warn!(error = %e, backend = index.backend(), "vector index failed; searching the store");
+                                self.store.vector_search(names, q, pool).await?
+                            }
+                        },
+                        None => self.store.vector_search(names, q, pool).await?,
+                    };
+                    vector.extend(found);
                 }
             }
             vector.sort_by(|a, b| b.score.total_cmp(&a.score));
@@ -519,6 +674,26 @@ impl Knowledge {
                 .total_cmp(&a.score)
                 .then(a.chunk_id.cmp(&b.chunk_id))
         });
+        let rr = &self.settings.rerank;
+        if rr.backend != crate::rerank::RerankBackend::Off && out.len() > 1 {
+            out.truncate(rr.candidates.max(k));
+            let passages: Vec<String> = out.iter().map(|h| h.text.clone()).collect();
+            match crate::rerank::rerank(rr, &self.models, &self.http, query, &passages).await {
+                Ok(scores) => {
+                    for (h, s) in out.iter_mut().zip(scores) {
+                        h.rerank_score = Some(s);
+                        h.score = s;
+                    }
+                    out.sort_by(|a, b| {
+                        b.score
+                            .total_cmp(&a.score)
+                            .then(a.chunk_id.cmp(&b.chunk_id))
+                    });
+                }
+                // Fused order is still a good answer.
+                Err(e) => tracing::warn!(error = %e, "reranking failed; keeping the fused order"),
+            }
+        }
         out.truncate(k);
         Ok(out)
     }
@@ -537,6 +712,7 @@ fn to_hit(h: gai_store::ChunkHit) -> SearchHit {
         score: 0.0,
         vector_score: None,
         text_score: None,
+        rerank_score: None,
     }
 }
 

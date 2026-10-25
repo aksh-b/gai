@@ -10,6 +10,8 @@
 pub mod conformance;
 pub mod keys;
 #[cfg(feature = "postgres")]
+mod pg_vector;
+#[cfg(feature = "postgres")]
 mod postgres;
 mod sqlite;
 mod types;
@@ -21,6 +23,8 @@ use async_trait::async_trait;
 use gai_core::{Message, Usage};
 use serde_json::Value;
 
+#[cfg(feature = "postgres")]
+pub use pg_vector::PgVectorIndex;
 #[cfg(feature = "postgres")]
 pub use postgres::PostgresStore;
 pub use sqlite::SqliteStore;
@@ -259,6 +263,18 @@ pub trait KnowledgeStore: Send + Sync {
         query: &[f32],
         k: usize,
     ) -> Result<Vec<ChunkHit>>;
+    /// Chunks by id with the scores given, in that order (for hits from a
+    /// separate vector index).
+    async fn chunk_hits(&self, scored: Vec<(i64, f32)>) -> Result<Vec<ChunkHit>>;
+    /// Stored embeddings, by chunk id: one document's, or a collection's in
+    /// pages (`after` the last id seen).
+    async fn chunk_vectors(
+        &self,
+        collection: &str,
+        document_id: Option<&str>,
+        after: i64,
+        limit: u32,
+    ) -> Result<Vec<(i64, Vec<f32>)>>;
     /// The `k` best full-text matches for `query`. The query is plain
     /// words; FTS operators in it are treated as text.
     async fn text_search(
@@ -450,6 +466,27 @@ pub trait GovernanceStore: Send + Sync {
     /// and files), their memory blocks and their ratings.
     async fn forget_user(&self, user_id: &str) -> Result<Deleted>;
 }
+
+/// A vector index beside the store (pgvector, Qdrant): the store keeps
+/// chunks and embeddings, the index answers nearest-neighbour searches.
+/// Points are chunk ids.
+#[async_trait]
+pub trait VectorIndex: Send + Sync {
+    /// `pgvector`, `qdrant`, ...
+    fn backend(&self) -> &'static str;
+    async fn upsert(&self, collection: &str, points: &[(i64, Vec<f32>)]) -> Result<()>;
+    async fn remove(&self, collection: &str, ids: &[i64]) -> Result<()>;
+    async fn drop_collection(&self, collection: &str) -> Result<()>;
+    /// The `k` nearest chunks by cosine similarity (higher is better).
+    async fn search(
+        &self,
+        collections: &[String],
+        query: &[f32],
+        k: usize,
+    ) -> Result<Vec<(i64, f32)>>;
+}
+
+pub type SharedVectorIndex = Arc<dyn VectorIndex>;
 
 /// Everything gai stores.
 pub trait Store:

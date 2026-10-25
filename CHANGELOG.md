@@ -103,6 +103,15 @@ initial development and will ship as 0.1.0.
 - **Docker image.** `docker build -t gai .` makes a single-binary image
   (Debian slim, dashboard included, data in `/data`); add
   `--build-arg BROWSER=1` for the browser tools.
+- **Vector indexes.** `[knowledge.vector_index] backend = "qdrant"` (with
+  `url`) or `"pgvector"` searches vectors there instead of scanning the
+  store, which stays the source of truth: ingesting, replacing and deleting
+  documents keep the index in sync, and `gai collections reindex <name>`
+  (`POST /v1/collections/{name}/reindex`) fills it. If the index is down,
+  search falls back to the store.
+- **Reranking.** `[knowledge.rerank]` reorders the best hybrid results with
+  a rerank API (`backend = "http"`: Cohere, Jina, Voyage or TEI) or a chat
+  model (`backend = "llm"`). Hits carry a `rerank_score`.
 - **Postgres.** Set `database = "postgres://user:pass@host/db"` in gai.toml
   (or `GAI_DATABASE`) to keep everything in Postgres instead of SQLite:
   conversations, runs, knowledge (full-text search with tsvector), memory,

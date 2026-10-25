@@ -15,12 +15,14 @@ pub mod blocks;
 pub mod chunk;
 pub mod knowledge;
 pub mod load;
+pub mod qdrant;
+pub mod rerank;
 pub mod tools;
 
 pub use blocks::{ArchivalScope, BlockSpec, MemoryConfig, RunMemory, archival_collection};
 pub use knowledge::{
     DocumentInput, FALLBACK_EMBEDDING_MODEL, Ingested, Knowledge, KnowledgeSettings, NewCollection,
-    SearchHit, SearchMode, format_hits,
+    SearchHit, SearchMode, VectorBackend, VectorIndexSettings, format_hits,
 };
 
 #[derive(Debug, thiserror::Error)]

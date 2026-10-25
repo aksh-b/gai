@@ -44,6 +44,7 @@ pub fn routes() -> Router<AppState> {
             get(get_document).delete(delete_document),
         )
         .route("/v1/collections/{name}/search", post(search))
+        .route("/v1/collections/{name}/reindex", post(reindex))
         .route("/v1/memory/blocks", get(list_blocks).post(create_block))
         .route(
             "/v1/memory/blocks/{id}",
@@ -177,11 +178,31 @@ async fn get_collection(
     Ok(Json(s.rt.knowledge().collection(&name).await?))
 }
 
+#[derive(Serialize, JsonSchema)]
+pub struct Reindexed {
+    /// Where vectors are searched: builtin, qdrant or pgvector.
+    pub backend: String,
+    pub vectors: u64,
+}
+
+/// Copy a collection's stored vectors into the vector index.
+async fn reindex(
+    State(s): State<AppState>,
+    Path(name): Path<String>,
+) -> ApiResult<Json<Reindexed>> {
+    let k = s.rt.knowledge();
+    let vectors = k.reindex(&name).await?;
+    Ok(Json(Reindexed {
+        backend: k.index_backend().to_owned(),
+        vectors,
+    }))
+}
+
 async fn delete_collection(
     State(s): State<AppState>,
     Path(name): Path<String>,
 ) -> ApiResult<StatusCode> {
-    if s.rt.store().delete_collection(&name).await? {
+    if s.rt.knowledge().delete_collection(&name).await? {
         Ok(StatusCode::NO_CONTENT)
     } else {
         Err(ApiError::not_found(format!("collection {name}")))
@@ -348,7 +369,7 @@ async fn delete_document(
             .get_document(&id)
             .await?
             .is_some_and(|d| d.collection == name);
-    if found && s.rt.store().delete_document(&id).await? {
+    if found && s.rt.knowledge().delete_document(&id).await? {
         Ok(StatusCode::NO_CONTENT)
     } else {
         Err(ApiError::not_found(format!("document {id} in {name}")))

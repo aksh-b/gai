@@ -372,6 +372,26 @@ impl Gai {
                     store.clone(),
                     config,
                 );
+                if self.config.knowledge.vector_index.backend == gai_memory::VectorBackend::Pgvector {
+                    let url = self
+                        .config
+                        .knowledge
+                        .vector_index
+                        .url
+                        .clone()
+                        .or_else(|| self.config.postgres_url())
+                        .ok_or_else(|| {
+                            Error::Invalid(
+                                "the pgvector index needs a Postgres URL: [knowledge.vector_index] url, or database = \"postgres://...\"".into(),
+                            )
+                        })?;
+                    #[cfg(feature = "postgres")]
+                    rt.knowledge().set_index(Some(Arc::new(gai_store::PgVectorIndex::connect(&url).await?)));
+                    #[cfg(not(feature = "postgres"))]
+                    return Err(Error::Invalid(format!(
+                        "the pgvector index ({url}) needs gai built with the postgres feature"
+                    )));
+                }
                 if let Some(m) = store.get_setting(SETTING_DEFAULT_MODEL).await? {
                     rt.set_default_model(Some(m));
                 }
@@ -502,7 +522,7 @@ impl Gai {
     pub async fn forget_user(&self, user_id: &str) -> Result<gai_store::Deleted, Error> {
         let rt = self.runtime().await?;
         let deleted = rt.store().forget_user(user_id).await?;
-        rt.store()
+        rt.knowledge()
             .delete_collection(&format!("memory:user:{user_id}"))
             .await?;
         Ok(deleted)

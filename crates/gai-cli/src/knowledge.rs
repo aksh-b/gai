@@ -113,6 +113,9 @@ pub enum CollectionsCmd {
     },
     /// Delete a collection and everything in it
     Delete { name: String },
+    /// Copy a collection's vectors into the configured vector index
+    /// (Qdrant or pgvector), e.g. after switching to it
+    Reindex { name: String },
 }
 
 pub async fn collections(gai: &Gai, cmd: CollectionsCmd) -> anyhow::Result<()> {
@@ -202,8 +205,26 @@ pub async fn collections(gai: &Gai, cmd: CollectionsCmd) -> anyhow::Result<()> {
                 eprintln!("{}", dim("No results."));
             }
         }
+        CollectionsCmd::Reindex { name } => {
+            let k = gai.runtime().await?.knowledge().clone();
+            if k.index_backend() == "builtin" {
+                anyhow::bail!("no vector index is configured ([knowledge.vector_index] backend)");
+            }
+            let n = k.reindex(&name).await?;
+            println!(
+                "{} {n} vectors into {}",
+                green("indexed"),
+                k.index_backend()
+            );
+        }
         CollectionsCmd::Delete { name } => {
-            if store.delete_collection(&name).await? {
+            if gai
+                .runtime()
+                .await?
+                .knowledge()
+                .delete_collection(&name)
+                .await?
+            {
                 println!("{} {name}", green("deleted"));
             } else {
                 anyhow::bail!("no collection {name}");

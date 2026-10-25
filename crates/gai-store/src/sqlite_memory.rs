@@ -597,6 +597,42 @@ impl KnowledgeStore for SqliteStore {
         self.hits(best).await
     }
 
+    async fn chunk_hits(&self, scored: Vec<(i64, f32)>) -> Result<Vec<ChunkHit>> {
+        self.hits(scored).await
+    }
+
+    async fn chunk_vectors(
+        &self,
+        collection: &str,
+        document_id: Option<&str>,
+        after: i64,
+        limit: u32,
+    ) -> Result<Vec<(i64, Vec<f32>)>> {
+        let rows = match document_id {
+            Some(d) => {
+                sqlx::query("SELECT id, embedding FROM chunks WHERE collection = ? AND document_id = ? AND embedding IS NOT NULL ORDER BY id")
+                    .bind(collection)
+                    .bind(d)
+                    .fetch_all(&self.pool)
+                    .await?
+            }
+            None => {
+                sqlx::query("SELECT id, embedding FROM chunks WHERE collection = ? AND id > ? AND embedding IS NOT NULL ORDER BY id LIMIT ?")
+                    .bind(collection)
+                    .bind(after)
+                    .bind(limit as i64)
+                    .fetch_all(&self.pool)
+                    .await?
+            }
+        };
+        rows.iter()
+            .map(|r| {
+                let blob: Vec<u8> = r.try_get("embedding")?;
+                Ok((r.try_get::<i64, _>("id")?, from_blob(&blob).collect()))
+            })
+            .collect()
+    }
+
     async fn text_search(
         &self,
         collections: &[String],
