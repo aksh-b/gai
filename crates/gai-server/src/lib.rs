@@ -6,6 +6,7 @@ mod a2a;
 mod api;
 mod auth;
 mod bundles;
+mod data;
 mod error;
 mod evals;
 mod governance;
@@ -104,6 +105,7 @@ pub async fn router(
         .merge(evals::routes())
         .merge(governance::routes())
         .merge(sources::routes())
+        .merge(data::routes())
         .merge(orgs::routes())
         .merge(sso::routes())
         .merge(media::routes())

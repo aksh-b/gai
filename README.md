@@ -176,6 +176,7 @@ Run `gai <command> --help` for details.
 - [Rust SDK](docs/sdk.md): the builder, agent handles, `#[gai::tool]` and the HTTP client
 - [Evaluations and feedback](docs/evals.md): eval sets, scorers, benchmarks, CI gates and ratings
 - [Knowledge at scale](docs/knowledge.md): vector indexes (Qdrant, pgvector), reranking, and sources synced from folders, websites, GitHub, Confluence and Notion
+- [Databases](docs/data.md): read-only connections to Postgres, MySQL, SQLite, BigQuery and Snowflake, and the SQL tools
 - [Users, teams and organizations](docs/users.md): roles, SSO (OIDC or a proxy), teams that own resources, several organizations on one server
 - [Safety and governance](docs/safety.md): personal data, prompt injection, guardrails, audit log, retention
 - [Bundles](docs/bundles.md): sharing agents between servers

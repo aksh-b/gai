@@ -576,6 +576,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Database connections agents can query */
+        get: operations["get_v1_connections"];
+        put?: never;
+        /** Save a connection (JSON, or {"yaml": "..."}): postgres, mysql, sqlite, bigquery or snowflake; passwords and tokens by environment variable or secret name. Reads its schema right away */
+        post: operations["post_v1_connections"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A connection, with its last schema */
+        get: operations["get_v1_connections__name_"];
+        put?: never;
+        post?: never;
+        /** Delete a connection */
+        delete: operations["delete_v1_connections__name_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{name}/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run one read-only query (SELECT), or check it with dry_run */
+        post: operations["post_v1_connections__name__query"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{name}/schema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Its tables and columns (kept from the last read; ?refresh=true reads them again) */
+        get: operations["get_v1_connections__name__schema"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/eval-runs": {
         parameters: {
             query?: never;
@@ -2783,6 +2853,16 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        Column: {
+            /** @description The database's type name. */
+            data_type: string;
+            name: string;
+        };
+        ColumnInfo: {
+            data_type: string;
+            name: string;
+            nullable: boolean;
+        };
         CompareView: {
             baseline: components["schemas"]["Summary"];
             baseline_id: string;
@@ -2803,6 +2883,96 @@ export interface components {
             score_delta: number;
             verdict: components["schemas"]["Verdict"];
         };
+        /**
+         * @description A database agents can query.
+         *
+         *     ```yaml
+         *     name: app
+         *     kind: postgres
+         *     url: postgres://reader@db.internal:5432/app
+         *     password_env: APP_DB_PASSWORD
+         *     description: Users, signups and orders
+         *     ```
+         */
+        ConnectionSpec: {
+            /** @description What is in it, for agents choosing a connection. */
+            description?: string | null;
+            /**
+             * Format: uint
+             * @description Rows returned by one query at most.
+             * @default 1000
+             */
+            max_rows: number;
+            /** @description Letters, digits, `-` and `_`. */
+            name: string;
+            /**
+             * @description Refuse anything but queries (default true).
+             * @default true
+             */
+            read_only: boolean;
+            /**
+             * Format: uint64
+             * @description Seconds one query may take.
+             * @default 30
+             */
+            timeout_secs: number;
+        } & ({
+            /** @constant */
+            kind: "postgres";
+            password_env?: string | null;
+            /** @description `postgres://user@host:5432/db` (no password: use `password_env`). */
+            url: string;
+        } | {
+            /** @constant */
+            kind: "mysql";
+            password_env?: string | null;
+            /** @description `mysql://user@host:3306/db`. */
+            url: string;
+        } | {
+            /** @constant */
+            kind: "sqlite";
+            /** @description A database file on the server. */
+            path: string;
+        } | {
+            /** @description For tests and emulators. */
+            api_url?: string | null;
+            /** @description Environment variable (or secret) with a service account's JSON key. */
+            credentials_env?: string | null;
+            /**
+             * @description The dataset unqualified table names are in, and whose schema is
+             *     read (default: every dataset, up to 10).
+             */
+            dataset?: string | null;
+            /** @constant */
+            kind: "bigquery";
+            location?: string | null;
+            /**
+             * Format: uint64
+             * @description Refuse queries that would scan more than this (default 10 GB).
+             */
+            max_bytes_billed?: number | null;
+            project: string;
+            /** @description Or one with an OAuth access token. */
+            token_env?: string | null;
+        } | {
+            /** @description The account identifier, like `myorg-myaccount`. */
+            account: string;
+            /** @description For tests: instead of `https://<account>.snowflakecomputing.com`. */
+            api_url?: string | null;
+            database?: string | null;
+            /** @constant */
+            kind: "snowflake";
+            role?: string | null;
+            schema?: string | null;
+            /**
+             * @description Environment variable (or secret) with a programmatic access
+             *     token or OAuth token.
+             */
+            token_env: string;
+            /** @description `PROGRAMMATIC_ACCESS_TOKEN` (default) or `OAUTH`. */
+            token_type?: string | null;
+            warehouse?: string | null;
+        });
         /**
          * @description One piece of message content.
          *
@@ -2963,6 +3133,21 @@ export interface components {
              */
             secret?: string | null;
             trigger: components["schemas"]["TriggerView"];
+        };
+        /** @description A database agents can query. The data crate owns the spec's shape. */
+        DataConnection: {
+            /** Format: date-time */
+            created_at: string;
+            /** @description `postgres`, `mysql`, `sqlite`, `bigquery` or `snowflake`. */
+            kind: string;
+            name: string;
+            /** @description Tables and columns, as last read from the database. */
+            schema?: unknown;
+            /** Format: date-time */
+            schema_at?: string | null;
+            spec: unknown;
+            /** Format: date-time */
+            updated_at: string;
         };
         /** @description A human's answer to a tool call that needs approval. */
         Decision: {
@@ -4335,6 +4520,17 @@ export interface components {
              */
             reset: boolean;
         };
+        /** @description What a query returned: at most the connection's `max_rows`. */
+        QueryAnswer: {
+            columns?: components["schemas"]["Column"][];
+            /** Format: uint64 */
+            elapsed_ms?: number;
+            /** @description For a dry run. */
+            plan?: string | null;
+            rows?: unknown[][];
+            /** @description There were more rows than returned. */
+            truncated?: boolean;
+        };
         Rate: {
             comment?: string | null;
             /**
@@ -4506,6 +4702,17 @@ export interface components {
             text: string;
             usage: components["schemas"]["Usage"];
         };
+        RunQuery: {
+            /**
+             * @description Only check it and return the plan.
+             * @default false
+             */
+            dry_run: boolean;
+            /** Format: uint */
+            limit?: number | null;
+            /** @description One SELECT. */
+            sql: string;
+        };
         /** @enum {string} */
         RunStatus: "queued" | "running" | "awaiting_approval" | "completed" | "failed" | "cancelled" | "budget_exceeded";
         RunView: {
@@ -4625,6 +4832,10 @@ export interface components {
             name: string;
             /** Format: uint32 */
             version: number;
+        };
+        /** @description A database's tables and their columns. */
+        Schema: {
+            tables: components["schemas"]["Table"][];
         };
         /**
          * @description What an API key may do. Each implies the ones after it: `admin`,
@@ -5063,6 +5274,19 @@ export interface components {
             unchanged: number;
             /** Format: uint64 */
             updated: number;
+        };
+        Table: {
+            columns: components["schemas"]["ColumnInfo"][];
+            /** @description `table` or `view`. */
+            kind: string;
+            name: string;
+            /**
+             * Format: uint64
+             * @description About how many rows, when the database says.
+             */
+            rows?: number | null;
+            /** @description The schema or dataset it is in, when the database has them. */
+            schema?: string | null;
         };
         /** @description What a trigger starts. */
         Target: {
@@ -6875,6 +7099,199 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SearchHit"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_connections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataConnection"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_connections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectionSpec"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataConnection"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_connections__name_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataConnection"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_connections__name_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Done"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_connections__name__query: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunQuery"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueryAnswer"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_connections__name__schema: {
+        parameters: {
+            query?: {
+                /** @description Read the schema from the database again */
+                refresh?: string;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schema"];
                 };
             };
             /** @description Error */

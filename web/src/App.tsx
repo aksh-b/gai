@@ -30,7 +30,7 @@ import { KeyDialog } from './KeyDialog';
 import { modelLabel } from './labels';
 import { applyTheme, isDark, setDevMode, useDevMode, useTheme, type Theme } from './prefs';
 import { navigate, useRoute } from './router';
-import { IconAgent, IconBook, IconChat, IconFlow, IconGear, IconMoon, IconRuns, IconSearch, IconStack, IconSun } from './icons';
+import { IconAgent, IconBook, IconData, IconChat, IconFlow, IconGear, IconMoon, IconRuns, IconSearch, IconStack, IconSun } from './icons';
 import { MediaStudio } from './pages/MediaStudio';
 import { Triggers } from './pages/Triggers';
 import { Connect } from './pages/Connect';
@@ -49,6 +49,7 @@ import { Personas } from './pages/Personas';
 import { Evals } from './pages/Evals';
 import { Audit } from './pages/Audit';
 import { People } from './pages/People';
+import { DataPage } from './pages/Data';
 import { AgentAnalytics, ConversationSearch } from './pages/Insights';
 import { Skills } from './pages/Skills';
 import { Workflows } from './pages/Workflows';
@@ -84,6 +85,7 @@ const NAV: { id: string; label: string; icon: Icon; routes: string[]; tabs?: { i
     ],
   },
   { id: 'knowledge', label: 'Knowledge', icon: IconStack, routes: ['knowledge'] },
+  { id: 'data', label: 'Data', icon: IconData, routes: ['data'] },
   {
     id: 'activity',
     label: 'Activity',
@@ -303,6 +305,9 @@ export function App() {
         break;
       case 'automations':
         page = <Workflows selected={route.parts[1] ? decodeURIComponent(route.parts[1]) : undefined} />;
+        break;
+      case 'data':
+        page = <DataPage selected={route.parts[1] ? decodeURIComponent(route.parts[1]) : undefined} />;
         break;
       case 'knowledge':
         page = <Knowledge selected={route.parts[1] ? decodeURIComponent(route.parts[1]) : undefined} />;

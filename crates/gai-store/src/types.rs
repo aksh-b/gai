@@ -44,6 +44,20 @@ pub struct Session {
     pub updated_at: DateTime<Utc>,
 }
 
+/// A database agents can query. The data crate owns the spec's shape.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct DataConnection {
+    pub name: String,
+    /// `postgres`, `mysql`, `sqlite`, `bigquery` or `snowflake`.
+    pub kind: String,
+    pub spec: Value,
+    /// Tables and columns, as last read from the database.
+    pub schema: Option<Value>,
+    pub schema_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 /// An entity a model found in chunks, with the chunks that mention it.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct NewEntity {

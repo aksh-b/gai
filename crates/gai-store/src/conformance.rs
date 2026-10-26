@@ -919,6 +919,42 @@ pub async fn workflows_are_versioned(s: SharedStore) {
     assert!(s.get_workflow("w", None).await.unwrap().is_none());
 }
 
+pub async fn data_connections(s: SharedStore) {
+    let spec = json!({"kind": "sqlite", "path": "a.db"});
+    s.put_connection("sales", "sqlite", &spec).await.unwrap();
+    let c = s.get_connection("sales").await.unwrap().unwrap();
+    assert_eq!(
+        (c.kind.as_str(), c.spec.clone(), c.schema.clone()),
+        ("sqlite", spec.clone(), None)
+    );
+    s.save_connection_schema("sales", &json!({"tables": [{"name": "orders"}]}))
+        .await
+        .unwrap();
+    let c = s.get_connection("sales").await.unwrap().unwrap();
+    assert_eq!(c.schema.unwrap()["tables"][0]["name"], "orders");
+    assert!(c.schema_at.is_some());
+    // A new spec forgets the old schema.
+    s.put_connection("sales", "postgres", &json!({"kind": "postgres"}))
+        .await
+        .unwrap();
+    let c = s.get_connection("sales").await.unwrap().unwrap();
+    assert_eq!((c.kind.as_str(), c.schema), ("postgres", None));
+    s.put_connection("ads", "bigquery", &json!({}))
+        .await
+        .unwrap();
+    let names: Vec<String> = s
+        .list_connections()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|c| c.name)
+        .collect();
+    assert_eq!(names, ["ads", "sales"]);
+    assert!(s.save_connection_schema("nope", &json!({})).await.is_err());
+    assert!(s.delete_connection("ads").await.unwrap());
+    assert!(!s.delete_connection("ads").await.unwrap());
+}
+
 pub async fn knowledge_graph(s: SharedStore) {
     s.create_collection(&coll("kb")).await.unwrap();
     let doc = |source: &str, texts: &[&str]| {
@@ -1474,6 +1510,12 @@ pub async fn sources_keep_their_sync_state(s: SharedStore) {
 #[macro_export]
 macro_rules! conformance_tests {
     ($make:expr) => {
+        #[tokio::test]
+        async fn data_connections() {
+            if let Some(s) = $make.await {
+                $crate::conformance::data_connections(s).await;
+            }
+        }
         #[tokio::test]
         async fn knowledge_graph() {
             if let Some(s) = $make.await {

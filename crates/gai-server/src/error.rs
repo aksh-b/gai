@@ -40,6 +40,18 @@ impl IntoResponse for ApiError {
     }
 }
 
+impl From<gai::data::DataError> for ApiError {
+    fn from(e: gai::data::DataError) -> Self {
+        use gai::data::DataError as D;
+        match e {
+            D::NotFound(m) => Self::not_found(m),
+            D::Invalid(m) | D::Database(m) => Self::bad_request(m),
+            D::Refused(m) => Self::new(StatusCode::FORBIDDEN, m),
+            D::Store(e) => e.into(),
+        }
+    }
+}
+
 impl From<gai::store::StoreError> for ApiError {
     fn from(e: gai::store::StoreError) -> Self {
         match e {
@@ -97,6 +109,7 @@ impl From<gai::Error> for ApiError {
             gai::Error::Skill(s) => s.into(),
             gai::Error::Workflow(w) => w.into(),
             gai::Error::Eval(e) => e.into(),
+            gai::Error::Data(d) => d.into(),
             gai::Error::Invalid(m) => Self::bad_request(m),
             other => Self::bad_request(other.to_string()),
         }

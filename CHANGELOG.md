@@ -16,6 +16,12 @@ initial development and will ship as 0.1.0.
 
 ### Added
 
+- **Databases.** Read-only connections to Postgres, MySQL, SQLite, BigQuery
+  and Snowflake (`gai data`, the **Data** page, `/v1/connections`), with
+  their tables read for agents. Tools `sql_schema`, `sql_query` (one
+  `SELECT`, row limits, dry runs, results saved as CSV) and `sql_execute`
+  (writes, with approval, on connections that allow them), and a
+  **Database analyst** template. See [docs/data.md](docs/data.md).
 - **Knowledge graphs.** A model reads a collection for entities and the
   relations between them (`gai collections graph`, the **Graph** tab,
   `/v1/collections/{name}/graph`); graph search (`mode: graph`, and

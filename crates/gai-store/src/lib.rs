@@ -181,6 +181,17 @@ pub trait KeyStore: Send + Sync {
     async fn has_keys(&self) -> Result<bool>;
 }
 
+/// Databases agents query.
+#[async_trait]
+pub trait DataStore: Send + Sync {
+    /// Create or replace; a new spec forgets the stored schema.
+    async fn put_connection(&self, name: &str, kind: &str, spec: &Value) -> Result<()>;
+    async fn get_connection(&self, name: &str) -> Result<Option<DataConnection>>;
+    async fn list_connections(&self) -> Result<Vec<DataConnection>>;
+    async fn delete_connection(&self, name: &str) -> Result<bool>;
+    async fn save_connection_schema(&self, name: &str, schema: &Value) -> Result<()>;
+}
+
 /// A knowledge graph per collection, built from its chunks.
 #[async_trait]
 pub trait GraphStore: Send + Sync {
@@ -626,6 +637,7 @@ pub type SharedVectorIndex = Arc<dyn VectorIndex>;
 /// Everything gai stores.
 pub trait Store:
     DirectoryStore
+    + DataStore
     + GraphStore
     + AgentStore
     + SessionStore
@@ -648,6 +660,7 @@ pub trait Store:
 }
 impl<T> Store for T where
     T: DirectoryStore
+        + DataStore
         + GraphStore
         + AgentStore
         + SessionStore

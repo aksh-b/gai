@@ -19,6 +19,8 @@ use crate::*;
 
 #[path = "pg_blobs.rs"]
 mod blobs;
+#[path = "pg_data.rs"]
+mod data;
 #[path = "pg_directory.rs"]
 mod directory;
 #[path = "pg_governance.rs"]

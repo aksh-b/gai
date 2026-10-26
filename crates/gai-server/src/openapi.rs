@@ -14,6 +14,7 @@ use schemars::{JsonSchema, SchemaGenerator};
 use serde_json::{Map, Value, json};
 
 use crate::api::*;
+use crate::data::*;
 use crate::evals::*;
 use crate::governance::*;
 use crate::knowledge::*;
@@ -250,6 +251,19 @@ pub fn document() -> Value {
         op("delete", "/v1/collections/{name}/graph", "knowledge", "Forget the collection's graph (the next build reads everything again)"),
         op("get", "/v1/collections/{name}/graph/nodes/{id}", "knowledge", "One entity: its relations and the passages that mention it")
             .ok(s::<GraphNodeView>(&mut g)),
+        op("get", "/v1/connections", "data", "Database connections agents can query")
+            .ok(list::<gai::store::DataConnection>(&mut g)),
+        op("post", "/v1/connections", "data", "Save a connection (JSON, or {\"yaml\": \"...\"}): postgres, mysql, sqlite, bigquery or snowflake; passwords and tokens by environment variable or secret name. Reads its schema right away")
+            .body(s::<gai::data::ConnectionSpec>(&mut g))
+            .ok(s::<gai::store::DataConnection>(&mut g)),
+        op("get", "/v1/connections/{name}", "data", "A connection, with its last schema").ok(s::<gai::store::DataConnection>(&mut g)),
+        op("delete", "/v1/connections/{name}", "data", "Delete a connection").ok(s::<Done>(&mut g)),
+        op("get", "/v1/connections/{name}/schema", "data", "Its tables and columns (kept from the last read; ?refresh=true reads them again)")
+            .ok(s::<gai::data::Schema>(&mut g))
+            .query(&[("refresh", "Read the schema from the database again")]),
+        op("post", "/v1/connections/{name}/query", "data", "Run one read-only query (SELECT), or check it with dry_run")
+            .body(s::<RunQuery>(&mut g))
+            .ok(s::<QueryAnswer>(&mut g)),
         op("get", "/v1/sessions/search", "sessions", "Find messages across conversations, best first, with the words marked [like this]")
             .ok(list::<gai::store::MessageHit>(&mut g))
             .query(&[("q", "Words to find"), ("agent", "One agent"), ("user", "One user id"), ("since", "RFC 3339 time"), ("until", "RFC 3339 time"), ("limit", "Max hits")]),

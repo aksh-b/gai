@@ -1,0 +1,30 @@
+[package]
+name = "gai-data"
+description = "Databases for gai agents: read-only connections to Postgres, MySQL, SQLite, BigQuery and Snowflake, schema introspection, and SQL tools."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+gai-core.workspace = true
+gai-store.workspace = true
+gai-tools.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+futures.workspace = true
+jsonwebtoken.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlparser.workspace = true
+sqlx = { workspace = true, features = ["postgres", "mysql"] }
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+gai-store = { workspace = true, features = ["postgres"] }
+tempfile.workspace = true
+wiremock.workspace = true

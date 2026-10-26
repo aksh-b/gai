@@ -23,6 +23,9 @@ export type AgentStats = Schemas['AgentStats'];
 export type MessageHit = Schemas['MessageHit'];
 export type Change = Schemas['Change'];
 export type Extracted = Schemas['Extracted'];
+export type DataConnection = Schemas['DataConnection'];
+export type DataSchema = Schemas['Schema'];
+export type QueryAnswer = Schemas['QueryAnswer'];
 export type GraphView = Schemas['GraphView'];
 export type GraphNodeView = Schemas['GraphNodeView'];
 export type GraphBuild = Schemas['GraphBuild'];
@@ -584,6 +587,13 @@ export const api = {
   ) => request<Ingested>('POST', `/v1/collections/${encodeURIComponent(name)}/documents`, body),
   deleteDocument: (name: string, id: string) =>
     request<void>('DELETE', `/v1/collections/${encodeURIComponent(name)}/documents/${id}`),
+  connections: () => get<DataConnection[]>('/v1/connections'),
+  saveConnection: (yaml: string) => request<DataConnection>('POST', '/v1/connections', { yaml }),
+  deleteConnection: (name: string) => request<{ ok: boolean }>('DELETE', `/v1/connections/${encodeURIComponent(name)}`),
+  connectionSchema: (name: string, refresh = false) =>
+    get<DataSchema>(`/v1/connections/${encodeURIComponent(name)}/schema${refresh ? '?refresh=true' : ''}`),
+  query: (name: string, sql: string, dry_run = false) =>
+    request<QueryAnswer>('POST', `/v1/connections/${encodeURIComponent(name)}/query`, { sql, dry_run }),
   extract: (name: string, fields: Record<string, string>) =>
     request<Extracted>('POST', `/v1/collections/${encodeURIComponent(name)}/extract`, { fields }),
   extractCsv: (name: string, fields: Record<string, string>) =>

@@ -44,6 +44,7 @@ pub use config::{
 pub use gai_agent as agent;
 pub use gai_browser as browser;
 pub use gai_core as core;
+pub use gai_data as data;
 pub use gai_eval as eval;
 pub use gai_llm as llm;
 /// Write a tool as an async function; see [`gai_macros::tool`].
@@ -87,6 +88,8 @@ pub enum Error {
     NotFound(String),
     #[error(transparent)]
     Memory(#[from] gai_memory::MemoryError),
+    #[error(transparent)]
+    Data(#[from] gai_data::DataError),
     #[error(transparent)]
     Skill(#[from] gai_skills::SkillError),
     #[error(transparent)]
@@ -140,6 +143,8 @@ pub struct Gai {
     runtime: OnceCell<Runtime>,
     workflows: OnceCell<gai_orchestra::Workflows>,
     triggers: OnceCell<gai_triggers::Triggers>,
+    /// Database connections, made when the runtime opens.
+    data: std::sync::OnceLock<gai_data::Data>,
 }
 
 impl Gai {
@@ -162,6 +167,7 @@ impl Gai {
             runtime: OnceCell::new(),
             workflows: OnceCell::new(),
             triggers: OnceCell::new(),
+            data: std::sync::OnceLock::new(),
         })
     }
 
@@ -491,6 +497,16 @@ impl Gai {
                         Err(e) => tracing::warn!(error = %e, "ignoring the stored persona defaults"),
                     }
                 }
+                let data = self.data.get_or_init(|| {
+                    if self.config.tools.confined {
+                        gai_data::Data::confined(store.clone(), self.config.data_dir().join("files"))
+                    } else {
+                        gai_data::Data::new(store.clone())
+                    }
+                });
+                for tool in gai_data::tools::tools(data.clone()) {
+                    rt.register_tool(tool);
+                }
                 match gai_sandbox::from_settings(&self.config.sandbox) {
                     Ok(Some(sb)) => rt.register_tool(Arc::new(gai_sandbox::code_exec(
                         sb,
@@ -575,6 +591,12 @@ impl Gai {
     /// their results.
     pub async fn evals(&self) -> Result<gai_eval::Evaluator, Error> {
         Ok(gai_eval::Evaluator::new(self.runtime().await?.clone()))
+    }
+
+    /// Database connections and querying them.
+    pub async fn data(&self) -> Result<&gai_data::Data, Error> {
+        self.runtime().await?;
+        Ok(self.data.get().expect("made with the runtime"))
     }
 
     /// Sources synced into knowledge collections (folders, websites,

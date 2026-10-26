@@ -17,6 +17,7 @@ import {
   ImageIcon,
   KeyRoundIcon,
   LayersIcon,
+  DatabaseIcon,
   MessageSquareIcon,
   MicIcon,
   MoonIcon,
@@ -65,6 +66,7 @@ export const IconKey = icon(KeyRoundIcon);
 export const IconBook = icon(BookOpenIcon);
 export const IconHand = icon(HandIcon);
 export const IconStack = icon(LayersIcon);
+export const IconData = icon(DatabaseIcon);
 export const IconBrain = icon(BrainIcon);
 export const IconBolt = icon(ZapIcon);
 export const IconSearch = icon(SearchIcon);

@@ -220,7 +220,8 @@ pub fn required_scope(method: &Method, path: &str) -> Scope {
         || path.starts_with("/v1/bundles")
         || path.starts_with("/v1/members")
         || path.starts_with("/v1/teams")
-        || path.starts_with("/v1/orgs"))
+        || path.starts_with("/v1/orgs")
+        || (path.starts_with("/v1/connections") && !path.ends_with("/query")))
         && write;
     // The audit log, forgetting users, retention, keys and secrets: admin,
     // reads included.

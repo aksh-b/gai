@@ -24,6 +24,7 @@ gai-triggers = { path = "crates/gai-triggers" }
 gai-sandbox = { path = "crates/gai-sandbox", default-features = false }
 gai-browser = { path = "crates/gai-browser", default-features = false }
 gai-macros = { path = "crates/gai-macros" }
+gai-data = { path = "crates/gai-data" }
 gai-eval = { path = "crates/gai-eval" }
 
 anyhow = "1"
@@ -46,6 +47,7 @@ futures = "0.3"
 getrandom = "0.3"
 governor = "0.10"
 hmac = "0.12"
+jsonwebtoken = "9"
 mime_guess = "2"
 minijinja = "2"
 notify = "8"
@@ -64,6 +66,7 @@ rust-embed = { version = "8", features = ["interpolate-folder-path"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "stream", "rustls-tls"] }
 secrecy = { version = "0.10", features = ["serde"] }
 sha2 = "0.10"
+sqlparser = "0.55"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"

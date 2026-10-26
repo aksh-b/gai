@@ -1,6 +1,7 @@
 mod ask;
 mod bundle;
 mod chat;
+mod data;
 mod eval;
 mod governance;
 mod knowledge;
@@ -108,6 +109,9 @@ enum Command {
     /// Folders, websites, GitHub, Confluence and Notion synced into collections
     #[command(subcommand)]
     Sources(sources::SourcesCmd),
+    /// Databases agents query: connections, schemas and queries
+    #[command(subcommand)]
+    Data(data::DataCmd),
     /// Inspect and edit agents' memory blocks
     #[command(subcommand)]
     Memory(knowledge::MemoryCmd),
@@ -232,6 +236,7 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
         Command::Triggers(cmd) => triggers::triggers(&gai, cmd).await,
         Command::Bundle(cmd) => bundle::bundle(&gai, cmd).await,
         Command::Eval(cmd) => eval::eval(&gai, cmd).await,
+        Command::Data(cmd) => data::run(&gai, cmd).await,
         Command::Orgs(cmd) => orgs::orgs(&gai, cmd).await,
         Command::Members(cmd) => orgs::members(&gai, cmd).await,
         Command::Teams(cmd) => orgs::teams(&gai, cmd).await,
