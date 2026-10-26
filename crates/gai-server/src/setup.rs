@@ -836,9 +836,13 @@ struct Template {
     id: &'static str,
     kind: &'static str,
     title: &'static str,
-    /// Stored agents this one uses, installed with it when missing.
+    /// Templates this one uses (agents, skills), installed with it when
+    /// missing.
     needs: &'static [&'static str],
+    /// For agents, workflows and personas the spec; for skills, SKILL.md.
     yaml: &'static str,
+    /// A skill's other files: (path, contents).
+    files: &'static [(&'static str, &'static str)],
 }
 
 const TEMPLATES: &[Template] = &[
@@ -848,6 +852,7 @@ const TEMPLATES: &[Template] = &[
         title: "Researcher",
         needs: &[],
         yaml: include_str!("../../../examples/agents/researcher.yaml"),
+        files: &[],
     },
     Template {
         id: "writer",
@@ -855,6 +860,7 @@ const TEMPLATES: &[Template] = &[
         title: "Writer",
         needs: &[],
         yaml: include_str!("../../../examples/agents/writer.yaml"),
+        files: &[],
     },
     Template {
         id: "docs-helper",
@@ -862,6 +868,7 @@ const TEMPLATES: &[Template] = &[
         title: "Answers from your documents",
         needs: &[],
         yaml: include_str!("../../../examples/agents/docs-helper.yaml"),
+        files: &[],
     },
     Template {
         id: "contract-reviewer",
@@ -869,13 +876,26 @@ const TEMPLATES: &[Template] = &[
         title: "Contract reviewer (summarize, compare, extract)",
         needs: &[],
         yaml: include_str!("../../../examples/agents/contract-reviewer.yaml"),
+        files: &[],
+    },
+    Template {
+        id: "data-analysis",
+        kind: "skill",
+        title: "Data analysis skill (drivers, forecasts, anomalies, data quality)",
+        needs: &[],
+        yaml: include_str!("../../../examples/skills/data-analysis/SKILL.md"),
+        files: &[(
+            "analytics.py",
+            include_str!("../../../examples/skills/data-analysis/analytics.py"),
+        )],
     },
     Template {
         id: "sql-analyst",
         kind: "agent",
         title: "Database analyst (SQL and charts)",
-        needs: &[],
+        needs: &["data-analysis"],
         yaml: include_str!("../../../examples/agents/sql-analyst.yaml"),
+        files: &[],
     },
     Template {
         id: "data-analyst",
@@ -883,6 +903,7 @@ const TEMPLATES: &[Template] = &[
         title: "Data analyst (runs code)",
         needs: &[],
         yaml: include_str!("../../../examples/agents/data-analyst.yaml"),
+        files: &[],
     },
     Template {
         id: "web-browser",
@@ -890,6 +911,7 @@ const TEMPLATES: &[Template] = &[
         title: "Web browser (clicks and fills forms)",
         needs: &[],
         yaml: include_str!("../../../examples/agents/web-browser.yaml"),
+        files: &[],
     },
     Template {
         id: "companion",
@@ -897,6 +919,7 @@ const TEMPLATES: &[Template] = &[
         title: "Remembers you",
         needs: &[],
         yaml: include_str!("../../../examples/agents/companion.yaml"),
+        files: &[],
     },
     Template {
         id: "supervisor",
@@ -904,6 +927,7 @@ const TEMPLATES: &[Template] = &[
         title: "Team lead (researcher + writer)",
         needs: &["researcher", "writer"],
         yaml: include_str!("../../../examples/agents/supervisor.yaml"),
+        files: &[],
     },
     Template {
         id: "research-brief",
@@ -911,6 +935,7 @@ const TEMPLATES: &[Template] = &[
         title: "Research brief",
         needs: &["researcher", "writer"],
         yaml: include_str!("../../../examples/workflows/research-brief.yaml"),
+        files: &[],
     },
     Template {
         id: "hello",
@@ -918,6 +943,7 @@ const TEMPLATES: &[Template] = &[
         title: "Hello (a tour, runs without a model)",
         needs: &[],
         yaml: include_str!("../../../examples/workflows/hello.yaml"),
+        files: &[],
     },
     Template {
         id: "concise-engineer",
@@ -925,6 +951,7 @@ const TEMPLATES: &[Template] = &[
         title: "Concise engineer",
         needs: &[],
         yaml: include_str!("../../../examples/personas/concise-engineer.yaml"),
+        files: &[],
     },
     Template {
         id: "friendly-tutor",
@@ -932,6 +959,7 @@ const TEMPLATES: &[Template] = &[
         title: "Friendly tutor",
         needs: &[],
         yaml: include_str!("../../../examples/personas/friendly-tutor.yaml"),
+        files: &[],
     },
     Template {
         id: "formal-analyst",
@@ -939,6 +967,7 @@ const TEMPLATES: &[Template] = &[
         title: "Formal analyst",
         needs: &[],
         yaml: include_str!("../../../examples/personas/formal-analyst.yaml"),
+        files: &[],
     },
     Template {
         id: "playful-companion",
@@ -946,6 +975,7 @@ const TEMPLATES: &[Template] = &[
         title: "Playful companion",
         needs: &[],
         yaml: include_str!("../../../examples/personas/playful-companion.yaml"),
+        files: &[],
     },
 ];
 
@@ -991,6 +1021,7 @@ async fn exists(s: &AppState, kind: &str, name: &str) -> bool {
     let store = s.rt.store();
     match kind {
         "agent" => matches!(store.get_agent(name, None).await, Ok(Some(_))),
+        "skill" => matches!(s.rt.skills().get(name).await, Ok(Some(_))),
         "persona" => matches!(store.get_persona(name, None).await, Ok(Some(_))),
         _ => matches!(store.get_workflow(name, None).await, Ok(Some(_))),
     }
@@ -1001,6 +1032,7 @@ async fn list_templates(Tenant(s): Tenant) -> Json<Vec<TemplateView>> {
     for t in TEMPLATES {
         let description = match t.kind {
             "agent" => template_agent(t).ok().and_then(|a| a.description),
+            "skill" => gai::skills::parse(t.yaml).ok().map(|(_, d, _, _)| d),
             "persona" => template_persona(t).ok().and_then(|p| p.description),
             _ => template_workflow(t).ok().and_then(|w| w.description),
         }
@@ -1026,6 +1058,32 @@ pub struct Installed {
     pub also: Vec<String>,
 }
 
+async fn install_one(s: &AppState, t: &Template) -> ApiResult<()> {
+    match t.kind {
+        "agent" => {
+            let spec = template_agent(t).map_err(ApiError::bad_request)?;
+            s.rt.save_agent(&spec, Some("from template")).await?;
+        }
+        "persona" => {
+            let spec = template_persona(t).map_err(ApiError::bad_request)?;
+            s.rt.save_persona(&spec, Some("from template")).await?;
+        }
+        "skill" => {
+            let files = t
+                .files
+                .iter()
+                .map(|(p, c)| ((*p).to_owned(), (*c).to_owned()))
+                .collect();
+            s.rt.skills().save(t.yaml, files).await?;
+        }
+        _ => {
+            let spec = template_workflow(t).map_err(ApiError::bad_request)?;
+            s.wf.save(&spec, Some("from template")).await?;
+        }
+    }
+    Ok(())
+}
+
 /// Save a template (and the agents it uses, when missing). An agent or
 /// workflow that already exists under the template's name is kept as is.
 async fn install_template(
@@ -1038,31 +1096,17 @@ async fn install_template(
         .ok_or_else(|| ApiError::not_found(format!("template {id}")))?;
     let mut also = Vec::new();
     for need in t.needs {
-        if !exists(&s, "agent", need).await {
-            let dep = TEMPLATES
-                .iter()
-                .find(|d| d.id == *need && d.kind == "agent")
-                .ok_or_else(|| ApiError::not_found(format!("template {need}")))?;
-            let spec = template_agent(dep).map_err(ApiError::bad_request)?;
-            s.rt.save_agent(&spec, Some("from template")).await?;
+        let dep = TEMPLATES
+            .iter()
+            .find(|d| d.id == *need)
+            .ok_or_else(|| ApiError::not_found(format!("template {need}")))?;
+        if !exists(&s, dep.kind, dep.id).await {
+            install_one(&s, dep).await?;
             also.push((*need).to_owned());
         }
     }
     if !exists(&s, t.kind, t.id).await {
-        match t.kind {
-            "agent" => {
-                let spec = template_agent(t).map_err(ApiError::bad_request)?;
-                s.rt.save_agent(&spec, Some("from template")).await?;
-            }
-            "persona" => {
-                let spec = template_persona(t).map_err(ApiError::bad_request)?;
-                s.rt.save_persona(&spec, Some("from template")).await?;
-            }
-            _ => {
-                let spec = template_workflow(t).map_err(ApiError::bad_request)?;
-                s.wf.save(&spec, Some("from template")).await?;
-            }
-        }
+        install_one(&s, t).await?;
     }
     Ok((
         StatusCode::CREATED,
@@ -1108,6 +1152,9 @@ mod tests {
                 }
                 "persona" => {
                     template_persona(t).unwrap();
+                }
+                "skill" => {
+                    gai::skills::parse(t.yaml).unwrap();
                 }
                 _ => {
                     template_workflow(t).unwrap();

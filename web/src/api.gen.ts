@@ -646,6 +646,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/dashboards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dashboards: charts with their queries, and their last results */
+        get: operations["get_v1_dashboards"];
+        put?: never;
+        /** Save a dashboard (JSON, or {"yaml": "..."}) and refresh it; refresh_minutes keeps it up to date, panel alerts watch KPIs */
+        post: operations["post_v1_dashboards"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/dashboards/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A dashboard and its last results */
+        get: operations["get_v1_dashboards__name_"];
+        put?: never;
+        post?: never;
+        /** Delete a dashboard */
+        delete: operations["delete_v1_dashboards__name_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/dashboards/{name}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run its queries now (and send alerts that start firing) */
+        post: operations["post_v1_dashboards__name__refresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/eval-runs": {
         parameters: {
             query?: never;
@@ -2540,6 +2593,22 @@ export interface components {
             /** Format: uint32 */
             version: number;
         };
+        /** @description Watch a panel's number: the last row's `column` (default the first `y`). */
+        Alert: {
+            /**
+             * Format: double
+             * @description Alert when it is above this.
+             */
+            above?: number | null;
+            /**
+             * Format: double
+             * @description Alert when it is below this.
+             */
+            below?: number | null;
+            column?: string | null;
+            /** @description What to say (default: the panel, the value and the limit). */
+            message?: string | null;
+        };
         ApiKey: {
             /** Format: double */
             budget_usd?: number | null;
@@ -2778,6 +2847,7 @@ export interface components {
             /** Format: uint16 */
             status: number;
         };
+        Chart: ("line" | "bar" | "area" | "pie" | "table") | "number";
         ChatCompletionRequest: {
             /** Format: uint32 */
             max_completion_tokens?: number | null;
@@ -3134,6 +3204,49 @@ export interface components {
             secret?: string | null;
             trigger: components["schemas"]["TriggerView"];
         };
+        DashboardResults: {
+            /** @description Alerts sent at this refresh. */
+            alerts?: string[];
+            panels: components["schemas"]["PanelResult"][];
+            /** Format: date-time */
+            refreshed_at?: string | null;
+        };
+        /**
+         * @description A dashboard.
+         *
+         *     ```yaml
+         *     name: growth
+         *     title: Growth
+         *     refresh_minutes: 60
+         *     notify: { email: [ana@example.com] }
+         *     panels:
+         *       - title: Signups per day
+         *         connection: app
+         *         sql: SELECT day, COUNT(*) AS signups FROM signups GROUP BY day ORDER BY day
+         *         chart: line
+         *         x: day
+         *         y: [signups]
+         *         alert: { below: 50 }
+         *     ```
+         */
+        DashboardSpec: {
+            description?: string | null;
+            name: string;
+            /** @description Who hears about alerts. */
+            notify?: components["schemas"]["Delivery"];
+            panels: components["schemas"]["Panel"][];
+            /**
+             * Format: uint32
+             * @description Refresh this often while `gai serve` runs (none: by hand).
+             */
+            refresh_minutes?: number | null;
+            title: string;
+        };
+        /** @description A dashboard with its last results. */
+        DashboardView: {
+            results?: components["schemas"]["DashboardResults"] | null;
+            spec: components["schemas"]["DashboardSpec"];
+        };
         /** @description A database agents can query. The data crate owns the spec's shape. */
         DataConnection: {
             /** Format: date-time */
@@ -3192,6 +3305,20 @@ export interface components {
             runs: number;
             /** Format: uint64 */
             sessions: number;
+        };
+        /** @description Where to send something. */
+        Delivery: {
+            /** @description Email addresses. */
+            email?: string[];
+            /** @description The email subject (default: from the message). */
+            subject?: string | null;
+            /** @description A URL that gets the message as JSON. */
+            webhook?: string | null;
+            /**
+             * @description Environment variable with a secret: the webhook is signed with it
+             *     (`X-Gai-Signature: sha256=<hex HMAC of the body>`).
+             */
+            webhook_secret_env?: string | null;
         };
         Document: {
             /** Format: uint64 */
@@ -4311,6 +4438,32 @@ export interface components {
             team: string;
             team_id: string;
         };
+        Panel: {
+            alert?: components["schemas"]["Alert"] | null;
+            /** @default table */
+            chart: components["schemas"]["Chart"];
+            connection: string;
+            /** @description One SELECT; for charts, one row per point. */
+            sql: string;
+            title: string;
+            /** @description The column along the bottom (or the slice names, for pie). */
+            x?: string | null;
+            /** @description The columns plotted (default: every numeric one but `x`). */
+            y?: string[];
+        };
+        /** @description What one panel's query returned at the last refresh. */
+        PanelResult: {
+            /** @default false */
+            alerting: boolean;
+            columns: components["schemas"]["Column"][];
+            error?: string | null;
+            rows: unknown[][];
+            /**
+             * Format: double
+             * @description The watched number, for panels with an alert.
+             */
+            value?: number | null;
+        };
         PendingApproval: {
             call_id: string;
             input: unknown;
@@ -5421,6 +5574,11 @@ export interface components {
              * @default false
              */
             auto_approve: boolean;
+            /**
+             * @description Send the run's answer and the files it made (by email or webhook)
+             *     when it finishes: a scheduled report.
+             */
+            deliver?: components["schemas"]["Delivery"];
             description?: string | null;
             enabled?: boolean;
             /**
@@ -7292,6 +7450,161 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Schema"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_dashboards: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardView"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_dashboards: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardSpec"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_dashboards__name_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_dashboards__name_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Done"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_dashboards__name__refresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardResults"];
                 };
             };
             /** @description Error */

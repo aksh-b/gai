@@ -8,6 +8,7 @@
 pub mod a2a;
 pub mod builtin;
 pub mod mcp;
+pub mod notify;
 mod registry;
 mod typed;
 

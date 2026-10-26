@@ -264,6 +264,15 @@ pub fn document() -> Value {
         op("post", "/v1/connections/{name}/query", "data", "Run one read-only query (SELECT), or check it with dry_run")
             .body(s::<RunQuery>(&mut g))
             .ok(s::<QueryAnswer>(&mut g)),
+        op("get", "/v1/dashboards", "data", "Dashboards: charts with their queries, and their last results")
+            .ok(list::<gai::data::dashboards::DashboardView>(&mut g)),
+        op("post", "/v1/dashboards", "data", "Save a dashboard (JSON, or {\"yaml\": \"...\"}) and refresh it; refresh_minutes keeps it up to date, panel alerts watch KPIs")
+            .body(s::<gai::data::dashboards::DashboardSpec>(&mut g))
+            .ok(s::<gai::data::dashboards::DashboardView>(&mut g)),
+        op("get", "/v1/dashboards/{name}", "data", "A dashboard and its last results").ok(s::<gai::data::dashboards::DashboardView>(&mut g)),
+        op("delete", "/v1/dashboards/{name}", "data", "Delete a dashboard").ok(s::<Done>(&mut g)),
+        op("post", "/v1/dashboards/{name}/refresh", "data", "Run its queries now (and send alerts that start firing)")
+            .ok(s::<gai::data::dashboards::DashboardResults>(&mut g)),
         op("get", "/v1/sessions/search", "sessions", "Find messages across conversations, best first, with the words marked [like this]")
             .ok(list::<gai::store::MessageHit>(&mut g))
             .query(&[("q", "Words to find"), ("agent", "One agent"), ("user", "One user id"), ("since", "RFC 3339 time"), ("until", "RFC 3339 time"), ("limit", "Max hits")]),

@@ -77,6 +77,7 @@ pub(crate) async fn start(gai: Arc<Gai>, control: SharedStore) -> Result<Instanc
     if gai.org().is_some() {
         crate::governance::start_retention(gai.clone());
         crate::sources::start_scheduler(gai.clone());
+        crate::data::start_scheduler(gai.clone());
     }
     Ok(Instance { gai, rt, wf })
 }

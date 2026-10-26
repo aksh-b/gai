@@ -70,6 +70,12 @@
 # model = "rerank-v3.5"
 # api_key_env = "COHERE_API_KEY"
 
+# ---- email and webhooks for scheduled reports and dashboard alerts ----
+# [notify]
+# smtp_url = "smtps://gai%40example.com@smtp.example.com:465"
+# password_env = "GAI_SMTP_PASSWORD"
+# from = "gai <gai@example.com>"
+
 # ---- media: image_gen, speak, transcribe and /v1/audio, /v1/images ----
 # [media]
 # image = "openai/gpt-image-1"

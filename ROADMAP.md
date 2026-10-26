@@ -81,7 +81,14 @@ answered from the graph alone (counts, paths).
 
 Done when a folder of scanned contracts can be searched, compared and turned into a table.
 
-## 18. Data and BI
+## 18. Data and BI — done (2026-10-26)
+
+Built: read-only connections to Postgres, MySQL, SQLite, BigQuery and
+Snowflake with schemas; `sql_schema`/`sql_query`/`sql_execute`;
+dashboards with schedules and KPI alerts; reports delivered by email or
+webhook from triggers; a data-analysis skill (drivers, forecasts,
+anomalies, data quality). Not checked: the end-to-end "why did signups
+drop" answer with a real model.
 
 - **Database connectors** [40]: Postgres, MySQL, SQLite, BigQuery and Snowflake as read-only sources with schema introspection.
 - **Text-to-SQL** [41, 93]: a `sql_query` tool with schema context, validation and a dry run, row limits and approval for anything that isn't a SELECT.

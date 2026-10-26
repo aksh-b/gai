@@ -16,6 +16,15 @@ initial development and will ship as 0.1.0.
 
 ### Added
 
+- **Dashboards, alerts and reports.** Dashboards of SQL panels (line, bar,
+  area, pie, number, table) that refresh on a schedule, built by agents
+  with `save_dashboard` or under **Data › Dashboards**; panel alerts email
+  or call a webhook when a KPI crosses a limit. Triggers take `deliver`
+  to send their run's answer and files: scheduled reports. `[notify]`
+  configures SMTP (or a folder of `.eml` files).
+- **Data-analysis skill.** Drivers of a change, forecasts, anomalies and
+  data-quality checks in Python for `code_exec`, installed with the
+  Database analyst template.
 - **Databases.** Read-only connections to Postgres, MySQL, SQLite, BigQuery
   and Snowflake (`gai data`, the **Data** page, `/v1/connections`), with
   their tables read for agents. Tools `sql_schema`, `sql_query` (one

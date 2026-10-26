@@ -77,4 +77,69 @@ impl DataStore for SqliteStore {
         }
         Ok(())
     }
+
+    async fn put_dashboard(&self, name: &str, spec: &Value) -> Result<()> {
+        let ts = now();
+        sqlx::query(
+            "INSERT INTO dashboards (name, spec, created_at, updated_at) VALUES (?, ?, ?, ?)
+             ON CONFLICT (name) DO UPDATE SET spec = excluded.spec, updated_at = excluded.updated_at",
+        )
+        .bind(name)
+        .bind(json(spec))
+        .bind(ts)
+        .bind(ts)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn get_dashboard(&self, name: &str) -> Result<Option<DashboardRecord>> {
+        let row = sqlx::query("SELECT * FROM dashboards WHERE name = ?")
+            .bind(name)
+            .fetch_optional(&self.pool)
+            .await?;
+        row.as_ref().map(dashboard).transpose()
+    }
+
+    async fn list_dashboards(&self) -> Result<Vec<DashboardRecord>> {
+        let rows = sqlx::query("SELECT * FROM dashboards ORDER BY name")
+            .fetch_all(&self.pool)
+            .await?;
+        rows.iter().map(dashboard).collect()
+    }
+
+    async fn delete_dashboard(&self, name: &str) -> Result<bool> {
+        let r = sqlx::query("DELETE FROM dashboards WHERE name = ?")
+            .bind(name)
+            .execute(&self.pool)
+            .await?;
+        Ok(r.rows_affected() > 0)
+    }
+
+    async fn save_dashboard_results(&self, name: &str, results: &Value) -> Result<()> {
+        let r = sqlx::query("UPDATE dashboards SET results = ?, refreshed_at = ? WHERE name = ?")
+            .bind(json(results))
+            .bind(now())
+            .bind(name)
+            .execute(&self.pool)
+            .await?;
+        if r.rows_affected() == 0 {
+            return Err(StoreError::NotFound(format!("dashboard {name}")));
+        }
+        Ok(())
+    }
+}
+
+fn dashboard(r: &SqliteRow) -> Result<DashboardRecord> {
+    Ok(DashboardRecord {
+        name: r.try_get("name")?,
+        spec: parse(&r.try_get::<String, _>("spec")?)?,
+        results: r
+            .try_get::<Option<String>, _>("results")?
+            .map(|s| parse(&s))
+            .transpose()?,
+        refreshed_at: r.try_get("refreshed_at")?,
+        created_at: r.try_get("created_at")?,
+        updated_at: r.try_get("updated_at")?,
+    })
 }

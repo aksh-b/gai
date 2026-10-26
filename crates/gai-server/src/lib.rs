@@ -143,6 +143,7 @@ pub async fn serve(
     let policy = AuthPolicy::new(mode, local, settings.rate_limit_per_minute);
     governance::start_retention(gai.clone());
     sources::start_scheduler(gai.clone());
+    data::start_scheduler(gai.clone());
     let app = router(gai, policy, opts.dashboard).await?;
     let listener = tokio::net::TcpListener::bind(opts.bind).await?;
     axum::serve(listener, app)

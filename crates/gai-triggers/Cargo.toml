@@ -6,6 +6,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+gai-tools.workspace = true
 gai-agent.workspace = true
 gai-orchestra.workspace = true
 gai-store.workspace = true

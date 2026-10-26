@@ -919,6 +919,36 @@ pub async fn workflows_are_versioned(s: SharedStore) {
     assert!(s.get_workflow("w", None).await.unwrap().is_none());
 }
 
+pub async fn dashboards(s: SharedStore) {
+    s.put_dashboard("growth", &json!({"title": "Growth"}))
+        .await
+        .unwrap();
+    let d = s.get_dashboard("growth").await.unwrap().unwrap();
+    assert_eq!(
+        (d.spec["title"].clone(), d.results),
+        (json!("Growth"), None)
+    );
+    s.save_dashboard_results("growth", &json!({"panels": [1]}))
+        .await
+        .unwrap();
+    s.put_dashboard("growth", &json!({"title": "Growth 2"}))
+        .await
+        .unwrap();
+    let d = s.get_dashboard("growth").await.unwrap().unwrap();
+    assert_eq!(d.spec["title"], "Growth 2");
+    assert_eq!(
+        d.results.unwrap()["panels"][0],
+        1,
+        "results survive a new spec"
+    );
+    assert!(d.refreshed_at.is_some());
+    s.put_dashboard("ads", &json!({})).await.unwrap();
+    assert_eq!(s.list_dashboards().await.unwrap().len(), 2);
+    assert!(s.save_dashboard_results("nope", &json!({})).await.is_err());
+    assert!(s.delete_dashboard("ads").await.unwrap());
+    assert!(!s.delete_dashboard("ads").await.unwrap());
+}
+
 pub async fn data_connections(s: SharedStore) {
     let spec = json!({"kind": "sqlite", "path": "a.db"});
     s.put_connection("sales", "sqlite", &spec).await.unwrap();
@@ -1510,6 +1540,12 @@ pub async fn sources_keep_their_sync_state(s: SharedStore) {
 #[macro_export]
 macro_rules! conformance_tests {
     ($make:expr) => {
+        #[tokio::test]
+        async fn dashboards() {
+            if let Some(s) = $make.await {
+                $crate::conformance::dashboards(s).await;
+            }
+        }
         #[tokio::test]
         async fn data_connections() {
             if let Some(s) = $make.await {

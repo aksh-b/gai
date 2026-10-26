@@ -24,6 +24,12 @@ pub enum DataCmd {
         #[arg(long)]
         refresh: bool,
     },
+    /// List dashboards
+    Dashboards,
+    /// Save a dashboard from a YAML or JSON file, and refresh it
+    SaveDashboard { file: PathBuf },
+    /// Run a dashboard's queries now (and send alerts that start firing)
+    Refresh { name: String },
     /// Run one read-only query
     Query {
         name: String,
@@ -82,6 +88,68 @@ pub async fn run(gai: &Gai, cmd: DataCmd) -> anyhow::Result<()> {
                     spec.name,
                     s.tables.len()
                 );
+            }
+        }
+        DataCmd::Dashboards => {
+            for d in gai.dashboards().await?.list().await? {
+                let at = d
+                    .results
+                    .as_ref()
+                    .and_then(|r| r.refreshed_at)
+                    .map(|t| t.format("%Y-%m-%d %H:%M").to_string())
+                    .unwrap_or_else(|| "never".into());
+                let alerting = d
+                    .results
+                    .as_ref()
+                    .map(|r| r.panels.iter().filter(|p| p.alerting).count())
+                    .unwrap_or(0);
+                println!(
+                    "{:<20} {:<28} {} panels  {}{}",
+                    d.spec.name,
+                    d.spec.title,
+                    d.spec.panels.len(),
+                    dim(&format!("refreshed {at}")),
+                    if alerting > 0 {
+                        format!("  {alerting} alerting")
+                    } else {
+                        String::new()
+                    }
+                );
+            }
+        }
+        DataCmd::SaveDashboard { file } => {
+            let v: serde_json::Value = serde_yaml::from_str(&std::fs::read_to_string(&file)?)?;
+            let d = gai.dashboards().await?;
+            let spec = gai::data::dashboards::Dashboards::parse(v)?;
+            d.save(&spec).await?;
+            let r = d.refresh(&spec.name).await?;
+            let failed = r.panels.iter().filter(|p| p.error.is_some()).count();
+            println!(
+                "{} {} ({} panels, {failed} failed)",
+                green("saved"),
+                spec.name,
+                r.panels.len()
+            );
+        }
+        DataCmd::Refresh { name } => {
+            let r = gai.dashboards().await?.refresh(&name).await?;
+            for (i, p) in r.panels.iter().enumerate() {
+                match &p.error {
+                    Some(e) => println!("{i}: failed: {e}"),
+                    None => println!(
+                        "{i}: {} rows{}",
+                        p.rows.len(),
+                        p.value
+                            .map(|v| format!(
+                                ", value {v}{}",
+                                if p.alerting { " (alerting)" } else { "" }
+                            ))
+                            .unwrap_or_default()
+                    ),
+                }
+            }
+            for a in &r.alerts {
+                println!("alert sent: {a}");
             }
         }
         DataCmd::Delete { name } => {

@@ -44,6 +44,18 @@ pub struct Session {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Charts with their queries. The data crate owns the spec's shape.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct DashboardRecord {
+    pub name: String,
+    pub spec: Value,
+    /// What the last refresh found.
+    pub results: Option<Value>,
+    pub refreshed_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 /// A database agents can query. The data crate owns the spec's shape.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct DataConnection {

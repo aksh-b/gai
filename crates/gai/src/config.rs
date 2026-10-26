@@ -70,6 +70,8 @@ pub struct Config {
     /// The persona runs speak as when neither the run nor its agent picks
     /// one, and where it goes in the prompt.
     pub persona: gai_agent::PersonaDefaults,
+    /// Email and webhooks for reports and alerts.
+    pub notify: gai_tools::notify::NotifySettings,
     #[serde(flatten)]
     pub llm: LlmConfig,
     /// Set on an organization's instance (see `Gai::for_org`): its slug.

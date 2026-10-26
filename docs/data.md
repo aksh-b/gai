@@ -65,6 +65,94 @@ The **Database analyst** template uses them with `code_exec`, so it can
 chart results and dig into why a number changed ("why did signups drop
 last week?": the change overall, then by channel, plan, country and so on).
 
+## Analysis
+
+The **data-analysis** skill (installed with the Database analyst template,
+or on its own from the template gallery) gives agents four tested Python
+functions over query results, run with `code_exec`:
+
+| Function | Answers |
+| --- | --- |
+| `drivers` | why a number changed: the last N days against the N before, broken down by each dimension, with each value's share of the change |
+| `forecast` | what comes next: Holt-Winters with a weekly (or other) season and 80%/95% ranges |
+| `anomalies` | which points are far off the rolling median |
+| `quality` | empty or constant columns, duplicates, missing days, thin days, the newest date |
+
+Each prints a short summary and saves a chart. Ask the analyst "why did
+signups drop last week?": it reads the schema, queries signups by day and
+segment, runs `drivers`, checks `quality` in case the drop is a data
+problem, and answers with the numbers and a chart.
+
+## Dashboards and alerts
+
+A dashboard is panels of a query and a chart, refreshed on a schedule:
+
+```yaml
+# growth.yaml
+name: growth
+title: Growth
+refresh_minutes: 60
+notify: { email: [ana@example.com], webhook: https://hooks.example.com/gai }
+panels:
+  - title: Signups per day
+    connection: app
+    sql: SELECT day, COUNT(*) AS signups FROM signups GROUP BY day ORDER BY day
+    chart: line            # line | bar | area | pie | number | table
+    x: day
+    y: [signups]
+    alert: { below: 50 }   # a KPI monitor: the last row's signups
+  - title: Signups today
+    connection: app
+    sql: SELECT COUNT(*) FROM signups WHERE day = CURRENT_DATE
+    chart: number
+```
+
+```bash
+gai data save-dashboard growth.yaml
+gai data refresh growth
+```
+
+Or ask an agent with `save_dashboard` in its tools (the Database analyst
+has it) to "make a dashboard of daily signups and tell me if it drops
+under 50", or write one under **Data › Dashboards**. While `gai serve`
+runs, dashboards with `refresh_minutes` refresh on their own. An alert is
+sent when its number crosses the limit, not again while it stays there,
+and again after it has come back.
+
+## Scheduled reports
+
+Any trigger (`gai triggers`, **Automations › Schedules & webhooks**) can deliver what its run produced: the final
+answer as the message, and the files it wrote (`write_document`'s Word or
+PDF, charts) as attachments.
+
+```yaml
+name: weekly-signups
+kind: cron
+schedule: "0 8 * * MON"
+target: { agent: sql-analyst }
+input: |
+  Write last week's signups report: the total against the week before,
+  what drove the change, and a chart. Save it as a PDF with write_document.
+deliver:
+  email: [team@example.com]
+  subject: Weekly signups
+  # webhook: https://hooks.example.com/reports
+  # webhook_secret_env: REPORT_WEBHOOK_SECRET   # signs it: X-Gai-Signature: sha256=<hmac>
+```
+
+Email goes through `[notify]` in gai.toml:
+
+```toml
+[notify]
+smtp_url = "smtps://gai%40example.com@smtp.example.com:465"   # smtp://host:587 for STARTTLS
+password_env = "GAI_SMTP_PASSWORD"
+from = "gai <gai@example.com>"
+# smtp_url = "file:///var/mail/gai"   # write .eml files instead, for trying it out
+```
+
+Webhooks get JSON: `subject`, `text`, `attachments` (name, media type and
+base64 data), and `kind`, `run_id` or `dashboard`.
+
 ## API
 
 | | |
@@ -73,3 +161,5 @@ last week?": the change overall, then by channel, plan, country and so on).
 | `GET, DELETE /v1/connections/{name}` | one connection, with its last schema |
 | `GET /v1/connections/{name}/schema` | tables and columns (`?refresh=true` reads them again) |
 | `POST /v1/connections/{name}/query` | `{"sql": "...", "limit": 100, "dry_run": false}` |
+| `GET, POST /v1/dashboards`, `GET, DELETE /v1/dashboards/{name}` | dashboards and their last results |
+| `POST /v1/dashboards/{name}/refresh` | run its queries now |

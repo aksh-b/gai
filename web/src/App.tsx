@@ -50,6 +50,7 @@ import { Evals } from './pages/Evals';
 import { Audit } from './pages/Audit';
 import { People } from './pages/People';
 import { DataPage } from './pages/Data';
+import { DashboardsPage } from './pages/Dashboards';
 import { AgentAnalytics, ConversationSearch } from './pages/Insights';
 import { Skills } from './pages/Skills';
 import { Workflows } from './pages/Workflows';
@@ -85,7 +86,16 @@ const NAV: { id: string; label: string; icon: Icon; routes: string[]; tabs?: { i
     ],
   },
   { id: 'knowledge', label: 'Knowledge', icon: IconStack, routes: ['knowledge'] },
-  { id: 'data', label: 'Data', icon: IconData, routes: ['data'] },
+  {
+    id: 'data',
+    label: 'Data',
+    icon: IconData,
+    routes: ['data', 'dashboards'],
+    tabs: [
+      { id: 'data', label: 'Databases' },
+      { id: 'dashboards', label: 'Dashboards' },
+    ],
+  },
   {
     id: 'activity',
     label: 'Activity',
@@ -305,6 +315,9 @@ export function App() {
         break;
       case 'automations':
         page = <Workflows selected={route.parts[1] ? decodeURIComponent(route.parts[1]) : undefined} />;
+        break;
+      case 'dashboards':
+        page = <DashboardsPage selected={route.parts[1] ? decodeURIComponent(route.parts[1]) : undefined} />;
         break;
       case 'data':
         page = <DataPage selected={route.parts[1] ? decodeURIComponent(route.parts[1]) : undefined} />;

@@ -126,6 +126,88 @@ pub fn default_agent() -> AgentSpec {
         ])
 }
 
+/// Send a finished report run (one with `metadata.deliver`, set by its
+/// trigger): its answer, and the files it and its sub-runs made.
+async fn deliver_report(
+    notifier: &gai_tools::notify::Notifier,
+    store: &SharedStore,
+    o: &gai_agent::RunOutcome,
+) {
+    let Ok(Some(run)) = store.get_run(&o.run_id).await else {
+        return;
+    };
+    let Some(to) = run
+        .metadata
+        .get("deliver")
+        .and_then(|d| serde_json::from_value::<gai_tools::notify::Delivery>(d.clone()).ok())
+        .filter(|d| !d.is_empty())
+    else {
+        return;
+    };
+    let name = run.metadata["trigger"]
+        .as_str()
+        .unwrap_or("Report")
+        .to_owned();
+    let mut runs = vec![run.id.clone()];
+    if let Ok(children) = store
+        .list_runs(gai_store::RunFilter {
+            parent_run_id: Some(run.id.clone()),
+            limit: Some(100),
+            ..Default::default()
+        })
+        .await
+    {
+        runs.extend(children.into_iter().map(|r| r.id));
+    }
+    let mut attachments = Vec::new();
+    let mut size = 0usize;
+    for id in &runs {
+        for b in store.list_blobs(Some(id), 20).await.unwrap_or_default() {
+            let Ok(Some(data)) = store.blob_data(&b.id).await else {
+                continue;
+            };
+            // Mail servers refuse big messages; links are better past this.
+            if size + data.len() > 15 << 20 {
+                continue;
+            }
+            size += data.len();
+            let name = b.metadata["filename"]
+                .as_str()
+                .map(str::to_owned)
+                .unwrap_or_else(|| {
+                    format!(
+                        "{}.{}",
+                        b.id,
+                        b.media_type.rsplit('/').next().unwrap_or("bin")
+                    )
+                });
+            attachments.push(gai_tools::notify::Attachment {
+                name,
+                media_type: b.media_type,
+                data,
+            });
+        }
+    }
+    let ok = o.status == gai_store::RunStatus::Completed;
+    let notice = gai_tools::notify::Notice {
+        subject: format!("{name}: {}", chrono::Utc::now().format("%Y-%m-%d")),
+        text: if ok {
+            o.text.clone()
+        } else {
+            format!(
+                "The report didn't finish: {}",
+                o.error.as_deref().unwrap_or("stopped")
+            )
+        },
+        attachments,
+        meta: serde_json::json!({"kind": "report", "trigger": name, "run_id": run.id, "status": o.status}),
+    };
+    match notifier.send(&to, &notice).await {
+        Ok(sent) => tracing::info!(run = %run.id, ?sent, "report delivered"),
+        Err(e) => tracing::warn!(run = %run.id, error = %e, "could not deliver the report"),
+    }
+}
+
 /// An organization slug as a SQL identifier part (`-` becomes `_`).
 fn org_ident(slug: &str) -> String {
     slug.replace('-', "_")
@@ -145,6 +227,7 @@ pub struct Gai {
     triggers: OnceCell<gai_triggers::Triggers>,
     /// Database connections, made when the runtime opens.
     data: std::sync::OnceLock<gai_data::Data>,
+    dashboards: std::sync::OnceLock<gai_data::dashboards::Dashboards>,
 }
 
 impl Gai {
@@ -168,6 +251,7 @@ impl Gai {
             workflows: OnceCell::new(),
             triggers: OnceCell::new(),
             data: std::sync::OnceLock::new(),
+            dashboards: std::sync::OnceLock::new(),
         })
     }
 
@@ -507,6 +591,19 @@ impl Gai {
                 for tool in gai_data::tools::tools(data.clone()) {
                     rt.register_tool(tool);
                 }
+                let dashboards = self.dashboards.get_or_init(|| {
+                    gai_data::dashboards::Dashboards::new(data.clone(), Some(self.notifier()))
+                });
+                rt.register_tool(dashboards.tool());
+                // Scheduled reports: a trigger's run sends what it made.
+                let (notifier, reports_store) = (self.notifier(), store.clone());
+                rt.set_finish_hook(
+                    "deliver-report",
+                    Arc::new(move |o: gai_agent::RunOutcome| {
+                        let (notifier, store) = (notifier.clone(), reports_store.clone());
+                        Box::pin(async move { deliver_report(&notifier, &store, &o).await })
+                    }),
+                );
                 match gai_sandbox::from_settings(&self.config.sandbox) {
                     Ok(Some(sb)) => rt.register_tool(Arc::new(gai_sandbox::code_exec(
                         sb,
@@ -591,6 +688,20 @@ impl Gai {
     /// their results.
     pub async fn evals(&self) -> Result<gai_eval::Evaluator, Error> {
         Ok(gai_eval::Evaluator::new(self.runtime().await?.clone()))
+    }
+
+    /// Email and webhooks, from `[notify]`.
+    pub fn notifier(&self) -> gai_tools::notify::Notifier {
+        gai_tools::notify::Notifier::new(
+            self.config.notify.clone(),
+            self.config.tools.allow_private_network && !self.config.tools.confined,
+        )
+    }
+
+    /// Dashboards over the database connections.
+    pub async fn dashboards(&self) -> Result<&gai_data::dashboards::Dashboards, Error> {
+        self.runtime().await?;
+        Ok(self.dashboards.get().expect("made with the runtime"))
     }
 
     /// Database connections and querying them.

@@ -48,6 +48,7 @@ getrandom = "0.3"
 governor = "0.10"
 hmac = "0.12"
 jsonwebtoken = "9"
+lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls", "ring", "webpki-roots", "file-transport", "hostname"] }
 mime_guess = "2"
 minijinja = "2"
 notify = "8"

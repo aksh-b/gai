@@ -35,6 +35,10 @@ pub struct TriggerSpec {
     /// (default true).
     #[serde(default = "yes")]
     pub skip_if_running: bool,
+    /// Send the run's answer and the files it made (by email or webhook)
+    /// when it finishes: a scheduled report.
+    #[serde(default, skip_serializing_if = "gai_tools::notify::Delivery::is_empty")]
+    pub deliver: gai_tools::notify::Delivery,
     #[serde(default = "yes", skip_serializing)]
     pub enabled: bool,
 }
@@ -115,6 +119,7 @@ impl TriggerSpec {
 
     /// Check what can be checked without the runtime.
     pub fn validate(&self) -> Result<(), String> {
+        self.deliver.validate()?;
         if self.name.is_empty()
             || self.name.len() > 64
             || !self

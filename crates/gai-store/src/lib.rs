@@ -190,6 +190,12 @@ pub trait DataStore: Send + Sync {
     async fn list_connections(&self) -> Result<Vec<DataConnection>>;
     async fn delete_connection(&self, name: &str) -> Result<bool>;
     async fn save_connection_schema(&self, name: &str, schema: &Value) -> Result<()>;
+    /// Create or replace (results are kept).
+    async fn put_dashboard(&self, name: &str, spec: &Value) -> Result<()>;
+    async fn get_dashboard(&self, name: &str) -> Result<Option<DashboardRecord>>;
+    async fn list_dashboards(&self) -> Result<Vec<DashboardRecord>>;
+    async fn delete_dashboard(&self, name: &str) -> Result<bool>;
+    async fn save_dashboard_results(&self, name: &str, results: &Value) -> Result<()>;
 }
 
 /// A knowledge graph per collection, built from its chunks.

@@ -275,6 +275,9 @@ impl Triggers {
         meta.insert("trigger_id".into(), json!(rec.id));
         meta.insert("trigger".into(), json!(rec.name));
         meta.insert("trigger_reason".into(), json!(reason));
+        if !spec.deliver.is_empty() {
+            meta.insert("deliver".into(), json!(spec.deliver));
+        }
         match &spec.target {
             Target::Agent(r) => {
                 let template = spec

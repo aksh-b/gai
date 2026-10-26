@@ -7,6 +7,7 @@
 //! kept, so agents can write SQL against them.
 
 mod bigquery;
+pub mod dashboards;
 mod mysql;
 mod pg;
 mod snowflake;
@@ -346,7 +347,7 @@ struct Inner {
 /// Settings holding an organization's secrets (see gai-memory).
 const SECRET_PREFIX: &str = "secret:";
 
-fn valid_name(n: &str) -> bool {
+pub(crate) fn valid_name(n: &str) -> bool {
     !n.is_empty()
         && n.len() <= 64
         && n.chars()
