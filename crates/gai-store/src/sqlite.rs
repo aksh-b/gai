@@ -29,6 +29,8 @@ mod memory;
 mod personas;
 #[path = "sqlite_quality.rs"]
 mod quality;
+#[path = "sqlite_recordings.rs"]
+mod recordings;
 #[path = "sqlite_sources.rs"]
 mod sources;
 #[path = "sqlite_triggers.rs"]

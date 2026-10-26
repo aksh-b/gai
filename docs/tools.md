@@ -17,8 +17,9 @@ this server offers and its default policy.
 Agents also get tools from their own settings: `rag_search` (from
 `knowledge`), `memory_append`, `memory_replace`, `memory_rethink`,
 `remember` and `memory_search` (from `memory`), `load_skill` (from
-`skills`), `ask_<agent>` (from `delegates`) and `image_gen`, `speak` and
-`transcribe` (when media models are set).
+`skills`), `ask_<agent>` (from `delegates`) and `image_gen`, `speak`,
+`transcribe`, `meeting_notes`, `analyze_audio` and `summarize_video` (when
+media models are set; see [voice](voice.md)).
 
 `[hooks] redact_secrets` (on by default) masks API keys, tokens and
 passwords in tool output before the model sees it.

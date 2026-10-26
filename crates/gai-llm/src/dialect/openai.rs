@@ -29,10 +29,10 @@ use crate::http::{HttpTarget, send, sse};
 use crate::{
     BlockKind, ChatEvent, ChatModel, ChatRequest, ChatStream, Effort, EmbedResponse,
     EmbeddingModel, GeneratedImage, ImageModel, ImageRequest, Images, LlmError, MediaUsage,
-    ModelInfo, ProviderConfig, ResponseFormat, SharedChatModel, SharedEmbeddingModel,
-    SharedImageModel, SharedSpeechToText, SharedTextToSpeech, Speech, SpeechRequest, SpeechToText,
-    StopReason, TextToSpeech, TranscribeRequest, Transcript, audio_media_type, extension_for,
-    sniff_image,
+    ModelInfo, ProviderConfig, RealtimeTarget, ResponseFormat, Segment, SharedChatModel,
+    SharedEmbeddingModel, SharedImageModel, SharedSpeechToText, SharedTextToSpeech, Speech,
+    SpeechRequest, SpeechToText, StopReason, TextToSpeech, TranscribeRequest, Transcript,
+    audio_media_type, extension_for, sniff_image,
 };
 
 pub struct OpenAiDialect;
@@ -115,6 +115,15 @@ impl Provider for OpenAiProvider {
 
     fn image(&self, info: ModelInfo) -> Result<SharedImageModel, LlmError> {
         Ok(Arc::new(self.media(info)))
+    }
+
+    fn realtime(&self, info: ModelInfo) -> Result<RealtimeTarget, LlmError> {
+        let path = format!("/realtime?model={}", info.model);
+        Ok(RealtimeTarget {
+            url: self.http.ws_url(&path),
+            headers: self.http.header_pairs(),
+            model: info.model,
+        })
     }
 
     async fn list_models(&self) -> Result<Vec<RemoteModel>, LlmError> {
@@ -613,6 +622,19 @@ impl SpeechToText for OpenAiMedia {
             duration: Option<f64>,
             #[serde(default)]
             usage: Option<Value>,
+            #[serde(default)]
+            segments: Vec<RespSegment>,
+        }
+        #[derive(Deserialize)]
+        struct RespSegment {
+            #[serde(default)]
+            start: f64,
+            #[serde(default)]
+            end: f64,
+            #[serde(default)]
+            text: String,
+            #[serde(default)]
+            speaker: Option<String>,
         }
         let filename = req
             .filename
@@ -622,16 +644,25 @@ impl SpeechToText for OpenAiMedia {
             .file_name(filename)
             .mime_str(&req.media_type)
             .map_err(|e| LlmError::InvalidRequest(format!("media type: {e}")))?;
-        // Whisper models also report the duration and language; newer
-        // transcription models only answer plain `json`.
-        let verbose = self.info.model.contains("whisper");
+        // Whisper models also report the duration, language and timed
+        // segments; diarizing models label speakers; other transcription
+        // models only answer plain `json`.
+        let format = if self.info.model.contains("diarize") {
+            "diarized_json"
+        } else if self.info.model.contains("whisper") {
+            "verbose_json"
+        } else {
+            "json"
+        };
         let mut form = Form::new()
             .part("file", part)
             .text("model", self.info.model.clone())
-            .text(
-                "response_format",
-                if verbose { "verbose_json" } else { "json" },
-            );
+            .text("response_format", format);
+        match format {
+            "verbose_json" => form = form.text("timestamp_granularities[]", "segment"),
+            "diarized_json" => form = form.text("chunking_strategy", "auto"),
+            _ => {}
+        }
         if let Some(l) = req.language {
             form = form.text("language", l);
         }
@@ -648,6 +679,7 @@ impl SpeechToText for OpenAiMedia {
         let seconds = r
             .duration
             .or_else(|| r.usage.as_ref().and_then(|u| u["seconds"].as_f64()));
+        let seconds = seconds.or_else(|| r.segments.last().map(|s| s.end));
         Ok(Transcript {
             text: r.text.trim().to_owned(),
             language: r.language,
@@ -656,6 +688,17 @@ impl SpeechToText for OpenAiMedia {
                 seconds: seconds.unwrap_or(0.0),
                 ..Default::default()
             },
+            segments: r
+                .segments
+                .into_iter()
+                .filter(|s| !s.text.trim().is_empty())
+                .map(|s| Segment {
+                    start: s.start,
+                    end: s.end,
+                    text: s.text.trim().to_owned(),
+                    speaker: s.speaker,
+                })
+                .collect(),
         })
     }
 }
@@ -1007,6 +1050,53 @@ mod media_tests {
             ProviderConfig::new("openai", &format!("{}/v1", server.uri())),
         );
         ModelRegistry::from_config(cfg).unwrap()
+    }
+
+    #[tokio::test]
+    async fn diarized_transcripts_have_speakers() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/audio/transcriptions"))
+            .and(body_string_contains("diarized_json"))
+            .and(body_string_contains("chunking_strategy"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "text": "Hi. Hello.",
+                "segments": [
+                    {"type": "transcript.text.segment", "id": "s1", "start": 0.0, "end": 1.2, "text": " Hi.", "speaker": "A"},
+                    {"type": "transcript.text.segment", "id": "s2", "start": 1.4, "end": 2.6, "text": "Hello.", "speaker": "B"}
+                ],
+                "usage": {"type": "duration", "seconds": 3}
+            })))
+            .mount(&server)
+            .await;
+        let r = registry(&server).await;
+        let t = r
+            .transcription("oa/gpt-4o-transcribe-diarize")
+            .unwrap()
+            .transcribe(TranscribeRequest {
+                audio: vec![0; 10],
+                media_type: "audio/wav".into(),
+                diarize: true,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(t.segments.len(), 2);
+        assert_eq!(t.segments[1].speaker.as_deref(), Some("B"));
+        assert_eq!(t.usage.seconds, 3.0);
+        assert_eq!(
+            t.timed_text(),
+            "[0:00] A: Hi.
+[0:01] B: Hello."
+        );
+
+        let rt = r.realtime("oa/gpt-realtime").unwrap();
+        assert!(rt.url.starts_with("ws://"), "{}", rt.url);
+        assert!(
+            rt.url.ends_with("/v1/realtime?model=gpt-realtime"),
+            "{}",
+            rt.url
+        );
     }
 
     #[tokio::test]

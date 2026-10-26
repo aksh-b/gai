@@ -196,7 +196,8 @@ impl AuthPolicy {
 /// The scope a request needs, from its method and path. Each scope
 /// includes the ones below it: admin, build, run, read.
 pub fn required_scope(method: &Method, path: &str) -> Scope {
-    let write = *method != Method::GET && *method != Method::HEAD;
+    // A voice session runs the agent, though it opens with a GET.
+    let write = (*method != Method::GET && *method != Method::HEAD) || path == "/v1/voice";
     // Saving or deleting a workflow is build; running or validating one is not.
     let workflow_build = path.starts_with("/v1/workflows")
         && !path.ends_with("/runs")
@@ -304,7 +305,9 @@ fn urlencoding_decode(s: &str) -> String {
         .unwrap_or_else(|| s.to_owned())
 }
 
-/// The API key a request carries (`Authorization: Bearer` or `x-api-key`).
+/// The API key a request carries (`Authorization: Bearer` or `x-api-key`;
+/// browsers opening a WebSocket, which can't set headers, offer it as the
+/// subprotocol `bearer.<key>`).
 pub(crate) fn header_token(h: &HeaderMap) -> Option<String> {
     h.get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
@@ -314,6 +317,12 @@ pub(crate) fn header_token(h: &HeaderMap) -> Option<String> {
         })
         .or_else(|| h.get("x-api-key").and_then(|v| v.to_str().ok()))
         .map(|t| t.trim().to_owned())
+        .or_else(|| {
+            h.get(header::SEC_WEBSOCKET_PROTOCOL)
+                .and_then(|v| v.to_str().ok())?
+                .split(',')
+                .find_map(|p| p.trim().strip_prefix("bearer.").map(str::to_owned))
+        })
         .filter(|t| !t.is_empty())
 }
 

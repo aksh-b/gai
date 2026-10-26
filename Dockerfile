@@ -5,8 +5,9 @@
 #
 # Build with `--build-arg BROWSER=1` to include Chromium for the browser
 # tools (about 300 MB more). Tesseract and poppler, for reading scanned
-# documents, are included; leave them out with `--build-arg OCR=0`. See
-# README.md for keys, models and the code sandbox.
+# documents, are included; leave them out with `--build-arg OCR=0`. So is
+# ffmpeg, for meeting recordings and videos (`--build-arg MEDIA=0` to leave
+# it out). See README.md for keys, models and the code sandbox.
 
 # ---- dashboard ----
 FROM docker.io/library/node:22-bookworm-slim AS web
@@ -30,6 +31,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 FROM docker.io/library/debian:bookworm-slim
 ARG BROWSER=0
 ARG OCR=1
+ARG MEDIA=1
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates tini \
  && if [ "$BROWSER" != "0" ]; then \
@@ -37,6 +39,9 @@ RUN apt-get update \
     fi \
  && if [ "$OCR" != "0" ]; then \
       apt-get install -y --no-install-recommends tesseract-ocr poppler-utils; \
+    fi \
+ && if [ "$MEDIA" != "0" ]; then \
+      apt-get install -y --no-install-recommends ffmpeg; \
     fi \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --system --uid 10001 --home-dir /data --create-home gai

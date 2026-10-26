@@ -898,6 +898,14 @@ const TEMPLATES: &[Template] = &[
         files: &[],
     },
     Template {
+        id: "meeting-assistant",
+        kind: "agent",
+        title: "Meeting notes (and calls, videos)",
+        needs: &[],
+        yaml: include_str!("../../../examples/agents/meeting-assistant.yaml"),
+        files: &[],
+    },
+    Template {
         id: "data-analyst",
         kind: "agent",
         title: "Data analyst (runs code)",

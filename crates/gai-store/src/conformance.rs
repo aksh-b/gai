@@ -949,6 +949,51 @@ pub async fn dashboards(s: SharedStore) {
     assert!(!s.delete_dashboard("ads").await.unwrap());
 }
 
+pub async fn recordings(s: SharedStore) {
+    let r = s
+        .create_recording(NewRecording {
+            kind: "meeting".into(),
+            title: "Standup".into(),
+            blob_id: Some("blob_1".into()),
+            options: json!({"template": "standup"}),
+        })
+        .await
+        .unwrap();
+    assert_eq!((r.status.as_str(), r.result.clone()), ("processing", None));
+    let got = s.get_recording(&r.id).await.unwrap().unwrap();
+    assert_eq!(got.options["template"], "standup");
+    s.finish_recording(&r.id, "done", Some(&json!({"summary": "ok"})), None)
+        .await
+        .unwrap();
+    let got = s.get_recording(&r.id).await.unwrap().unwrap();
+    assert_eq!(
+        (got.status.as_str(), got.result.unwrap()["summary"].clone()),
+        ("done", json!("ok"))
+    );
+    let second = s
+        .create_recording(NewRecording {
+            kind: "video".into(),
+            title: "Demo".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    s.finish_recording(&second.id, "failed", None, Some("no audio"))
+        .await
+        .unwrap();
+    let list = s.list_recordings(10).await.unwrap();
+    assert_eq!(list.len(), 2);
+    assert_eq!(list[0].id, second.id, "newest first");
+    assert_eq!(list[0].error.as_deref(), Some("no audio"));
+    assert!(
+        s.finish_recording("rec_nope", "done", None, None)
+            .await
+            .is_err()
+    );
+    assert!(s.delete_recording(&r.id).await.unwrap());
+    assert!(!s.delete_recording(&r.id).await.unwrap());
+}
+
 pub async fn data_connections(s: SharedStore) {
     let spec = json!({"kind": "sqlite", "path": "a.db"});
     s.put_connection("sales", "sqlite", &spec).await.unwrap();
@@ -1544,6 +1589,12 @@ macro_rules! conformance_tests {
         async fn dashboards() {
             if let Some(s) = $make.await {
                 $crate::conformance::dashboards(s).await;
+            }
+        }
+        #[tokio::test]
+        async fn recordings() {
+            if let Some(s) = $make.await {
+                $crate::conformance::recordings(s).await;
             }
         }
         #[tokio::test]

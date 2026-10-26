@@ -51,6 +51,7 @@ import { Audit } from './pages/Audit';
 import { People } from './pages/People';
 import { DataPage } from './pages/Data';
 import { DashboardsPage } from './pages/Dashboards';
+import { RecordingsPage } from './pages/Recordings';
 import { AgentAnalytics, ConversationSearch } from './pages/Insights';
 import { Skills } from './pages/Skills';
 import { Workflows } from './pages/Workflows';
@@ -85,7 +86,16 @@ const NAV: { id: string; label: string; icon: Icon; routes: string[]; tabs?: { i
       { id: 'schedules', label: 'Schedules & webhooks' },
     ],
   },
-  { id: 'knowledge', label: 'Knowledge', icon: IconStack, routes: ['knowledge'] },
+  {
+    id: 'knowledge',
+    label: 'Knowledge',
+    icon: IconStack,
+    routes: ['knowledge', 'recordings'],
+    tabs: [
+      { id: 'knowledge', label: 'Documents' },
+      { id: 'recordings', label: 'Recordings' },
+    ],
+  },
   {
     id: 'data',
     label: 'Data',
@@ -341,6 +351,9 @@ export function App() {
         break;
       case 'media':
         page = <MediaStudio />;
+        break;
+      case 'recordings':
+        page = <RecordingsPage selected={route.parts[1] ? decodeURIComponent(route.parts[1]) : undefined} />;
         break;
       case 'schedules':
         page = <Triggers selected={route.parts[1]} />;

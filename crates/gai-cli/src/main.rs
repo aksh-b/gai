@@ -84,6 +84,9 @@ enum Command {
     Speak(media::SpeakArgs),
     /// Turn speech in an audio file into text
     Transcribe(media::TranscribeArgs),
+    /// Notes on a meeting or call recording, or a summary of a video:
+    /// speakers, decisions, action items, chapters
+    Notes(media::NotesArgs),
     /// Generate images from a prompt and save them
     Image(media::ImageArgs),
     /// Chat with an agent in a full-screen terminal UI
@@ -221,6 +224,7 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
         Command::Replay(args) => replay::replay(&gai, args).await,
         Command::Speak(args) => media::speak(&gai, args).await,
         Command::Transcribe(args) => media::transcribe(&gai, args).await,
+        Command::Notes(args) => media::notes(&gai, args).await,
         Command::Image(args) => media::image(&gai, args).await,
         Command::Chat(args) => chat::chat(&gai, args).await,
         Command::Ask(args) => ask::ask(&gai, args).await,

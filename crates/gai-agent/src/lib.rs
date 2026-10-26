@@ -14,6 +14,7 @@ pub mod hooks;
 mod media;
 mod multi;
 mod persona;
+mod recordings;
 mod render;
 mod replay;
 mod runtime;

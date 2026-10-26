@@ -306,6 +306,8 @@ pub enum ModelKind {
     Speech,
     /// Image generation.
     Image,
+    /// Speech in and out over one live session.
+    Realtime,
 }
 
 /// A resolved model: its address, what it can do and what it costs.

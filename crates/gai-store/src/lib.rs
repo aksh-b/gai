@@ -198,6 +198,25 @@ pub trait DataStore: Send + Sync {
     async fn save_dashboard_results(&self, name: &str, results: &Value) -> Result<()>;
 }
 
+/// Recordings and what was made of them.
+#[async_trait]
+pub trait RecordingStore: Send + Sync {
+    /// Starts as `processing`.
+    async fn create_recording(&self, new: NewRecording) -> Result<Recording>;
+    async fn get_recording(&self, id: &str) -> Result<Option<Recording>>;
+    /// Newest first.
+    async fn list_recordings(&self, limit: u32) -> Result<Vec<Recording>>;
+    /// Set the status and what processing made (or why it failed).
+    async fn finish_recording(
+        &self,
+        id: &str,
+        status: &str,
+        result: Option<&Value>,
+        error: Option<&str>,
+    ) -> Result<()>;
+    async fn delete_recording(&self, id: &str) -> Result<bool>;
+}
+
 /// A knowledge graph per collection, built from its chunks.
 #[async_trait]
 pub trait GraphStore: Send + Sync {
@@ -644,6 +663,7 @@ pub type SharedVectorIndex = Arc<dyn VectorIndex>;
 pub trait Store:
     DirectoryStore
     + DataStore
+    + RecordingStore
     + GraphStore
     + AgentStore
     + SessionStore
@@ -667,6 +687,7 @@ pub trait Store:
 impl<T> Store for T where
     T: DirectoryStore
         + DataStore
+        + RecordingStore
         + GraphStore
         + AgentStore
         + SessionStore

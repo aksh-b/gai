@@ -52,6 +52,17 @@ impl From<gai::data::DataError> for ApiError {
     }
 }
 
+impl From<gai::media::MediaError> for ApiError {
+    fn from(e: gai::media::MediaError) -> Self {
+        use gai::media::MediaError as E;
+        match e {
+            E::Invalid(m) => Self::bad_request(m),
+            E::Llm(m) => Self::new(StatusCode::BAD_GATEWAY, m.to_string()),
+            E::Store(s) => s.into(),
+        }
+    }
+}
+
 impl From<gai::store::StoreError> for ApiError {
     fn from(e: gai::store::StoreError) -> Self {
         match e {

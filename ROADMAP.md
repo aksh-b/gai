@@ -98,7 +98,14 @@ drop" answer with a real model.
 
 Done when "why did signups drop last week?" gets a correct, charted answer from a connected database.
 
-## 19. Real-time and rich media
+## 19. Real-time and rich media — done (2026-10-27)
+
+Built: voice conversations in the chat and over `/v1/voice` (sentence-by-
+sentence speech, barge-in, realtime speech-to-speech relay with tools);
+speakers, timestamps, language and sentiment for recordings; meeting notes
+with decisions and action items and templates; video summaries from frames
+and speech; `gai notes`. Not checked: a real model and a live realtime
+session end to end.
 
 - **Real-time voice** [35, 39]: streaming speech in and out over WebRTC or WebSocket, with barge-in, through providers' realtime APIs.
 - **Audio intelligence** [38]: speaker labels, language detection and sentiment on transcripts.

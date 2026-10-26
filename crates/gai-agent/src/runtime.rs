@@ -99,7 +99,10 @@ pub type FinishHook = Arc<dyn Fn(RunOutcome) -> BoxFuture<'static, ()> + Send + 
 
 /// Tools the runtime builds for each run from the agent's `memory`,
 /// `knowledge` and `skills` settings, rather than taking from the registry.
-const AGENT_TOOLS: [&str; 14] = [
+const AGENT_TOOLS: [&str; 17] = [
+    "meeting_notes",
+    "analyze_audio",
+    "summarize_video",
     "summarize_document",
     "compare_documents",
     "extract_fields",
@@ -802,6 +805,22 @@ impl Runtime {
                     self.inner.models.clone(),
                     self.inner.store.clone(),
                     settings,
+                    &wanted,
+                )
+                .map_err(AgentError::Invalid)?,
+            );
+        }
+        let wanted: Vec<&str> = crate::recordings::RECORDING_TOOLS
+            .into_iter()
+            .filter(|t| spec.tools.iter().any(|x| x == t))
+            .collect();
+        if !wanted.is_empty() {
+            extras.tools.extend(
+                crate::recordings::recording_tools(
+                    self.inner.models.clone(),
+                    self.inner.store.clone(),
+                    &spec.media.over(&self.inner.config.media),
+                    spec.model.clone().or_else(|| self.default_model()),
                     &wanted,
                 )
                 .map_err(AgentError::Invalid)?,

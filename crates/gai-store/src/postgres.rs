@@ -33,6 +33,8 @@ mod memory;
 mod personas;
 #[path = "pg_quality.rs"]
 mod quality;
+#[path = "pg_recordings.rs"]
+mod recordings;
 #[path = "pg_sources.rs"]
 mod sources;
 #[path = "pg_triggers.rs"]

@@ -312,6 +312,12 @@ impl ModelRegistry {
         self.provider(&info.provider)?.image(info)
     }
 
+    /// Where to open a live speech session with a model, by address.
+    pub fn realtime(&self, spec: &str) -> Result<crate::RealtimeTarget, LlmError> {
+        let info = self.media_info(spec, ModelKind::Realtime)?;
+        self.provider(&info.provider)?.realtime(info)
+    }
+
     fn media_info(&self, spec: &str, kind: ModelKind) -> Result<ModelInfo, LlmError> {
         let chain = self.chain(spec)?;
         let mut info = self.resolve(chain[0])?;

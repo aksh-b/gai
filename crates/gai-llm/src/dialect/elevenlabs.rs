@@ -13,7 +13,7 @@ use serde_json::{Map, Value, json};
 use super::{Dialect, Provider, RemoteModel};
 use crate::http::{HttpTarget, send};
 use crate::{
-    LlmError, MediaUsage, ModelInfo, ProviderConfig, SharedChatModel, SharedSpeechToText,
+    LlmError, MediaUsage, ModelInfo, ProviderConfig, Segment, SharedChatModel, SharedSpeechToText,
     SharedTextToSpeech, Speech, SpeechRequest, SpeechToText, TextToSpeech, TranscribeRequest,
     Transcript, audio_media_type, extension_for,
 };
@@ -145,6 +145,55 @@ impl TextToSpeech for ElevenLabsModel {
     }
 }
 
+/// Segments from Scribe's words: a new one when the speaker changes, after
+/// a sentence once it is 15 seconds long, or at 30 seconds.
+fn word_segments(words: &[Value]) -> Vec<Segment> {
+    let mut out: Vec<Segment> = Vec::new();
+    let mut cur: Option<Segment> = None;
+    for w in words {
+        let text = w["text"].as_str().unwrap_or_default();
+        if w["type"].as_str() == Some("spacing") {
+            if let Some(c) = cur.as_mut() {
+                c.text.push_str(text);
+            }
+            continue;
+        }
+        let (start, end) = (
+            w["start"].as_f64().unwrap_or(0.0),
+            w["end"].as_f64().unwrap_or(0.0),
+        );
+        let speaker = w["speaker_id"].as_str().map(str::to_owned);
+        let split = cur.as_ref().is_some_and(|c| {
+            let long = end - c.start;
+            c.speaker != speaker
+                || long > 30.0
+                || (long > 15.0 && c.text.trim_end().ends_with(['.', '?', '!']))
+        });
+        if split {
+            out.extend(cur.take());
+        }
+        match cur.as_mut() {
+            Some(c) => {
+                c.text.push_str(text);
+                c.end = end;
+            }
+            None => {
+                cur = Some(Segment {
+                    start,
+                    end,
+                    text: text.to_owned(),
+                    speaker,
+                })
+            }
+        }
+    }
+    out.extend(cur);
+    for s in &mut out {
+        s.text = s.text.trim().to_owned();
+    }
+    out
+}
+
 #[async_trait]
 impl SpeechToText for ElevenLabsModel {
     fn info(&self) -> &ModelInfo {
@@ -175,6 +224,9 @@ impl SpeechToText for ElevenLabsModel {
         if let Some(l) = req.language {
             form = form.text("language_code", l);
         }
+        if req.diarize {
+            form = form.text("diarize", "true");
+        }
         let r: Resp = send(self.http.post_multipart("/v1/speech-to-text", form))
             .await?
             .json()
@@ -189,6 +241,7 @@ impl SpeechToText for ElevenLabsModel {
                 seconds: seconds.unwrap_or(0.0),
                 ..Default::default()
             },
+            segments: word_segments(&r.words),
         })
     }
 }

@@ -70,6 +70,11 @@ export type WorkflowVersion = Schemas['WorkflowVersion'];
 export type StoredBlob = Schemas['Blob'];
 export type MediaResult = Schemas['MediaResult'];
 export type TranscribeResult = Schemas['TranscribeResult'];
+export type Recording = Schemas['Recording'];
+export type RecordingResult = Schemas['RecordingResult'];
+export type RecordingOptions = Schemas['RecordingOptions'];
+export type NotesTemplateInfo = Schemas['NotesTemplateInfo'];
+export type TranscriptSegment = Schemas['Segment'];
 export type MediaDefaults = Schemas['MediaDefaults'];
 export type TriggerView = Schemas['TriggerView'];
 export type TriggerEvent = Schemas['TriggerEvent'];
@@ -743,6 +748,12 @@ export const api = {
   },
   transcribe: (body: { audio_base64?: string; media_type?: string; blob_id?: string; model?: string; language?: string }) =>
     request<TranscribeResult>('POST', '/v1/audio/transcriptions', body),
+  recordings: () => get<Recording[]>('/v1/recordings'),
+  recording: (id: string) => get<Recording>(`/v1/recordings/${encodeURIComponent(id)}`),
+  createRecording: (body: { blob_id: string; kind?: string; title?: string; options?: RecordingOptions }) =>
+    request<Recording>('POST', '/v1/recordings', body),
+  deleteRecording: (id: string) => request<void>('DELETE', `/v1/recordings/${encodeURIComponent(id)}`),
+  notesTemplates: () => get<NotesTemplateInfo[]>('/v1/recordings/templates'),
   speak: (body: { text: string; model?: string; voice?: string; format?: string }) =>
     request<MediaResult>('POST', '/v1/audio/speech', body),
   images: (body: { prompt: string; model?: string; size?: string; n?: number; quality?: string }) =>
@@ -816,4 +827,14 @@ export async function streamRun(body: StartRun, onEvent: (e: EventEnvelope) => v
 export async function followRun(id: string, onEvent: (e: EventEnvelope) => void, signal?: AbortSignal) {
   const res = await fetch(`/v1/runs/${id}/events`, { signal, headers: headers(false) });
   await readSse(res, onEvent);
+}
+
+/** A voice chat socket (`/v1/voice`), carrying the API key as a subprotocol. */
+export function voiceSocket(): WebSocket {
+  const url = new URL('/v1/voice', window.location.href);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  const org = getOrg();
+  const key = getApiKey();
+  if (org && !key) url.searchParams.set('org', org);
+  return new WebSocket(url, key ? ['gai', `bearer.${key}`] : ['gai']);
 }

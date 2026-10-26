@@ -56,6 +56,33 @@ pub struct DashboardRecord {
     pub updated_at: DateTime<Utc>,
 }
 
+/// A meeting, call or video, and what processing it made: the media crate
+/// owns `options` and `result`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Recording {
+    pub id: String,
+    /// `meeting`, `video` or `audio`.
+    pub kind: String,
+    pub title: String,
+    /// The stored media.
+    pub blob_id: Option<String>,
+    /// `processing`, `done` or `failed`.
+    pub status: String,
+    pub options: Value,
+    pub result: Option<Value>,
+    pub error: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct NewRecording {
+    pub kind: String,
+    pub title: String,
+    pub blob_id: Option<String>,
+    pub options: Value,
+}
+
 /// A database agents can query. The data crate owns the spec's shape.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct DataConnection {

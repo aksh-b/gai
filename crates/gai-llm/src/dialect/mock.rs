@@ -24,7 +24,7 @@ use super::{Dialect, Provider, RemoteModel};
 use crate::{
     BlockKind, ChatEvent, ChatModel, ChatRequest, ChatResponse, ChatStream, EmbedResponse,
     EmbeddingModel, GeneratedImage, ImageModel, ImageRequest, Images, LlmError, MediaUsage,
-    ModelInfo, ProviderConfig, SharedChatModel, SharedEmbeddingModel, SharedImageModel,
+    ModelInfo, ProviderConfig, Segment, SharedChatModel, SharedEmbeddingModel, SharedImageModel,
     SharedSpeechToText, SharedTextToSpeech, Speech, SpeechRequest, SpeechToText, StopReason,
     TextToSpeech, TranscribeRequest, Transcript,
 };
@@ -150,6 +150,43 @@ fn wav_text(audio: &[u8]) -> Option<String> {
     )
 }
 
+/// One segment per line, timed by its share of the characters. With
+/// `diarize`, a line `Name: words` is `Name` saying `words`.
+fn mock_segments(text: &str, seconds: f64, diarize: bool) -> Vec<Segment> {
+    let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+    let total: usize = lines.iter().map(|l| l.len()).sum::<usize>().max(1);
+    let per_char = if seconds > 0.0 {
+        seconds / total as f64
+    } else {
+        0.06
+    };
+    let mut at = 0.0;
+    lines
+        .into_iter()
+        .map(|l| {
+            let start = at;
+            at += l.len() as f64 * per_char;
+            let (speaker, words) = match l.split_once(':') {
+                Some((who, rest))
+                    if diarize
+                        && !who.trim().is_empty()
+                        && who.split_whitespace().count() <= 3
+                        && who.trim().starts_with(|c: char| c.is_uppercase()) =>
+                {
+                    (Some(who.trim().to_owned()), rest.trim())
+                }
+                _ => (None, l.trim()),
+            };
+            Segment {
+                start,
+                end: at,
+                text: words.to_owned(),
+                speaker,
+            }
+        })
+        .collect()
+}
+
 #[async_trait]
 impl SpeechToText for MockMedia {
     fn info(&self) -> &ModelInfo {
@@ -173,6 +210,7 @@ impl SpeechToText for MockMedia {
             });
         // 16-bit mono at 16 kHz, roughly; enough for pricing tests.
         let seconds = req.audio.len() as f64 / (RATE as f64 * 2.0);
+        let segments = mock_segments(&text, seconds, req.diarize);
         Ok(Transcript {
             text,
             language: req.language.or(Some("en".into())),
@@ -181,6 +219,7 @@ impl SpeechToText for MockMedia {
                 seconds,
                 ..Default::default()
             },
+            segments,
         })
     }
 }

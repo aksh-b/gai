@@ -17,12 +17,14 @@ mod openai;
 mod openapi;
 mod orgs;
 mod personas;
+mod recordings;
 mod setup;
 mod sources;
 mod sso;
 mod triggers;
 mod ui;
 mod versions;
+mod voice;
 mod workflows;
 
 use std::net::SocketAddr;
@@ -109,6 +111,8 @@ pub async fn router(
         .merge(orgs::routes())
         .merge(sso::routes())
         .merge(media::routes())
+        .merge(recordings::routes())
+        .merge(voice::routes())
         .merge(triggers::routes())
         .merge(setup::routes())
         .merge(a2a::routes())
@@ -144,6 +148,7 @@ pub async fn serve(
     governance::start_retention(gai.clone());
     sources::start_scheduler(gai.clone());
     data::start_scheduler(gai.clone());
+    recordings::recover(gai.clone());
     let app = router(gai, policy, opts.dashboard).await?;
     let listener = tokio::net::TcpListener::bind(opts.bind).await?;
     axum::serve(listener, app)

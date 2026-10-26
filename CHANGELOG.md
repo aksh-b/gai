@@ -16,6 +16,27 @@ initial development and will ship as 0.1.0.
 
 ### Added
 
+- **Voice conversations.** **Talk** in the chat holds a spoken conversation
+  with any agent: each pause ends a turn, the answer is spoken sentence by
+  sentence as it is written, and talking over it interrupts. Agents with
+  `media.realtime` (`openai/gpt-realtime`) go through the provider's
+  speech-to-speech session, their tools running in gai. Over the API:
+  the `/v1/voice` WebSocket.
+- **Meeting notes, call analysis and video summaries.** Drop a recording
+  into **Knowledge › Recordings** (or `POST /v1/recordings`, `gai notes`):
+  meetings get speakers, a summary, decisions, action items with owners
+  and dates, and template sections (standup, one-to-one, sales call,
+  interview, retro, lecture); calls get talk time, language, sentiment
+  and key moments; videos get frames described by a vision model and a
+  summary in chapters. Agents get `meeting_notes`, `analyze_audio` and
+  `summarize_video`, and a Meeting notes template. Long recordings and
+  video use ffmpeg, now in the Docker image (`--build-arg MEDIA=0` leaves
+  it out).
+- **Speakers and timestamps in transcripts.** Transcriptions carry timed
+  segments with speakers where the model gives them (Whisper,
+  `gpt-4o-transcribe-diarize`, ElevenLabs Scribe): `gai transcribe
+  --speakers`, `"speakers": true` on `/v1/audio/transcriptions`, and the
+  `transcribe` tool's `speakers`. `[media]` gains `vision` and `realtime`.
 - **Dashboards, alerts and reports.** Dashboards of SQL panels (line, bar,
   area, pie, number, table) that refresh on a schedule, built by agents
   with `save_dashboard` or under **Data › Dashboards**; panel alerts email

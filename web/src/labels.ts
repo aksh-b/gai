@@ -32,6 +32,9 @@ const TOOLS: Record<string, { label: string; verb: (i: Record<string, unknown>) 
   image_gen: { label: 'Make an image', verb: (i) => `Make an image of ${str(i.prompt)}` },
   speak: { label: 'Speak text aloud', verb: () => 'Turn text into speech' },
   transcribe: { label: 'Transcribe audio', verb: () => 'Transcribe audio' },
+  meeting_notes: { label: 'Take meeting notes', verb: (i) => `Take notes on ${str(i.title ?? i.path, 'the meeting')}` },
+  analyze_audio: { label: 'Analyse a recording', verb: (i) => `Analyse ${str(i.title ?? i.path, 'the recording')}` },
+  summarize_video: { label: 'Summarize a video', verb: (i) => `Summarize ${str(i.title ?? i.path, 'the video')}` },
 };
 
 function str(v: unknown, fallback = ''): string {

@@ -56,6 +56,9 @@ const AGENT_TOOLS: PickItem[] = [
   { value: 'image_gen', description: 'Make images with the image model.', group: 'Voice & images' },
   { value: 'speak', description: 'Turn text into speech.', group: 'Voice & images' },
   { value: 'transcribe', description: 'Turn speech into text.', group: 'Voice & images' },
+  { value: 'meeting_notes', description: 'Notes on a meeting recording: decisions, action items, speakers.', group: 'Voice & images' },
+  { value: 'analyze_audio', description: 'Who spoke how much, the language, sentiment and key moments.', group: 'Voice & images' },
+  { value: 'summarize_video', description: 'Summarize a video from its frames and speech, in chapters.', group: 'Voice & images' },
 ];
 
 const EFFORTS = ['off', 'low', 'medium', 'high', 'xhigh', 'max'];
@@ -147,7 +150,9 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
     set(['memory', 'blocks'], next);
   };
 
-  const usesMedia = (spec.tools ?? []).some((t) => ['image_gen', 'speak', 'transcribe'].includes(t));
+  const usesMedia = (spec.tools ?? []).some((t) =>
+    ['image_gen', 'speak', 'transcribe', 'meeting_notes', 'analyze_audio', 'summarize_video'].includes(t),
+  );
   const mediaModels = (kind: string) => (models.data ?? []).filter((m) => m.kind === kind).map((m) => ({ value: m.id, label: m.id }));
   const effort = get<string>(['reasoning', 'effort']) ?? '';
 
@@ -528,6 +533,25 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
                 ]}
                 value={get<string>(['media', 'transcription']) ?? ''}
                 onValueChange={(v) => set(['media', 'transcription'], v)}
+              />
+              <TextField
+                label="Vision (video frames)"
+                placeholder="The assistant's own model"
+                value={get<string>(['media', 'vision']) ?? ''}
+                onChange={(e) => set(['media', 'vision'], e.target.value)}
+              />
+            </Section>
+          )}
+          {(usesMedia || get<string>(['media', 'realtime'])) && (
+            <Section
+              title="Live voice"
+              hint="With a realtime model, voice chats go straight to it (speech in and out); otherwise they are transcribed, answered and spoken."
+            >
+              <TextField
+                label="Realtime model"
+                placeholder="openai/gpt-realtime"
+                value={get<string>(['media', 'realtime']) ?? ''}
+                onChange={(e) => set(['media', 'realtime'], e.target.value)}
               />
             </Section>
           )}

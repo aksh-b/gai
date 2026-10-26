@@ -165,6 +165,7 @@ Settings chosen in the dashboard (default model, provider keys, pulled Ollama mo
 | `gai triggers` | Cron, webhook and file triggers |
 | `gai mcp` | Manage MCP servers, or `gai mcp serve` to expose gai over stdio |
 | `gai image`, `gai speak`, `gai transcribe` | Media models |
+| `gai notes` | Notes on a meeting or call recording, or a video summary |
 | `gai models`, `gai providers`, `gai tools`, `gai keys` | Inspect models, providers and tools; manage API keys |
 
 Run `gai <command> --help` for details.
@@ -176,6 +177,7 @@ Run `gai <command> --help` for details.
 - [Rust SDK](docs/sdk.md): the builder, agent handles, `#[gai::tool]` and the HTTP client
 - [Evaluations and feedback](docs/evals.md): eval sets, scorers, benchmarks, CI gates and ratings
 - [Knowledge at scale](docs/knowledge.md): vector indexes (Qdrant, pgvector), reranking, and sources synced from folders, websites, GitHub, Confluence and Notion
+- [Voice, meetings and video](docs/voice.md): talking to agents, meeting notes with speakers and action items, call analysis, video summaries
 - [Databases](docs/data.md): read-only connections to Postgres, MySQL, SQLite, BigQuery and Snowflake, and the SQL tools
 - [Users, teams and organizations](docs/users.md): roles, SSO (OIDC or a proxy), teams that own resources, several organizations on one server
 - [Safety and governance](docs/safety.md): personal data, prompt injection, guardrails, audit log, retention

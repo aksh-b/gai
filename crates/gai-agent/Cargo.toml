@@ -10,6 +10,7 @@ base64.workspace = true
 gai-core.workspace = true
 gai-llm.workspace = true
 gai-memory.workspace = true
+gai-media.workspace = true
 zip.workspace = true
 gai-skills.workspace = true
 gai-store.workspace = true

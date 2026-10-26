@@ -38,6 +38,14 @@ pub struct MediaSettings {
     /// Image model for `image_gen`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
+    /// Describes video frames for `summarize_video`; the agent's own model
+    /// when not set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vision: Option<String>,
+    /// Speech-to-speech model for live voice (`openai/gpt-realtime`); voice
+    /// chats otherwise transcribe, run the agent and speak its answer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub realtime: Option<String>,
 }
 
 impl MediaSettings {
@@ -55,6 +63,8 @@ impl MediaSettings {
             speech: self.speech.clone().or_else(|| defaults.speech.clone()),
             voice: self.voice.clone().or_else(|| defaults.voice.clone()),
             image: self.image.clone().or_else(|| defaults.image.clone()),
+            vision: self.vision.clone().or_else(|| defaults.vision.clone()),
+            realtime: self.realtime.clone().or_else(|| defaults.realtime.clone()),
         }
     }
 }
@@ -103,6 +113,9 @@ struct TranscribeArgs {
     /// ISO-639-1 language of the speech, if known (`en`, `de`).
     #[serde(default)]
     language: Option<String>,
+    /// Label who says what, with times, where the model can.
+    #[serde(default)]
+    speakers: bool,
 }
 
 /// What a media call cost, written to the usage log so it shows up with
@@ -294,56 +307,15 @@ pub(crate) fn media_tools(
                 move |ctx, a: TranscribeArgs| {
                     let (m, store) = (m.clone(), store.clone());
                     async move {
-                        let (audio, media_type, name) = match (&a.blob_id, &a.path) {
-                            (Some(id), _) => {
-                                let b = store
-                                    .get_blob(id)
-                                    .await
-                                    .map_err(failed)?
-                                    .ok_or_else(|| ToolError::InvalidInput(format!("no blob {id}")))?;
-                                let data = store
-                                    .blob_data(id)
-                                    .await
-                                    .map_err(failed)?
-                                    .unwrap_or_default();
-                                (data, b.media_type, b.name)
-                            }
-                            (None, Some(p)) => {
-                                let path = ctx.resolve_path(p)?;
-                                let data = tokio::fs::read(&path)
-                                    .await
-                                    .map_err(|e| ToolError::InvalidInput(format!("{p}: {e}")))?;
-                                let ext = path
-                                    .extension()
-                                    .and_then(|e| e.to_str())
-                                    .unwrap_or_default()
-                                    .to_lowercase();
-                                let media_type = match ext.as_str() {
-                                    "wav" => "audio/wav",
-                                    "ogg" | "opus" => "audio/ogg",
-                                    "webm" => "audio/webm",
-                                    "m4a" | "mp4" => "audio/mp4",
-                                    "flac" => "audio/flac",
-                                    _ => "audio/mpeg",
-                                };
-                                let name = path
-                                    .file_name()
-                                    .map(|n| n.to_string_lossy().into_owned());
-                                (data, media_type.to_owned(), name)
-                            }
-                            (None, None) => {
-                                return Err(ToolError::InvalidInput(
-                                    "give a blob_id or a path".into(),
-                                ));
-                            }
-                        };
+                        let input = read_media(&store, &ctx, a.blob_id.as_deref(), a.path.as_deref()).await?;
                         let t = m
                             .transcribe(TranscribeRequest {
-                                audio,
-                                media_type,
-                                filename: name,
+                                audio: input.data,
+                                media_type: input.media_type,
+                                filename: input.name,
                                 language: a.language,
                                 prompt: None,
+                                diarize: a.speakers,
                             })
                             .await
                             .map_err(failed)?;
@@ -353,6 +325,8 @@ pub(crate) fn media_tools(
                             cost,
                             ..ToolOutput::text(if t.text.is_empty() {
                                 "(no speech found)".to_owned()
+                            } else if a.speakers || t.has_speakers() {
+                                t.timed_text()
                             } else {
                                 t.text
                             })
@@ -364,6 +338,54 @@ pub(crate) fn media_tools(
         ));
     }
     Ok(out)
+}
+
+/// Audio or video to work on: a stored blob, or a file in the workspace.
+pub(crate) async fn read_media(
+    store: &SharedStore,
+    ctx: &ToolCtx,
+    blob_id: Option<&str>,
+    path: Option<&str>,
+) -> Result<gai_media::transcribe::MediaInput, ToolError> {
+    match (blob_id, path) {
+        (Some(id), _) => {
+            let b = store
+                .get_blob(id)
+                .await
+                .map_err(failed)?
+                .ok_or_else(|| ToolError::InvalidInput(format!("no blob {id}")))?;
+            let data = store
+                .blob_data(id)
+                .await
+                .map_err(failed)?
+                .unwrap_or_default();
+            Ok(gai_media::transcribe::MediaInput {
+                data,
+                media_type: b.media_type,
+                name: b.name,
+            })
+        }
+        (None, Some(p)) => {
+            let path = ctx.resolve_path(p)?;
+            let data = tokio::fs::read(&path)
+                .await
+                .map_err(|e| ToolError::InvalidInput(format!("{p}: {e}")))?;
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let media_type = match gai_media::transcribe::media_type_for(&name) {
+                "application/octet-stream" => "audio/mpeg",
+                t => t,
+            };
+            Ok(gai_media::transcribe::MediaInput {
+                data,
+                media_type: media_type.to_owned(),
+                name: Some(name),
+            })
+        }
+        (None, None) => Err(ToolError::InvalidInput("give a blob_id or a path".into())),
+    }
 }
 
 /// Swaps blob references in a request for the bytes a provider needs, and

@@ -78,6 +78,34 @@ impl HttpTarget {
         format!("{}{}", self.base_url, path)
     }
 
+    /// The WebSocket address for `path` (`https` becomes `wss`), with the
+    /// configured query.
+    pub fn ws_url(&self, path: &str) -> String {
+        let url = self.url(path);
+        let url = match url.split_once("://") {
+            Some(("https", rest)) => format!("wss://{rest}"),
+            Some(("http", rest)) => format!("ws://{rest}"),
+            _ => url,
+        };
+        match reqwest::Url::parse(&url) {
+            Ok(mut u) => {
+                for (k, v) in &self.query {
+                    u.query_pairs_mut().append_pair(k, v);
+                }
+                u.to_string()
+            }
+            Err(_) => url,
+        }
+    }
+
+    /// The headers every request carries (auth included).
+    pub fn header_pairs(&self) -> Vec<(String, String)> {
+        self.headers
+            .iter()
+            .filter_map(|(k, v)| Some((k.as_str().to_owned(), v.to_str().ok()?.to_owned())))
+            .collect()
+    }
+
     pub fn get(&self, path: &str) -> reqwest::RequestBuilder {
         self.client
             .get(self.url(path))

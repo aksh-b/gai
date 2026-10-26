@@ -21,10 +21,17 @@ use crate::orgs::Tenant;
 
 /// Uploads and generated media can be large; the default limit is 2 MB.
 const MAX_MEDIA_BYTES: usize = 50 * 1024 * 1024;
+/// Uploads include meeting recordings and videos.
+const MAX_UPLOAD_BYTES: usize = 500 * 1024 * 1024;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/v1/blobs", get(list_blobs).post(upload_blob))
+        .route(
+            "/v1/blobs",
+            get(list_blobs)
+                .post(upload_blob)
+                .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES)),
+        )
         .route("/v1/blobs/{id}", get(blob_bytes).delete(delete_blob))
         .route("/v1/blobs/{id}/info", get(blob_info))
         .route("/v1/media", get(defaults))
@@ -64,6 +71,9 @@ pub struct TranscribeBody {
     pub media_type: Option<String>,
     pub language: Option<String>,
     pub prompt: Option<String>,
+    /// Label who says what, from models that can.
+    #[serde(default)]
+    pub speakers: bool,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -71,6 +81,9 @@ pub struct TranscribeResult {
     pub text: String,
     pub language: Option<String>,
     pub duration_secs: Option<f64>,
+    /// Timed stretches, with speakers where known.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub segments: Vec<gai::llm::Segment>,
     pub model: String,
     pub cost: Option<f64>,
 }
@@ -141,7 +154,7 @@ async fn upload_blob(
                 media_type,
                 name: q.name,
                 source: Some("upload".into()),
-                data: body.to_vec(),
+                data: body.into(),
                 ..Default::default()
             })
             .await?;
@@ -252,6 +265,7 @@ async fn transcribe(
             filename,
             language: b.language,
             prompt: b.prompt,
+            diarize: b.speakers,
         })
         .await?;
     let cost = m.info().media_cost(&t.usage);
@@ -260,6 +274,7 @@ async fn transcribe(
         text: t.text,
         language: t.language,
         duration_secs: t.duration_secs,
+        segments: t.segments,
         model: m.info().id.clone(),
         cost,
     }))

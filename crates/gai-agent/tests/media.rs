@@ -67,7 +67,7 @@ async fn runtime(
             image: Some("mock/painter".into()),
             speech: Some("mock/voice".into()),
             transcription: Some("mock/ears".into()),
-            voice: None,
+            ..Default::default()
         },
         ..Default::default()
     };
@@ -344,4 +344,65 @@ async fn routed_runs_record_the_real_model_and_its_cost() {
     );
     let totals = rt.store().usage_totals(None).await.unwrap();
     assert!(totals.iter().any(|t| t.model == "mock/echo"));
+}
+
+#[tokio::test]
+async fn meeting_notes_tool_writes_notes_and_keeps_the_recording() {
+    let (rt, mock, dir) = runtime(
+        vec![
+            tool_response(
+                "meeting_notes",
+                json!({"path": "standup.wav", "template": "standup"}),
+            ),
+            // The tool's own calls go to the agent's model: insights, then notes.
+            text_response(
+                &json!({"language": "en", "sentiment": {"label": "positive", "score": 0.5}})
+                    .to_string(),
+            ),
+            text_response(
+                &json!({
+                    "title": "Standup",
+                    "summary": "Quick standup.",
+                    "decisions": [],
+                    "action_items": [{"task": "Review the PR", "owner": "Ana"}],
+                    "sections": {"updates": "- Ana: reviewing\n- Ben: testing"}
+                })
+                .to_string(),
+            ),
+            text_response("Notes are ready."),
+        ],
+        false,
+    )
+    .await;
+    let ws = dir.path().join("ws");
+    std::fs::create_dir_all(&ws).unwrap();
+    std::fs::write(
+        ws.join("standup.wav"),
+        gai_llm::dialect::mock::mock_wav("Ana: I'm reviewing the PR.\nBen: I'm testing.", 3.0),
+    )
+    .unwrap();
+    let mut spec = agent(&["meeting_notes"]);
+    spec.workspace = Some(ws.clone());
+    let out = rt
+        .run(RunRequest::new(spec, "notes on standup.wav please"))
+        .await
+        .unwrap();
+    assert_eq!(out.status, RunStatus::Completed, "{:?}", out.error);
+    let sent = mock.requests().lock().unwrap()[3].clone();
+    let ContentBlock::ToolResult { content, .. } = &sent.messages.last().unwrap().content[0] else {
+        panic!("no tool result")
+    };
+    let text = content[0].as_text().unwrap();
+    assert!(text.contains("- [ ] Review the PR (**Ana**)"), "{text}");
+    assert!(text.contains("## Updates"), "{text}");
+    assert!(
+        !text.contains("## Transcript"),
+        "the transcript stays in the file"
+    );
+    let recs = rt.store().list_recordings(5).await.unwrap();
+    assert_eq!((recs.len(), recs[0].status.as_str()), (1, "done"));
+    let saved = std::fs::read_to_string(ws.join(format!("notes/{}.md", recs[0].id))).unwrap();
+    assert!(saved.contains("Ben: I'm testing."), "{saved}");
+    // Transcription is charged to the run.
+    assert!(out.cost > 0.0);
 }

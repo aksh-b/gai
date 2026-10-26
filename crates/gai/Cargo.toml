@@ -25,6 +25,7 @@ gai-macros.workspace = true
 gai-core.workspace = true
 gai-llm.workspace = true
 gai-memory.workspace = true
+gai-media.workspace = true
 gai-orchestra.workspace = true
 gai-triggers.workspace = true
 gai-sandbox.workspace = true

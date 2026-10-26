@@ -35,6 +35,32 @@ pub struct TranscribeArgs {
     /// Language of the speech (ISO-639-1, e.g. en)
     #[arg(long, short)]
     pub language: Option<String>,
+    /// Label speakers and times, where the model can
+    #[arg(long)]
+    pub speakers: bool,
+}
+
+#[derive(clap::Args)]
+pub struct NotesArgs {
+    /// A recording: audio or video
+    pub file: PathBuf,
+    /// meeting (default), audio (speakers, sentiment) or video (default
+    /// for video files)
+    #[arg(long, short)]
+    pub kind: Option<String>,
+    /// Notes template: general, standup, one_on_one, sales_call,
+    /// interview, retro, lecture
+    #[arg(long, short)]
+    pub template: Option<String>,
+    /// What else is known: agenda, attendees, names to spell right
+    #[arg(long, short)]
+    pub context: Option<String>,
+    /// Language of the speech (ISO-639-1)
+    #[arg(long, short)]
+    pub language: Option<String>,
+    /// Write the notes here (default: print them)
+    #[arg(long, short)]
+    pub out: Option<PathBuf>,
 }
 
 #[derive(clap::Args)]
@@ -130,9 +156,14 @@ pub async fn transcribe(gai: &Gai, a: TranscribeArgs) -> anyhow::Result<()> {
             filename: a.file.file_name().map(|n| n.to_string_lossy().into_owned()),
             language: a.language,
             prompt: None,
+            diarize: a.speakers,
         })
         .await?;
-    println!("{}", t.text);
+    if a.speakers || t.has_speakers() {
+        println!("{}", t.timed_text());
+    } else {
+        println!("{}", t.text);
+    }
     eprintln!(
         "{}",
         dim(&format!(
@@ -184,6 +215,59 @@ pub async fn image(gai: &Gai, a: ImageArgs) -> anyhow::Result<()> {
             "{}{}",
             m.info().id,
             cost_note(m.info().media_cost(&resp.usage))
+        ))
+    );
+    Ok(())
+}
+
+pub async fn notes(gai: &Gai, a: NotesArgs) -> anyhow::Result<()> {
+    use gai::media::transcribe::{MediaInput, media_type_for};
+    let name = a
+        .file
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let input = MediaInput {
+        data: std::fs::read(&a.file)?,
+        media_type: media_type_for(&name).to_owned(),
+        name: Some(name.clone()),
+    };
+    let kind = a
+        .kind
+        .unwrap_or_else(|| if input.is_video() { "video" } else { "meeting" }.into());
+    let options = gai::media::RecordingOptions {
+        language: a.language,
+        template: a.template,
+        context: a.context,
+        ..Default::default()
+    };
+    let recordings = gai.recordings().await?;
+    let meter = gai::media::Meter::new(Some(gai.runtime().await?.store().clone()), None);
+    eprintln!("{}", dim(&format!("Processing {name} as a {kind}...")));
+    let result = recordings.analyze(&kind, &input, &options, &meter).await?;
+    let title = result
+        .notes
+        .as_ref()
+        .map(|n| n.title.clone())
+        .or_else(|| result.video.as_ref().map(|v| v.title.clone()))
+        .unwrap_or(name);
+    let saved = recordings
+        .save(&kind, &title, None, &options, &result)
+        .await?;
+    match a.out {
+        Some(out) => {
+            std::fs::write(&out, &result.markdown)?;
+            println!("{} {}", green("wrote"), out.display());
+        }
+        None => println!("{}", result.markdown),
+    }
+    eprintln!(
+        "{}",
+        dim(&format!(
+            "{} · ${:.4} · saved as {}",
+            result.models.transcription.as_deref().unwrap_or("?"),
+            result.cost,
+            saved.id
         ))
     );
     Ok(())

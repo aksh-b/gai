@@ -81,7 +81,9 @@
 # image = "openai/gpt-image-1"
 # speech = "openai/gpt-4o-mini-tts"
 # voice = "alloy"
-# transcription = "openai/gpt-4o-mini-transcribe"
+# transcription = "openai/gpt-4o-mini-transcribe"   # ...-transcribe-diarize labels speakers
+# vision = "openai/gpt-5"                 # describes video frames for summaries
+# realtime = "openai/gpt-realtime"        # speech-to-speech for live voice
 
 # ---- the code sandbox (code_exec) ----
 # A fresh Docker/Podman container per call: no network, 512 MB, 60 s.

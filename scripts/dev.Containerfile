@@ -12,3 +12,9 @@ RUN rustup component add rustfmt clippy \
 RUN apt-get update \
  && apt-get install -y --no-install-recommends tesseract-ocr poppler-utils \
  && rm -rf /var/lib/apt/lists/*
+
+# ffmpeg for recordings: audio from video, long audio in pieces, video
+# frames (gai-media's tests use it when present).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg \
+ && rm -rf /var/lib/apt/lists/*

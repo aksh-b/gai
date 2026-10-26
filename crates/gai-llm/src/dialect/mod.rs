@@ -7,8 +7,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    LlmError, ModelInfo, ProviderConfig, SharedChatModel, SharedEmbeddingModel, SharedImageModel,
-    SharedSpeechToText, SharedTextToSpeech,
+    LlmError, ModelInfo, ProviderConfig, RealtimeTarget, SharedChatModel, SharedEmbeddingModel,
+    SharedImageModel, SharedSpeechToText, SharedTextToSpeech,
 };
 
 pub mod anthropic;
@@ -50,6 +50,15 @@ pub trait Provider: Send + Sync {
     fn image(&self, info: ModelInfo) -> Result<SharedImageModel, LlmError> {
         Err(LlmError::Unsupported(format!(
             "provider {:?} has no image models ({})",
+            self.name(),
+            info.id
+        )))
+    }
+
+    /// Where to open a live speech session with this model.
+    fn realtime(&self, info: ModelInfo) -> Result<RealtimeTarget, LlmError> {
+        Err(LlmError::Unsupported(format!(
+            "provider {:?} has no realtime models ({})",
             self.name(),
             info.id
         )))

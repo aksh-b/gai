@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircleIcon, RefreshCwIcon } from 'lucide-react';
+import { AlertCircleIcon, AudioLinesIcon, RefreshCwIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { SwitchField } from '@/components/fields';
 import { PickerMenu, type PickerOption } from '@/components/picker-menu';
@@ -84,6 +84,7 @@ import { navigate, type Route } from '../router';
 import { ago, blocksText, money, tokens, totalIn } from '../util';
 import { stashDraft } from './Agents';
 import { ReplyRating } from '../Feedback';
+import { VoiceChat, type VoiceState } from '../voice';
 
 type Item =
   | { kind: 'user'; text: string; media?: ContentBlock[]; files?: string[] }
@@ -224,6 +225,9 @@ export function Playground({ route }: { route: Route }) {
   const [media, setMedia] = useState<MediaDefaults | null>(null);
   const recorder = useRecorder();
   const [transcribing, setTranscribing] = useState(false);
+  const voiceChat = useRef<VoiceChat | null>(null);
+  const [voiceState, setVoiceState] = useState<VoiceState>('closed');
+  const [voiceLevel, setVoiceLevel] = useState(0);
   const filePicker = useRef<HTMLInputElement>(null);
   const sessionRef = useRef<string | null>(sessionParam);
   // Tools the person said may run without asking, for this chat.
@@ -422,6 +426,13 @@ export function Playground({ route }: { route: Route }) {
 
   async function send(text?: string) {
     const typed = (text ?? input).trim();
+    if (voiceChat.current && typed) {
+      // In a voice chat, typed turns go the same way, and are answered aloud.
+      setInput('');
+      update((it) => [...it, { kind: 'user', text: typed }]);
+      voiceChat.current.say(typed);
+      return;
+    }
     if ((!typed && !files.length) || running) return;
     const attached = files;
     setInput('');
@@ -469,6 +480,52 @@ export function Playground({ route }: { route: Route }) {
       loadSessions();
     }
   }
+
+  /** Talk with the assistant: listen, answer aloud, and stop when talked over. */
+  async function startVoice() {
+    if (voiceChat.current) return;
+    const chat = new VoiceChat({
+      onState: (st) => {
+        setVoiceState(st);
+        if (st === 'closed') {
+          voiceChat.current = null;
+          setVoiceLevel(0);
+          loadSessions();
+        }
+      },
+      onLevel: setVoiceLevel,
+      onTranscript: (text) => update((it) => [...it, { kind: 'user', text }]),
+      onReplyStarted: (_runId, sessionId) => {
+        if (sessionId && sessionRef.current !== sessionId) {
+          sessionRef.current = sessionId;
+          navigate(`/chat?session=${sessionId}${agent ? `&agent=${encodeURIComponent(agent)}` : ''}`);
+        }
+      },
+      onDelta: (text) =>
+        update((it) => {
+          const last = it[it.length - 1];
+          if (last?.kind === 'assistant') it[it.length - 1] = { ...last, text: last.text + text };
+          else it.push({ kind: 'assistant', text });
+          return it;
+        }),
+      onTool: (name) => update((it) => [...it, { kind: 'note', text: toolLabel(name), tone: 'muted' }]),
+      onReplyDone: (e) => {
+        if (e.status && e.status !== 'completed' && e.status !== 'cancelled')
+          update((it) => [...it, { kind: 'note', ...explain(e.error ?? e.status!.replace('_', ' ')), tone: 'bad' }]);
+      },
+      onInterrupted: () => update((it) => [...it, { kind: 'note', text: 'Stopped to listen.', tone: 'muted' }]),
+      onError: (m) => toast.error(m),
+    });
+    voiceChat.current = chat;
+    try {
+      await chat.start({ agent: agent || undefined, sessionId: sessionRef.current ?? undefined });
+    } catch (e) {
+      toast.error(`Voice: ${(e as Error).message}`);
+      chat.stop();
+    }
+  }
+
+  useEffect(() => () => voiceChat.current?.stop(), []);
 
   /** Mic button: start recording, or stop and put the words in the box. */
   async function toggleMic() {
@@ -804,6 +861,30 @@ export function Playground({ route }: { route: Route }) {
               e.target.value = '';
             }}
           />
+          {voiceState !== 'closed' && (
+            <div className="mb-2 flex items-center gap-3 rounded-lg border bg-muted/40 px-3 py-2 text-sm" role="status">
+              <AudioLinesIcon className="size-4 shrink-0" />
+              <span className="w-28 shrink-0">
+                {
+                  {
+                    connecting: 'Connecting…',
+                    listening: 'Listening',
+                    hearing: 'Hearing you…',
+                    thinking: 'Thinking…',
+                    speaking: 'Speaking',
+                    closed: '',
+                  }[voiceState]
+                }
+              </span>
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                <div className="h-full rounded-full bg-primary transition-[width] duration-75" style={{ width: `${Math.round(voiceLevel * 100)}%` }} />
+              </div>
+              <span className="hidden text-xs text-muted-foreground md:inline">Talk over it to interrupt</span>
+              <Button size="sm" variant="outline" type="button" onClick={() => voiceChat.current?.stop()}>
+                End
+              </Button>
+            </div>
+          )}
           <InputGroup>
             {files.length > 0 && (
               <InputGroupAddon align="block-start">
@@ -873,6 +954,16 @@ export function Playground({ route }: { route: Route }) {
                     </InputGroupButton>
                   </TooltipTrigger>
                   <TooltipContent>{recorder.recording ? 'Stop and turn into text' : 'Speak your message'}</TooltipContent>
+                </Tooltip>
+              )}
+              {recorder.supported && voiceState === 'closed' && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <InputGroupButton type="button" size="icon-sm" aria-label="Talk with the assistant" onClick={startVoice} disabled={!!running}>
+                      <AudioLinesIcon />
+                    </InputGroupButton>
+                  </TooltipTrigger>
+                  <TooltipContent>Talk: a voice conversation, answered aloud</TooltipContent>
                 </Tooltip>
               )}
               {running ? (

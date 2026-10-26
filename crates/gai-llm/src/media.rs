@@ -63,6 +63,19 @@ pub struct TranscribeRequest {
     pub language: Option<String>,
     /// Words or context that help recognition.
     pub prompt: Option<String>,
+    /// Ask for who said what, from models that can tell speakers apart.
+    pub diarize: bool,
+}
+
+/// A stretch of a transcript: when it was said and, where known, by whom.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Segment {
+    /// Seconds from the start.
+    pub start: f64,
+    pub end: f64,
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speaker: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -75,6 +88,87 @@ pub struct Transcript {
     pub duration_secs: Option<f64>,
     #[serde(default)]
     pub usage: MediaUsage,
+    /// Timed stretches, from models that report them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub segments: Vec<Segment>,
+}
+
+impl Transcript {
+    /// The text with a time (and speaker, where known) on each segment,
+    /// or the plain text when there are no segments.
+    pub fn timed_text(&self) -> String {
+        if self.segments.is_empty() {
+            return self.text.clone();
+        }
+        self.segments
+            .iter()
+            .map(|s| {
+                format!(
+                    "[{}] {}{}",
+                    clock(s.start),
+                    s.speaker
+                        .as_deref()
+                        .map(|p| format!("{p}: "))
+                        .unwrap_or_default(),
+                    s.text.trim()
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(
+                "
+",
+            )
+    }
+
+    /// Whether any segment has a speaker.
+    pub fn has_speakers(&self) -> bool {
+        self.segments.iter().any(|s| s.speaker.is_some())
+    }
+
+    /// Join transcripts of consecutive pieces of one recording, each
+    /// starting `offset` seconds in.
+    pub fn join(parts: Vec<(f64, Transcript)>) -> Transcript {
+        let mut out = Transcript::default();
+        for (offset, t) in parts {
+            if !t.text.trim().is_empty() {
+                if !out.text.is_empty() {
+                    out.text.push(' ');
+                }
+                out.text.push_str(t.text.trim());
+            }
+            out.language = out.language.or(t.language);
+            let end = offset + t.duration_secs.unwrap_or(0.0);
+            out.duration_secs = Some(out.duration_secs.unwrap_or(0.0).max(end));
+            out.usage.seconds += t.usage.seconds;
+            out.segments.extend(t.segments.into_iter().map(|mut s| {
+                s.start += offset;
+                s.end += offset;
+                s
+            }));
+        }
+        out
+    }
+}
+
+/// `h:mm:ss`, or `m:ss` under an hour.
+pub fn clock(secs: f64) -> String {
+    let t = secs.max(0.0) as u64;
+    let (h, m, s) = (t / 3600, t / 60 % 60, t % 60);
+    if h > 0 {
+        format!("{h}:{m:02}:{s:02}")
+    } else {
+        format!("{m}:{s:02}")
+    }
+}
+
+/// Where to open a provider's speech-to-speech session (a WebSocket), and
+/// the headers that authenticate it.
+#[derive(Clone, Debug)]
+pub struct RealtimeTarget {
+    pub url: String,
+    pub headers: Vec<(String, String)>,
+    /// The provider's name for the model.
+    pub model: String,
 }
 
 /// Text to speak.
@@ -228,5 +322,34 @@ mod tests {
         assert!((c - (0.009 + 0.03 + 0.08)).abs() < 1e-9);
         assert_eq!(sniff_image(&[0xFF, 0xD8, 0xFF, 0]), "image/jpeg");
         assert_eq!(extension_for("audio/webm;codecs=opus"), "webm");
+    }
+
+    #[test]
+    fn transcripts_join_with_offsets() {
+        let piece = |text: &str| Transcript {
+            text: text.into(),
+            duration_secs: Some(600.0),
+            usage: MediaUsage {
+                seconds: 600.0,
+                ..Default::default()
+            },
+            segments: vec![Segment {
+                start: 1.0,
+                end: 4.0,
+                text: text.into(),
+                speaker: Some("A".into()),
+            }],
+            ..Default::default()
+        };
+        let t = Transcript::join(vec![(0.0, piece("hello")), (600.0, piece("again"))]);
+        assert_eq!(t.text, "hello again");
+        assert_eq!(t.duration_secs, Some(1200.0));
+        assert_eq!(t.segments[1].start, 601.0);
+        assert_eq!(
+            t.timed_text(),
+            "[0:01] A: hello
+[10:01] A: again"
+        );
+        assert_eq!(clock(3725.0), "1:02:05");
     }
 }

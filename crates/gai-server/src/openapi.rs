@@ -22,6 +22,7 @@ use crate::media::*;
 use crate::openai::ChatCompletionRequest;
 use crate::orgs::*;
 use crate::personas::*;
+use crate::recordings::*;
 use crate::setup::*;
 use crate::sso::AuthConfig;
 use crate::triggers::*;
@@ -400,6 +401,18 @@ pub fn document() -> Value {
         )
         .body(s::<ImagesBody>(&mut g))
         .ok(s::<MediaResult>(&mut g)),
+        op("get", "/v1/recordings", "media", "Recordings (meetings, calls, videos), newest first, without their full results")
+            .ok(list::<gai::store::Recording>(&mut g))
+            .query(&[("limit", "Max rows")]),
+        op("post", "/v1/recordings", "media", "Process an uploaded recording in the background: a meeting gets speakers, notes, decisions and action items; audio speakers, language and sentiment; a video a summary in chapters. Poll GET /v1/recordings/{id}")
+            .body(s::<NewRecordingBody>(&mut g))
+            .ok(s::<gai::store::Recording>(&mut g)),
+        op("get", "/v1/recordings/templates", "media", "The built-in meeting notes templates")
+            .ok(list::<NotesTemplateInfo>(&mut g)),
+        op("get", "/v1/recordings/{id}", "media", "A recording and, once done, its result (a RecordingResult)")
+            .ok(s::<gai::store::Recording>(&mut g)),
+        op("delete", "/v1/recordings/{id}", "media", "Delete a recording (its blob stays)"),
+        op("get", "/v1/voice", "media", "A voice chat over a WebSocket: send {\"type\": \"start\", \"agent\": ...}, then audio frames and {\"type\": \"commit\"} per utterance, or {\"type\": \"text\"}; get transcript, delta, audio (per sentence) and reply_done back; {\"type\": \"interrupt\"} stops a reply. Agents with media.realtime are relayed to the provider's realtime session (24 kHz PCM16 in and out)"),
         op(
             "post",
             "/v1/runs/{id}/replay",
@@ -992,6 +1005,8 @@ pub fn document() -> Value {
         }
         paths.entry(o.path.to_owned()).or_insert_with(|| json!({}))[o.method] = operation;
     }
+    // What untyped fields hold, for the dashboard: a recording's result.
+    let _ = s::<gai::media::RecordingResult>(&mut g);
     let mut schemas = g.take_definitions(true);
     schemas.insert(
         "Error".into(),

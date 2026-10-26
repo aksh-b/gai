@@ -49,6 +49,7 @@ pub use gai_eval as eval;
 pub use gai_llm as llm;
 /// Write a tool as an async function; see [`gai_macros::tool`].
 pub use gai_macros::tool;
+pub use gai_media as media;
 pub use gai_memory as memory;
 pub use gai_orchestra as orchestra;
 pub use gai_sandbox as sandbox;
@@ -702,6 +703,23 @@ impl Gai {
     pub async fn dashboards(&self) -> Result<&gai_data::dashboards::Dashboards, Error> {
         self.runtime().await?;
         Ok(self.dashboards.get().expect("made with the runtime"))
+    }
+
+    /// Meeting recordings, calls and videos: transcribed with speakers,
+    /// with notes or a summary, using the `[media]` models and the
+    /// default model to write.
+    pub async fn recordings(&self) -> Result<Arc<gai_media::Recordings>, Error> {
+        let rt = self.runtime().await?;
+        let m = &rt.config().media;
+        Ok(Arc::new(gai_media::Recordings::new(
+            rt.store().clone(),
+            rt.models().clone(),
+            gai_media::MediaModels {
+                transcription: m.transcription.clone(),
+                chat: rt.default_model(),
+                vision: m.vision.clone(),
+            },
+        )))
     }
 
     /// Database connections and querying them.

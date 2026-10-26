@@ -46,7 +46,7 @@ gai agents diff researcher 1 2           # also: versions, label, rollback
 | `skills` | Skills it can load: names or prefixes ending in `*`. |
 | `delegates` | Agents it can hand work to, each as an `ask_<name>` tool. |
 | `persona`, `persona_placement` | The voice it speaks in (below). |
-| `media` | Models for `image_gen`, `speak` and `transcribe`, over `[media]`. |
+| `media` | Models for `image_gen`, `speak`, `transcribe` and the recording tools (`vision` for video frames), and `realtime` for live voice, over `[media]`. See [voice](voice.md). |
 | `metadata` | Free-form data for your own integrations. |
 
 The dashboard checks agent YAML against this schema as you type. The

@@ -1,0 +1,23 @@
+[package]
+name = "gai-media"
+description = "Recordings for gai: long audio and video transcribed with speakers, language and sentiment, meeting notes with decisions and action items, and video summaries from frames and speech."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+gai-core.workspace = true
+gai-llm.workspace = true
+gai-store.workspace = true
+base64.workspace = true
+futures.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true

@@ -1500,6 +1500,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/recordings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recordings (meetings, calls, videos), newest first, without their full results */
+        get: operations["get_v1_recordings"];
+        put?: never;
+        /** Process an uploaded recording in the background: a meeting gets speakers, notes, decisions and action items; audio speakers, language and sentiment; a video a summary in chapters. Poll GET /v1/recordings/{id} */
+        post: operations["post_v1_recordings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/recordings/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The built-in meeting notes templates */
+        get: operations["get_v1_recordings_templates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/recordings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A recording and, once done, its result (a RecordingResult) */
+        get: operations["get_v1_recordings__id_"];
+        put?: never;
+        post?: never;
+        /** Delete a recording (its blob stays) */
+        delete: operations["delete_v1_recordings__id_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/retention/sweep": {
         parameters: {
             query?: never;
@@ -2213,6 +2266,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/voice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A voice chat over a WebSocket: send {"type": "start", "agent": ...}, then audio frames and {"type": "commit"} per utterance, or {"type": "text"}; get transcript, delta, audio (per sentence) and reply_done back; {"type": "interrupt"} stops a reply. Agents with media.realtime are relayed to the provider's realtime session (24 kHz PCM16 in and out) */
+        get: operations["get_v1_voice"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/webhooks/{id}": {
         parameters: {
             query?: never;
@@ -2392,6 +2462,18 @@ export interface components {
     schemas: {
         /** @description What to do when something is found. */
         Action: "off" | "warn" | "mask" | "strip" | "block";
+        /** @description Something to do, from a meeting. */
+        ActionItem: {
+            /**
+             * Format: double
+             * @description When in the recording it was agreed, in seconds.
+             */
+            at?: number | null;
+            /** @description As said ("Friday", "end of Q3") or a date. */
+            due?: string | null;
+            owner?: string | null;
+            task: string;
+        };
         AddDocument: {
             /** @description A file, base64-encoded (text, Markdown, HTML or PDF). Needs `filename`. */
             content_base64?: string | null;
@@ -2631,6 +2713,16 @@ export interface components {
         };
         /** @enum {string} */
         ArchivalScope: "agent" | "user";
+        /** @description What an audio recording is like. */
+        AudioInsights: {
+            /** Format: double */
+            duration_secs?: number | null;
+            /** @description ISO-639-1. */
+            language?: string | null;
+            moments?: components["schemas"]["Moment"][];
+            sentiment?: components["schemas"]["Sentiment"] | null;
+            speakers?: components["schemas"]["SpeakerStats"][];
+        };
         /** @description One change recorded in the audit log. */
         AuditEntry: {
             /** @description The request, e.g. `POST /v1/agents`. */
@@ -2846,6 +2938,16 @@ export interface components {
             at: string;
             /** Format: uint16 */
             status: number;
+        };
+        /** @description A part of a recording. */
+        Chapter: {
+            /**
+             * Format: double
+             * @description Seconds from the start.
+             */
+            start: number;
+            summary?: string;
+            title: string;
         };
         Chart: ("line" | "bar" | "area" | "pie" | "table") | "number";
         ChatCompletionRequest: {
@@ -3759,6 +3861,14 @@ export interface components {
         };
         /** @enum {string} */
         Formality: "casual" | "neutral" | "formal";
+        /** @description What one sampled frame shows. */
+        FrameNote: {
+            /** Format: double */
+            at: number;
+            /** @description The frame, stored. */
+            blob_id?: string | null;
+            description: string;
+        };
         /** @description What a build did. */
         GraphBuild: {
             /** Format: uint64 */
@@ -4077,6 +4187,24 @@ export interface components {
             transcription?: string | null;
             voice?: string | null;
         };
+        /** @description The models a recording is processed with. */
+        MediaModels: {
+            /**
+             * @description Writes notes and summaries, and labels speakers and sentiment.
+             * @default null
+             */
+            chat: string | null;
+            /**
+             * @description Speech to text.
+             * @default null
+             */
+            transcription: string | null;
+            /**
+             * @description Describes video frames; the chat model when not set.
+             * @default null
+             */
+            vision: string | null;
+        };
         /** @description Prices for models billed by something other than tokens, in USD. */
         MediaPricing: {
             /**
@@ -4119,10 +4247,20 @@ export interface components {
         MediaSettings: {
             /** @description Image model for `image_gen`. */
             image?: string | null;
+            /**
+             * @description Speech-to-speech model for live voice (`openai/gpt-realtime`); voice
+             *     chats otherwise transcribe, run the agent and speak its answer.
+             */
+            realtime?: string | null;
             /** @description Text-to-speech model for `speak`. */
             speech?: string | null;
             /** @description Speech-to-text model for `transcribe`. */
             transcription?: string | null;
+            /**
+             * @description Describes video frames for `summarize_video`; the agent's own model
+             *     when not set.
+             */
+            vision?: string | null;
             /** @description Voice `speak` uses when the call names none. */
             voice?: string | null;
         };
@@ -4141,6 +4279,39 @@ export interface components {
             /** @constant */
             kind: "blob";
             media_type: string;
+        };
+        /** @description What a media call used, for pricing. */
+        MediaUsage: {
+            /**
+             * Format: uint64
+             * @default 0
+             */
+            chars: number;
+            /**
+             * Format: uint32
+             * @default 0
+             */
+            images: number;
+            /**
+             * Format: double
+             * @default 0
+             */
+            seconds: number;
+        };
+        MeetingNotes: {
+            action_items?: components["schemas"]["ActionItem"][];
+            decisions?: string[];
+            open_questions?: string[];
+            /** @description The template's own sections, in Markdown. */
+            sections?: {
+                [key: string]: string;
+            };
+            /** @description Markdown. */
+            summary: string;
+            template: string;
+            title: string;
+            /** @description What was discussed when. */
+            topics?: components["schemas"]["Chapter"][];
         };
         /** @description A user's place in an organization. */
         Membership: {
@@ -4232,7 +4403,16 @@ export interface components {
             user_id?: string | null;
         };
         Mode: "wait" | "stream" | "background";
-        ModelKind: ("chat" | "embedding") | "transcription" | "speech" | "image";
+        ModelKind: ("chat" | "embedding") | "transcription" | "speech" | "image" | "realtime";
+        /** @description A moment worth finding again. */
+        Moment: {
+            /**
+             * Format: double
+             * @description Seconds from the start.
+             */
+            at: number;
+            what: string;
+        };
         NewBlock: {
             /** @default null */
             description: string | null;
@@ -4273,6 +4453,21 @@ export interface components {
             owner_email?: string | null;
             /** @description Lowercase letters, digits and `-`. */
             slug: string;
+        };
+        NewRecordingBody: {
+            /** @description The uploaded media (`POST /v1/blobs`). */
+            blob_id: string;
+            /**
+             * @description `meeting` (default): speakers, notes, decisions and action items;
+             *     `audio`: speakers, language and sentiment; `video`: frames and
+             *     speech summarized in chapters.
+             * @default null
+             */
+            kind: string | null;
+            /** @default {} */
+            options: components["schemas"]["RecordingOptions"];
+            /** @default null */
+            title: string | null;
         };
         NewSession: {
             agent?: string | null;
@@ -4348,6 +4543,25 @@ export interface components {
              *     `{{ expression }}` keeps the expression's type (list, object…).
              */
             value?: unknown;
+        };
+        /** @description What notes to write: the usual ones and, per template, more sections. */
+        NotesTemplate: {
+            /** @description Extra guidance for the writer. */
+            instructions?: string | null;
+            /** @default  */
+            name: string;
+            /**
+             * @description Sections to write besides the summary, decisions and action items:
+             *     key to what goes in it.
+             */
+            sections?: {
+                [key: string]: string;
+            };
+        };
+        NotesTemplateInfo: {
+            instructions?: string | null;
+            name: string;
+            sections: string[];
         };
         OaContent: string | unknown[];
         OaFunction: {
@@ -4712,6 +4926,68 @@ export interface components {
              */
             expose: boolean;
         };
+        /**
+         * @description A meeting, call or video, and what processing it made: the media crate
+         *     owns `options` and `result`.
+         */
+        Recording: {
+            /** @description The stored media. */
+            blob_id?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            error?: string | null;
+            id: string;
+            /** @description `meeting`, `video` or `audio`. */
+            kind: string;
+            options: unknown;
+            result?: unknown;
+            /** @description `processing`, `done` or `failed`. */
+            status: string;
+            title: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description What to make of a recording. */
+        RecordingOptions: {
+            /** @description What else is known: the agenda, who attended, names to spell right. */
+            context?: string | null;
+            /** @description Or a template of your own. */
+            custom_template?: components["schemas"]["NotesTemplate"] | null;
+            /**
+             * Format: double
+             * @description Video: seconds between frames.
+             */
+            every_secs?: number | null;
+            /** @description ISO-639-1 language of the speech, when known. */
+            language?: string | null;
+            /**
+             * Format: uint
+             * @description Video: at most this many frames (default 24).
+             */
+            max_frames?: number | null;
+            /** @description Models to use instead of the defaults. */
+            models?: components["schemas"]["MediaModels"] | null;
+            /** @description Tell speakers apart (default: yes for meetings and audio). */
+            speakers?: boolean | null;
+            /**
+             * @description Meeting notes template: `general` (default), `standup`,
+             *     `one_on_one`, `sales_call`, `interview`, `retro`, `lecture`.
+             */
+            template?: string | null;
+        };
+        /** @description What processing made. */
+        RecordingResult: {
+            /** Format: double */
+            cost: number;
+            insights?: components["schemas"]["AudioInsights"] | null;
+            /** @description Everything above as one Markdown document. */
+            markdown: string;
+            models: components["schemas"]["MediaModels"];
+            notes?: components["schemas"]["MeetingNotes"] | null;
+            transcript: components["schemas"]["Transcript"];
+            usage: components["schemas"]["Usage"];
+            video?: components["schemas"]["VideoSummary"] | null;
+        };
         /** @description A remote agent reached over A2A. */
         RemoteDelegate: {
             /** @description The agent's A2A endpoint, or its agent card URL. */
@@ -5074,6 +5350,28 @@ export interface components {
         SecretValue: {
             value: string;
         };
+        /** @description A stretch of a transcript: when it was said and, where known, by whom. */
+        Segment: {
+            /** Format: double */
+            end: number;
+            speaker?: string | null;
+            /**
+             * Format: double
+             * @description Seconds from the start.
+             */
+            start: number;
+            text: string;
+        };
+        /**
+         * @description How something sounds: `positive`, `neutral`, `negative` or `mixed`,
+         *     with a score from -1 (very negative) to 1 (very positive).
+         */
+        Sentiment: {
+            label: string;
+            reason?: string | null;
+            /** Format: double */
+            score: number;
+        };
         Session: {
             agent?: string | null;
             /** Format: date-time */
@@ -5278,6 +5576,27 @@ export interface components {
             text: string;
             /** @description A provider voice name or id (`alloy`, an ElevenLabs voice id...). */
             voice?: string | null;
+        };
+        /** @description One speaker's share of a recording. */
+        SpeakerStats: {
+            name: string;
+            /**
+             * Format: double
+             * @description Seconds spoken.
+             */
+            seconds: number;
+            sentiment?: components["schemas"]["Sentiment"] | null;
+            /**
+             * Format: double
+             * @description Of all the speaking, 0 to 1.
+             */
+            share: number;
+            /** @description What they mostly said. */
+            summary?: string | null;
+            /** Format: uint32 */
+            turns: number;
+            /** Format: uint32 */
+            words: number;
         };
         /** @description What to evaluate. */
         StartEval: {
@@ -5528,6 +5847,11 @@ export interface components {
             /** @description Speech-to-text model; defaults to `[media] transcription`. */
             model?: string | null;
             prompt?: string | null;
+            /**
+             * @description Label who says what, from models that can.
+             * @default false
+             */
+            speakers: boolean;
         };
         TranscribeResult: {
             /** Format: double */
@@ -5536,7 +5860,28 @@ export interface components {
             duration_secs?: number | null;
             language?: string | null;
             model: string;
+            /** @description Timed stretches, with speakers where known. */
+            segments: components["schemas"]["Segment"][];
             text: string;
+        };
+        Transcript: {
+            /**
+             * Format: double
+             * @description Length of the audio, when the provider reports it.
+             */
+            duration_secs?: number | null;
+            language?: string | null;
+            /** @description Timed stretches, from models that report them. */
+            segments?: components["schemas"]["Segment"][];
+            text: string;
+            /**
+             * @default {
+             *       "chars": 0,
+             *       "images": 0,
+             *       "seconds": 0
+             *     }
+             */
+            usage: components["schemas"]["MediaUsage"];
         };
         /** @description One firing of a trigger. */
         TriggerEvent: {
@@ -5740,6 +6085,16 @@ export interface components {
             /** Format: uint32 */
             to: number;
             to_yaml: string;
+        };
+        VideoSummary: {
+            chapters?: components["schemas"]["Chapter"][];
+            /** Format: double */
+            duration_secs?: number | null;
+            frames?: components["schemas"]["FrameNote"][];
+            key_points?: string[];
+            /** @description Markdown. */
+            summary: string;
+            title: string;
         };
         WorkflowEntry: {
             description?: string | null;
@@ -9675,6 +10030,160 @@ export interface operations {
             };
         };
     };
+    get_v1_recordings: {
+        parameters: {
+            query?: {
+                /** @description Max rows */
+                limit?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recording"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_recordings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewRecordingBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recording"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_recordings_templates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotesTemplateInfo"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_recordings__id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recording"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_recordings__id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     post_v1_retention_sweep: {
         parameters: {
             query?: never;
@@ -11466,6 +11975,33 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Deleted"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_voice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
