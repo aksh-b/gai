@@ -949,6 +949,120 @@ pub async fn dashboards(s: SharedStore) {
     assert!(!s.delete_dashboard("ads").await.unwrap());
 }
 
+pub async fn library(s: SharedStore) {
+    let v1 = s
+        .put_item(
+            "prompt",
+            "tone",
+            &json!({"title": "Tone", "text": "Be brief."}),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(v1, 1);
+    let same = s
+        .put_item(
+            "prompt",
+            "tone",
+            &json!({"title": "Tone", "text": "Be brief."}),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(same, 1, "an unchanged spec is not a new version");
+    let v2 = s
+        .put_item(
+            "prompt",
+            "tone",
+            &json!({"title": "Tone", "description": "How to sound", "text": "Be kind."}),
+            Some("kinder"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(v2, 2);
+    // The same name in another kind is another item.
+    s.put_item("listing", "tone", &json!({"title": "Tone kit"}), None)
+        .await
+        .unwrap();
+    let got = s.get_item("prompt", "tone", None).await.unwrap().unwrap();
+    assert_eq!((got.version, got.note.as_deref()), (2, Some("kinder")));
+    let old = s
+        .get_item("prompt", "tone", Some(1))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(old.spec["text"], "Be brief.");
+    s.set_item_label("prompt", "tone", "prod", Some(1))
+        .await
+        .unwrap();
+    assert!(
+        s.set_item_label("prompt", "tone", "prod", Some(9))
+            .await
+            .is_err()
+    );
+    let versions = s.list_item_versions("prompt", "tone").await.unwrap();
+    assert_eq!(
+        versions.iter().map(|v| v.version).collect::<Vec<_>>(),
+        [2, 1]
+    );
+
+    s.rate_item("prompt", "tone", "ada", 5, Some("great"))
+        .await
+        .unwrap();
+    s.rate_item("prompt", "tone", "alan", 2, None)
+        .await
+        .unwrap();
+    s.rate_item("prompt", "tone", "alan", 4, None)
+        .await
+        .unwrap();
+    assert!(s.rate_item("prompt", "nope", "ada", 3, None).await.is_err());
+    assert!(s.rate_item("prompt", "tone", "ada", 6, None).await.is_err());
+    let item = s.item("prompt", "tone").await.unwrap().unwrap();
+    assert_eq!(item.labels["prod"], 1);
+    assert_eq!((item.rating, item.ratings), (Some(4.5), 2));
+    assert_eq!(item.description.as_deref(), Some("How to sound"));
+    let ratings = s.list_ratings("prompt", "tone").await.unwrap();
+    assert_eq!(ratings.len(), 2);
+    let prompts = s.list_items("prompt").await.unwrap();
+    assert_eq!(prompts.len(), 1);
+    let listings = s.list_items("listing").await.unwrap();
+    assert_eq!((listings[0].rating, listings[0].ratings), (None, 0));
+    assert!(s.delete_item("prompt", "tone").await.unwrap());
+    assert!(s.list_ratings("prompt", "tone").await.unwrap().is_empty());
+    assert!(
+        s.get_item("prompt", "tone", Some(1))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(s.item("listing", "tone").await.unwrap().is_some());
+}
+
+pub async fn jobs(s: SharedStore) {
+    let j = s
+        .create_job("optimize", &json!({"agent": "support"}))
+        .await
+        .unwrap();
+    assert_eq!(j.status, "running");
+    s.update_job(&j.id, "running", Some(&json!({"round": 1})), None)
+        .await
+        .unwrap();
+    s.update_job(&j.id, "done", Some(&json!({"round": 2})), None)
+        .await
+        .unwrap();
+    let got = s.get_job(&j.id).await.unwrap().unwrap();
+    assert_eq!(
+        (got.status.as_str(), got.result.unwrap()["round"].clone()),
+        ("done", json!(2))
+    );
+    let second = s.create_job("optimize", &json!({})).await.unwrap();
+    s.create_job("other", &json!({})).await.unwrap();
+    let list = s.list_jobs("optimize", 10).await.unwrap();
+    assert_eq!(list.len(), 2);
+    assert_eq!(list[0].id, second.id, "newest first");
+    assert!(s.update_job("job_nope", "done", None, None).await.is_err());
+}
+
 pub async fn apps(s: SharedStore) {
     s.put_app("intake", &json!({"title": "Intake"}))
         .await
@@ -1627,6 +1741,18 @@ macro_rules! conformance_tests {
         async fn dashboards() {
             if let Some(s) = $make.await {
                 $crate::conformance::dashboards(s).await;
+            }
+        }
+        #[tokio::test]
+        async fn library() {
+            if let Some(s) = $make.await {
+                $crate::conformance::library(s).await;
+            }
+        }
+        #[tokio::test]
+        async fn jobs() {
+            if let Some(s) = $make.await {
+                $crate::conformance::jobs(s).await;
             }
         }
         #[tokio::test]

@@ -85,11 +85,13 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
   const collections = useLoad(() => api.collections(), []);
   const skills = useLoad(() => api.skills(), []);
   const personas = useLoad(() => api.personas(), []);
+  const templates = useLoad(() => api.prompts(), []);
   const health = useLoad(() => api.health(), []);
   const prompt = useRef<HTMLTextAreaElement>(null);
   const [typing, setTyping] = useState(false);
 
   const set = (path: (string | number)[], v: unknown) => onChange(setIn(spec, path, v));
+  const promptRef = typeof spec.prompt === 'string' ? spec.prompt : '';
   const get = <T,>(path: (string | number)[]) => getIn(spec, path) as T | undefined;
 
   const chatModels = (models.data ?? []).filter((m) => m.kind === 'chat');
@@ -198,8 +200,32 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
         title="Instructions"
         hint="What the assistant should do, and how. Words in {{ }} are filled in each time, like today's date."
       >
+        <SelectField
+          label="Start from a prompt"
+          description={
+            <>
+              Shared instructions with versions; yours below are added after them. <a href="#/prompts">Manage prompts</a>
+            </>
+          }
+          options={[
+            { value: '', label: 'None', description: 'just the instructions below' },
+            ...(templates.data ?? []).flatMap((p) => [
+              { value: p.summary.name, label: p.summary.title || p.summary.name, description: 'always the latest version' },
+              ...Object.keys(p.summary.labels).map((l) => ({
+                value: `${p.summary.name}@${l}`,
+                label: `${p.summary.title || p.summary.name} @${l}`,
+                description: `the version labelled ${l}`,
+              })),
+            ]),
+            ...(promptRef && !(templates.data ?? []).some((p) => promptRef === p.summary.name || promptRef.startsWith(`${p.summary.name}@`))
+              ? [{ value: promptRef, label: promptRef, description: 'not found among your prompts' }]
+              : []),
+          ]}
+          value={promptRef}
+          onValueChange={(v) => set(['prompt'], v || undefined)}
+        />
         <TextArea
-          label="Instructions"
+          label={promptRef ? 'More instructions (after the prompt)' : 'Instructions'}
           rows={9}
           value={spec.system ?? ''}
           placeholder="You are a careful researcher. Today is {{ date }}…"

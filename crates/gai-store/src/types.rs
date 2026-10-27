@@ -56,6 +56,61 @@ pub struct DashboardRecord {
     pub updated_at: DateTime<Utc>,
 }
 
+/// One version of a library item (a prompt template, a marketplace
+/// listing). The crate that owns the kind owns the spec's shape.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct LibraryVersion {
+    pub kind: String,
+    pub name: String,
+    pub version: u32,
+    pub spec: Value,
+    pub note: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// A library item: its latest version, labels and ratings.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct LibraryItem {
+    pub kind: String,
+    pub name: String,
+    pub latest_version: u32,
+    /// From the latest spec's `title` and `description`.
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub labels: BTreeMap<String, u32>,
+    /// Mean stars (1 to 5), when anyone has rated it.
+    pub rating: Option<f64>,
+    pub ratings: u32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Someone's stars for a library item.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct LibraryRating {
+    /// Who rated: a user's email or a key's name.
+    pub rater: String,
+    /// 1 to 5.
+    pub stars: u8,
+    pub comment: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Background work and what it made. Its owner gives `input` and
+/// `result` their shape.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Job {
+    pub id: String,
+    pub kind: String,
+    /// `running`, `done`, `failed`.
+    pub status: String,
+    pub input: Value,
+    pub result: Option<Value>,
+    pub error: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 /// An agent or workflow published as an app. The server owns the spec's
 /// shape; only a hash of the app's key is kept.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]

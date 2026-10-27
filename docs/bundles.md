@@ -82,6 +82,7 @@ bundle.toml
 agents/<name>.yaml
 workflows/<name>.yaml
 personas/<name>.yaml
+prompts/<name>.yaml              plus prompts/<name>.labels
 skills/<name>/SKILL.md, plus the skill's files
 mcp/<name>.json
 memory/blocks.json

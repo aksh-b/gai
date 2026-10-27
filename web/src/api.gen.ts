@@ -909,6 +909,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/evals/{name}/optimize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rewrite the agent's instructions (or its prompt template) to raise its score on this set, in the background; follow GET /v1/optimizations/{id} */
+        post: operations["post_v1_evals__name__optimize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/evals/{name}/runs": {
         parameters: {
             query?: never;
@@ -1059,6 +1076,162 @@ export interface paths {
         post?: never;
         /** Revoke an API key */
         delete: operations["delete_v1_keys__id_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/marketplace/browse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listings of this server or of a registry */
+        get: operations["get_v1_marketplace_browse"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/marketplace/browse/{registry}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A listing of this server (registry local) or another registry */
+        get: operations["get_v1_marketplace_browse__registry___name_"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/marketplace/browse/{registry}/{name}/ratings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rate a listing here or in another registry */
+        post: operations["post_v1_marketplace_browse__registry___name__ratings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/marketplace/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Install a listing's bundle, or with dry_run see what it holds and needs */
+        post: operations["post_v1_marketplace_install"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/marketplace/listings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What this server publishes (other servers browse it as a registry) */
+        get: operations["get_v1_marketplace_listings"];
+        put?: never;
+        /** Export a bundle from this server and publish it as a listing's next version */
+        post: operations["post_v1_marketplace_listings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/marketplace/listings/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A listing with its versions and reviews */
+        get: operations["get_v1_marketplace_listings__name_"];
+        put?: never;
+        post?: never;
+        /** Unpublish a listing and its bundles */
+        delete: operations["delete_v1_marketplace_listings__name_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/marketplace/listings/{name}/bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A listing's bundle (a zip; latest, or ?version=) */
+        get: operations["get_v1_marketplace_listings__name__bundle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/marketplace/listings/{name}/ratings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rate a listing 1 to 5; rating again replaces your rating */
+        post: operations["post_v1_marketplace_listings__name__ratings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/marketplace/registries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Other registries (gai servers) to browse and install from */
+        get: operations["get_v1_marketplace_registries"];
+        /** Replace the list of registries; one sent without a token keeps its saved token */
+        put: operations["put_v1_marketplace_registries"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1291,6 +1464,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/optimizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Prompt optimizations, newest first */
+        get: operations["get_v1_optimizations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/optimizations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An optimization and what it found so far */
+        get: operations["get_v1_optimizations__id_"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/optimizations/{id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save the best instructions as the agent's (or prompt template's) next version */
+        post: operations["post_v1_optimizations__id__apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/orgs": {
         parameters: {
             query?: never;
@@ -1511,6 +1735,128 @@ export interface paths {
         };
         /** A persona's versions */
         get: operations["get_v1_personas__name__versions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/prompts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Prompt templates, with the agents that use them */
+        get: operations["get_v1_prompts"];
+        put?: never;
+        /** Save a prompt template as its next version */
+        post: operations["post_v1_prompts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/prompts/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A prompt's text with these variables (and its defaults) */
+        post: operations["post_v1_prompts_render"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/prompts/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A prompt template (latest, or ?version=) */
+        get: operations["get_v1_prompts__name_"];
+        put?: never;
+        post?: never;
+        /** Delete a prompt template no agent uses */
+        delete: operations["delete_v1_prompts__name_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/prompts/{name}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What changed between two versions */
+        get: operations["get_v1_prompts__name__diff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/prompts/{name}/labels/{label}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Point a label at a version (agents use name@label) */
+        post: operations["post_v1_prompts__name__labels__label_"];
+        /** Remove a label */
+        delete: operations["delete_v1_prompts__name__labels__label_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/prompts/{name}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save an old version as the newest */
+        post: operations["post_v1_prompts__name__rollback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/prompts/{name}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A prompt's versions, newest first */
+        get: operations["get_v1_prompts__name__versions"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2693,6 +3039,11 @@ export interface components {
              *     Defaults to the global setting, else `prepend`.
              */
             persona_placement?: components["schemas"]["Placement"] | null;
+            /**
+             * @description A stored prompt template used as the instructions, before `system`:
+             *     `name`, `name@v3` or `name@<label>`.
+             */
+            prompt?: string | null;
             reasoning?: components["schemas"]["Reasoning"] | null;
             /**
              * @description Personal data, prompt injection, guardrails and retention, over the
@@ -2943,8 +3294,42 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        Apply: {
+            /**
+             * @description The version note; one with the scores is written when empty.
+             * @default null
+             */
+            note: string | null;
+        };
         /** @enum {string} */
         ArchivalScope: "agent" | "user";
+        /** @description One set of instructions and how it scored. */
+        Attempt: {
+            /** @description Why it could not be written or evaluated. */
+            error?: string | null;
+            eval_run_id?: string | null;
+            instructions: string;
+            /** @description It beat everything before it. */
+            kept: boolean;
+            /** Format: double */
+            pass_rate: number;
+            /** Format: uint32 */
+            passed: number;
+            /** @description What the writer says it changed. */
+            rationale?: string | null;
+            /**
+             * Format: uint32
+             * @description 0 for the agent as it is.
+             */
+            round: number;
+            /**
+             * Format: double
+             * @description Mean case score, 0 to 1.
+             */
+            score: number;
+            /** Format: uint32 */
+            total: number;
+        };
         /** @description What an audio recording is like. */
         AudioInsights: {
             /** Format: double */
@@ -3433,6 +3818,8 @@ export interface components {
             memory_blocks: number;
             /** @default [] */
             personas: string[];
+            /** @default [] */
+            prompts: string[];
             /** @default [] */
             skills: string[];
             /** @default [] */
@@ -4009,6 +4396,11 @@ export interface components {
             /** @default [] */
             personas: string[];
             /**
+             * @description Prompt templates.
+             * @default []
+             */
+            prompts: string[];
+            /**
              * @description Mask personal data (emails, phone and card numbers, ...) in memory
              *     blocks and knowledge documents.
              * @default false
@@ -4220,6 +4612,29 @@ export interface components {
             default?: unknown;
             description?: string | null;
         };
+        Install: {
+            /**
+             * @description Only say what it holds and needs; install nothing.
+             * @default false
+             */
+            dry_run: boolean;
+            name: string;
+            /**
+             * @description `local` (default) or a registry's name.
+             * @default null
+             */
+            registry: string | null;
+            /**
+             * @description Leave items that already exist alone.
+             * @default false
+             */
+            skip_existing: boolean;
+            /**
+             * Format: uint32
+             * @description Defaults to the latest.
+             */
+            version?: number | null;
+        };
         Installed: {
             /** @description Agents installed along with it because it uses them. */
             also: string[];
@@ -4257,12 +4672,63 @@ export interface components {
             /** Format: uint32 */
             version: number;
         };
+        /** @description A library item: its latest version, labels and ratings. */
+        LibraryItem: {
+            /** Format: date-time */
+            created_at: string;
+            description?: string | null;
+            kind: string;
+            labels: {
+                [key: string]: number;
+            };
+            /** Format: uint32 */
+            latest_version: number;
+            name: string;
+            /**
+             * Format: double
+             * @description Mean stars (1 to 5), when anyone has rated it.
+             */
+            rating?: number | null;
+            /** Format: uint32 */
+            ratings: number;
+            /** @description From the latest spec's `title` and `description`. */
+            title?: string | null;
+            /** Format: date-time */
+            updated_at: string;
+        };
         LibraryModel: {
             description: string;
             installed: boolean;
             name: string;
             size: string;
             tools: boolean;
+        };
+        /** @description Someone's stars for a library item. */
+        LibraryRating: {
+            comment?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** @description Who rated: a user's email or a key's name. */
+            rater: string;
+            /**
+             * Format: uint8
+             * @description 1 to 5.
+             */
+            stars: number;
+        };
+        /**
+         * @description One version of a library item (a prompt template, a marketplace
+         *     listing). The crate that owns the kind owns the spec's shape.
+         */
+        LibraryVersion: {
+            /** Format: date-time */
+            created_at: string;
+            kind: string;
+            name: string;
+            note?: string | null;
+            spec: unknown;
+            /** Format: uint32 */
+            version: number;
         };
         /**
          * @description Hard ceilings for one run. Hitting any ends the run with
@@ -4309,6 +4775,55 @@ export interface components {
              */
             requests_per_minute: number | null;
         };
+        /** @description A listing as people browse it. */
+        Listing: {
+            author?: string | null;
+            description?: string | null;
+            /** @description What the latest version holds and needs. */
+            manifest: components["schemas"]["Manifest"];
+            name: string;
+            /**
+             * Format: double
+             * @description Mean stars, 1 to 5.
+             */
+            rating?: number | null;
+            /** Format: uint32 */
+            ratings: number;
+            /**
+             * @description The registry it comes from (`local` for this server).
+             * @default
+             */
+            registry: string;
+            /**
+             * Format: uint
+             * @description Bytes of the latest bundle.
+             */
+            size: number;
+            /** @default [] */
+            tags: string[];
+            title: string;
+            /** Format: date-time */
+            updated_at: string;
+            /**
+             * Format: uint32
+             * @description The latest version.
+             */
+            version: number;
+        };
+        ListingDetail: {
+            listing: components["schemas"]["Listing"];
+            /** @description Newest first. */
+            reviews: components["schemas"]["LibraryRating"][];
+            /** @description Newest first. */
+            versions: components["schemas"]["ListingVersion"][];
+        };
+        ListingVersion: {
+            /** Format: date-time */
+            created_at: string;
+            note?: string | null;
+            /** Format: uint32 */
+            version: number;
+        };
         /** @description `bundle.toml`. */
         Manifest: {
             /**
@@ -4318,6 +4833,7 @@ export interface components {
              *       "mcp_servers": [],
              *       "memory_blocks": 0,
              *       "personas": [],
+             *       "prompts": [],
              *       "skills": [],
              *       "workflows": []
              *     }
@@ -4834,6 +5350,41 @@ export interface components {
             models: string[];
             reachable: boolean;
         };
+        /** @description An optimization: what was asked, and what it found so far. */
+        Optimization: {
+            agent?: string | null;
+            /** @description The version the best instructions were saved as, once applied. */
+            applied?: components["schemas"]["Saved"] | null;
+            /** Format: date-time */
+            created_at: string;
+            error?: string | null;
+            eval_set: string;
+            id: string;
+            report?: components["schemas"]["OptimizeReport"] | null;
+            /** @description `running`, `done` or `failed`. */
+            status: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description What an optimization found, so far or in the end. */
+        OptimizeReport: {
+            agent: string;
+            /** Format: uint32 */
+            agent_version?: number | null;
+            /** @description Every candidate, in order (the baseline not included). */
+            attempts: components["schemas"]["Attempt"][];
+            baseline: components["schemas"]["Attempt"];
+            best: components["schemas"]["Attempt"];
+            done: boolean;
+            eval_set: string;
+            /** @description The best scores higher than the baseline. */
+            improved: boolean;
+            /**
+             * @description The prompt template rewritten, when the agent uses one
+             *     (`name@version`); otherwise the agent's `system` is.
+             */
+            prompt?: string | null;
+        };
         Org: {
             /** Format: date-time */
             created_at: string;
@@ -5075,6 +5626,55 @@ export interface components {
             teams: string[];
             user_id?: string | null;
         };
+        PromptEntry: {
+            spec?: components["schemas"]["PromptSpec"] | null;
+            summary: components["schemas"]["LibraryItem"];
+            /** @description Stored agents that use it. */
+            used_by: string[];
+        };
+        /**
+         * @description A prompt template.
+         *
+         *     ```yaml
+         *     name: support-tone
+         *     title: Support tone
+         *     text: |
+         *       You answer customers of {{ company }}. Be brief and kind; say what
+         *       happens next.
+         *     variables:
+         *       company: { description: Who we are, default: Acme }
+         *     ```
+         */
+        PromptSpec: {
+            description?: string | null;
+            /**
+             * @description Letters, digits, `-`, `_` and `.`.
+             * @default
+             */
+            name: string;
+            tags?: string[];
+            /**
+             * @description The instructions: a minijinja template.
+             * @default
+             */
+            text: string;
+            title?: string | null;
+            /** @description Variables the text uses, with what they are and their defaults. */
+            variables?: {
+                [key: string]: components["schemas"]["PromptVariable"];
+            };
+        };
+        PromptVariable: {
+            /** @description Used when a run doesn't pass the variable. */
+            default?: unknown;
+            description?: string | null;
+        };
+        PromptView: {
+            name: string;
+            spec: components["schemas"]["PromptSpec"];
+            /** Format: uint32 */
+            version: number;
+        };
         ProviderKey: {
             key: string;
         };
@@ -5090,6 +5690,21 @@ export interface components {
             key: components["schemas"]["KeyState"];
             models: string[];
             name: string;
+        };
+        Publish: {
+            description?: string | null;
+            /** @description What goes in the bundle, as for `/v1/bundles/export`. */
+            items: components["schemas"]["ExportOptions"];
+            /**
+             * @description Letters, digits, `-`, `_` and `.`. Publishing to a name again makes
+             *     a new version.
+             */
+            name: string;
+            /** @description What changed in this version. */
+            note?: string | null;
+            /** @default [] */
+            tags: string[];
+            title: string;
         };
         PullProgress: {
             /** Format: uint64 */
@@ -5140,6 +5755,14 @@ export interface components {
             rating: number;
             /** @default [] */
             tags: string[];
+        };
+        RateListing: {
+            comment?: string | null;
+            /**
+             * Format: uint8
+             * @description 1 to 5.
+             */
+            stars: number;
         };
         /**
          * @description How hard the model should think. Each dialect maps this onto whatever its
@@ -5221,6 +5844,25 @@ export interface components {
             usage: components["schemas"]["Usage"];
             video?: components["schemas"]["VideoSummary"] | null;
         };
+        /** @description Another registry: a gai server whose listings this one can install. */
+        Registry: {
+            /** @description Letters, digits, `-` and `_`; not `local`. */
+            name: string;
+            /**
+             * @description A key for it (read scope to browse and install, run to rate). Never
+             *     shown again (views are `RegistryView`s); send it empty to keep the
+             *     one saved.
+             * @default null
+             */
+            token: string | null;
+            /** @description The server's address, e.g. `https://gai.example.com`. */
+            url: string;
+        };
+        RegistryView: {
+            has_token: boolean;
+            name: string;
+            url: string;
+        };
         /** @description A remote agent reached over A2A. */
         RemoteDelegate: {
             /** @description The agent's A2A endpoint, or its agent card URL. */
@@ -5233,8 +5875,21 @@ export interface components {
             /** @description Tool name suffix: the tool becomes `ask_<name>`. */
             name: string;
         };
+        RenderPrompt: {
+            prompt: components["schemas"]["PromptSpec"];
+            /**
+             * @description Values for its variables; the prompt's defaults fill the rest.
+             * @default {}
+             */
+            vars: {
+                [key: string]: unknown;
+            };
+        };
         RenderedPersona: {
             /** @description The persona as it goes into the system prompt. */
+            text: string;
+        };
+        RenderedPrompt: {
             text: string;
         };
         /** @description What the fork runs with instead of the original's settings. */
@@ -5856,6 +6511,64 @@ export interface components {
             models: string[];
             /** @default [] */
             tags: string[];
+        };
+        /** @description What to evaluate. */
+        StartOptimize: {
+            /**
+             * @description An agent reference (`name`, `name@v3`, `name@prod`, a file);
+             *     defaults to the set's `agent`.
+             */
+            agent?: string | null;
+            /**
+             * Format: uint32
+             * @description Candidates written and evaluated each round (1 to 5).
+             * @default 2
+             */
+            candidates: number;
+            /**
+             * @description Only these case ids.
+             * @default []
+             */
+            cases: string[];
+            /**
+             * Format: uint
+             * @description Cases run at once.
+             * @default 4
+             */
+            concurrency: number;
+            /**
+             * @description Model for `judge` and `grounded`, over the set's `judge_model`.
+             * @default null
+             */
+            judge_model: string | null;
+            /** @description Run the agent on this model instead of its own. */
+            model?: string | null;
+            /**
+             * Format: uint32
+             * @description Rounds of rewriting (1 to 10).
+             * @default 3
+             */
+            rounds: number;
+            /**
+             * @description Only cases with one of these tags.
+             * @default []
+             */
+            tags: string[];
+            /**
+             * Format: double
+             * @description Stop once the score reaches this (0 to 1).
+             * @default 1
+             */
+            target_score: number;
+            /**
+             * @description The model that rewrites the instructions; the default model when
+             *     not given.
+             * @default null
+             */
+            writer_model: string | null;
+        };
+        Started: {
+            id: string;
         };
         StartedEvals: {
             /** @description One per model, in the order given. */
@@ -8781,6 +9494,41 @@ export interface operations {
             };
         };
     };
+    post_v1_evals__name__optimize: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartOptimize"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Started"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get_v1_evals__name__runs: {
         parameters: {
             query?: never;
@@ -9116,6 +9864,392 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_marketplace_browse: {
+        parameters: {
+            query?: {
+                /** @description A registry's name; this server without one */
+                registry?: string;
+                /** @description Words to look for */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Listing"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_marketplace_browse__registry___name_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                registry: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingDetail"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_marketplace_browse__registry___name__ratings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                registry: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RateListing"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Done"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_marketplace_install: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Install"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportReport"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_marketplace_listings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Listing"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_marketplace_listings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Publish"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Listing"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_marketplace_listings__name_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingDetail"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_marketplace_listings__name_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_marketplace_listings__name__bundle: {
+        parameters: {
+            query?: {
+                /** @description Version number */
+                version?: string;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_marketplace_listings__name__ratings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RateListing"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Done"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_marketplace_registries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistryView"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put_v1_marketplace_registries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Registry"][];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistryView"][];
+                };
             };
             /** @description Error */
             default: {
@@ -9703,6 +10837,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CatalogEntry"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_optimizations: {
+        parameters: {
+            query?: {
+                /** @description Max rows */
+                limit?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Optimization"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_optimizations__id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Optimization"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_optimizations__id__apply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Apply"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Saved"];
                 };
             };
             /** @description Error */
@@ -10349,6 +11581,337 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PersonaVersion"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_prompts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromptEntry"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_prompts: {
+        parameters: {
+            query?: {
+                /** @description Version note */
+                note?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromptSpec"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Saved"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_prompts_render: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenderPrompt"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenderedPrompt"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_prompts__name_: {
+        parameters: {
+            query?: {
+                /** @description Version number */
+                version?: string;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromptView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_prompts__name_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_prompts__name__diff: {
+        parameters: {
+            query?: {
+                /** @description Version (default: the one before to) */
+                from?: string;
+                /** @description Version (default: latest) */
+                to?: string;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionDiff"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_prompts__name__labels__label_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                label: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabelBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Done"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_prompts__name__labels__label_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                label: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Done"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_prompts__name__rollback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Rollback"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Saved"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_prompts__name__versions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryVersion"][];
                 };
             };
             /** @description Error */

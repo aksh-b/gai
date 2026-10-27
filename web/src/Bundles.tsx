@@ -29,6 +29,7 @@ const KINDS: [keyof BundleReport['manifest']['contents'], string][] = [
   ['agents', 'Assistants'],
   ['workflows', 'Workflows'],
   ['personas', 'Personas'],
+  ['prompts', 'Prompts'],
   ['skills', 'Skills'],
   ['mcp_servers', 'Connected apps'],
   ['knowledge', 'Knowledge'],

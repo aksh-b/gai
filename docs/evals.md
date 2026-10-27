@@ -91,6 +91,12 @@ gai eval run support.yaml -a support@v8 --baseline eval_01j...
 
 The output lists newly failing and newly passing cases.
 
+## Improving the instructions
+
+**Improve** on a test set (or `POST /v1/evals/{name}/optimize`) has a model
+rewrite the assistant's instructions to pass more cases, and keeps a rewrite
+only when it scores higher. See [prompts.md](prompts.md#the-prompt-optimizer).
+
 ## Feedback
 
 Every reply in chat has thumbs up and down. A thumbs down asks what went

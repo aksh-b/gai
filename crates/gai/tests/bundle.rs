@@ -78,6 +78,17 @@ async fn bundles_round_trip_without_secrets() {
         .await
         .unwrap();
 
+    rt.save_prompt(
+        &gai::agent::PromptSpec::parse("name: tone\ntext: Be brief.\n", "yaml").unwrap(),
+        None,
+    )
+    .await
+    .unwrap();
+    store
+        .set_item_label(gai::agent::PROMPT_KIND, "tone", "prod", Some(1))
+        .await
+        .unwrap();
+
     let helper = AgentSpec::new("helper").system("Help.");
     rt.save_agent(&helper, None).await.unwrap();
     let mut main: AgentSpec = serde_json::from_value(json!({
@@ -85,6 +96,7 @@ async fn bundles_round_trip_without_secrets() {
         "model": "mock/echo",
         "system": "Be useful.",
         "persona": "tutor",
+        "prompt": "tone@prod",
         "skills": ["haiku"],
         "knowledge": ["handbook"],
         "tools": ["calculator", "mcp__tracker__*"],
@@ -124,6 +136,8 @@ async fn bundles_round_trip_without_secrets() {
         "agents/main.yaml",
         "agents/helper.yaml",
         "personas/tutor.yaml",
+        "prompts/tone.yaml",
+        "prompts/tone.labels",
         "skills/haiku/SKILL.md",
         "skills/haiku/examples.txt",
         "mcp/tracker.json",
@@ -172,6 +186,8 @@ async fn bundles_round_trip_without_secrets() {
             .spec["tone"],
         "warm"
     );
+    let (tone, _) = drt.resolve_prompt("tone@prod").await.unwrap();
+    assert_eq!(tone.text, "Be brief.");
     let skill = drt.skills().get("haiku").await.unwrap().unwrap();
     assert_eq!(skill.read_file("examples.txt").unwrap(), b"old pond");
     let mcp = drt.store().list_mcp_servers().await.unwrap();

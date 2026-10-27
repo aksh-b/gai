@@ -70,8 +70,18 @@ impl Provider for MockProvider {
                 script: Script::Fields,
                 requests: Default::default(),
             })),
+            "obey" => Ok(Arc::new(MockModel {
+                info,
+                script: Script::Obey,
+                requests: Default::default(),
+            })),
+            "rewriter" => Ok(Arc::new(MockModel {
+                info,
+                script: Script::Rewrite,
+                requests: Default::default(),
+            })),
             other => Err(LlmError::NotFound(format!(
-                "mock model {other:?}; available: echo, judge, fields"
+                "mock model {other:?}; available: echo, judge, fields, obey, rewriter"
             ))),
         }
     }
@@ -321,6 +331,8 @@ enum Script {
     Echo,
     Judge,
     Fields,
+    Obey,
+    Rewrite,
     Fixed(Mutex<VecDeque<Result<ChatResponse, LlmError>>>),
 }
 
@@ -367,6 +379,8 @@ impl MockModel {
             Script::Echo => Ok(echo(req)),
             Script::Judge => Ok(text_response(&judge(req))),
             Script::Fields => Ok(text_response(&fields(req))),
+            Script::Obey => Ok(obey(req)),
+            Script::Rewrite => Ok(text_response(&rewrite(req))),
             Script::Fixed(q) => {
                 q.lock().expect("mock lock").pop_front().unwrap_or_else(|| {
                     Err(LlmError::InvalidRequest("mock script exhausted".into()))
@@ -401,6 +415,65 @@ fn section<'a>(prompt: &'a str, label: &str) -> &'a str {
     .min()
     .unwrap_or(rest.len());
     &rest[..end]
+}
+
+/// `mock/obey`: follows `If the question mentions "X", answer: Y` lines in
+/// its instructions, and otherwise echoes. An agent model whose answers
+/// depend on its instructions, for offline tests of the prompt optimizer.
+fn obey(req: &ChatRequest) -> ChatResponse {
+    let question = req
+        .messages
+        .iter()
+        .rev()
+        .find(|m| m.role == Role::User)
+        .map(|m| m.text().to_lowercase())
+        .unwrap_or_default();
+    for line in req.system.as_deref().unwrap_or_default().lines() {
+        let Some(rest) = line.trim().strip_prefix("If the question mentions \"") else {
+            continue;
+        };
+        if let Some((cue, answer)) = rest.split_once("\", answer: ")
+            && question.contains(&cue.to_lowercase())
+        {
+            return text_response(answer.trim());
+        }
+    }
+    echo(req)
+}
+
+/// `mock/rewriter`: the prompt optimizer's writer. Adds an `If the question
+/// mentions ..., answer: ...` line to the instructions for each failing
+/// case with an expected answer, and answers in the optimizer's JSON.
+fn rewrite(req: &ChatRequest) -> String {
+    let prompt = req
+        .messages
+        .iter()
+        .map(|m| m.text())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let current = prompt
+        .split_once("Current instructions:\n<<<\n")
+        .and_then(|(_, r)| r.split_once("\n>>>"))
+        .map(|(t, _)| t.trim_end())
+        .unwrap_or_default();
+    let mut lines = vec![current.to_owned()];
+    let mut input = "";
+    for line in prompt.lines() {
+        if let Some(i) = line.trim().strip_prefix("Input: ") {
+            input = i;
+        } else if let Some(e) = line.trim().strip_prefix("Expected: ") {
+            let cue: Vec<&str> = input.split_whitespace().take(3).collect();
+            lines.push(format!(
+                "If the question mentions \"{}\", answer: {e}",
+                cue.join(" ")
+            ));
+        }
+    }
+    serde_json::json!({
+        "instructions": lines.join("\n").trim(),
+        "rationale": "Say the expected answer for the questions that failed.",
+    })
+    .to_string()
 }
 
 /// `mock/judge`: a JSON grade from word overlap.

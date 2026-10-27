@@ -14,6 +14,7 @@ pub mod hooks;
 mod media;
 mod multi;
 mod persona;
+mod prompt;
 mod recordings;
 mod render;
 mod replay;
@@ -33,6 +34,7 @@ pub use persona::{
     Formality, NO_PERSONA, PersonaDefaults, PersonaExample, PersonaRef, PersonaSpec, Placement,
     ResolvedPersona, Verbosity,
 };
+pub use prompt::{PROMPT_KIND, PromptSpec, PromptVariable};
 pub use replay::{ForkInfo, ReplayOverrides, ReplayRequest, StepEdit};
 pub use runtime::{
     AgentError, FinishHook, RunHandle, RunOutcome, RunRequest, Runtime, RuntimeConfig,

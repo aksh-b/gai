@@ -125,7 +125,7 @@ pub struct AgentView {
     pub spec: AgentSpec,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct Saved {
     pub name: String,
     pub version: u32,

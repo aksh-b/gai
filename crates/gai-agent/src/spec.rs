@@ -34,6 +34,10 @@ pub struct AgentSpec {
     /// run `vars`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub system: Option<String>,
+    /// A stored prompt template used as the instructions, before `system`:
+    /// `name`, `name@v3` or `name@<label>`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
     /// Persona the agent speaks as unless a run picks another: `name`,
     /// `name@v3` or `name@<label>`.
     #[serde(skip_serializing_if = "Option::is_none")]

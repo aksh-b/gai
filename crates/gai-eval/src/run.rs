@@ -133,6 +133,10 @@ impl Evaluator {
         Self { rt }
     }
 
+    pub(crate) fn runtime(&self) -> &Runtime {
+        &self.rt
+    }
+
     /// Save a set as its next version.
     pub async fn save(&self, set: &EvalSet, note: Option<&str>) -> Result<u32, EvalError> {
         let mut set = set.clone();
@@ -208,6 +212,29 @@ impl Evaluator {
         if let Some(m) = &target.model {
             spec.model = Some(m.clone());
         }
+        self.run_spec(
+            (set, version),
+            spec,
+            agent_version,
+            json!({"agent_ref": agent_ref}),
+            opts,
+            progress,
+        )
+        .await
+    }
+
+    /// Run a loaded set against an agent definition that need not be
+    /// stored (a candidate from the prompt optimizer, say). `meta` is
+    /// recorded on the evaluation with the agent and model.
+    pub async fn run_spec(
+        &self,
+        (set, version): (EvalSet, u32),
+        spec: AgentSpec,
+        agent_version: Option<u32>,
+        meta: Value,
+        opts: &EvalOptions,
+        progress: Option<Progress>,
+    ) -> Result<EvalReport, EvalError> {
         let model = spec
             .model
             .clone()
@@ -230,13 +257,12 @@ impl Evaluator {
         }
 
         let store = self.rt.store();
-        let run = store
-            .create_eval_run(
-                &set.name,
-                version,
-                &json!({"agent": spec.name, "agent_ref": agent_ref, "agent_version": agent_version, "model": model}),
-            )
-            .await?;
+        let mut target =
+            json!({"agent": spec.name, "agent_version": agent_version, "model": model});
+        if let (Some(t), Value::Object(extra)) = (target.as_object_mut(), meta) {
+            t.extend(extra);
+        }
+        let run = store.create_eval_run(&set.name, version, &target).await?;
         if let Some(p) = &progress {
             p(EvalProgress::Started {
                 eval_run_id: run.id.clone(),

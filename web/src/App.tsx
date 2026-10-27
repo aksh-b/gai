@@ -31,8 +31,10 @@ import { modelLabel } from './labels';
 import { applyTheme, isDark, setDevMode, useDevMode, useTheme, type Theme } from './prefs';
 import { navigate, useRoute, type Route } from './router';
 import { Apps } from './pages/Apps';
+import { Marketplace } from './pages/Marketplace';
+import { Prompts } from './pages/Prompts';
 import { PublicApp } from './pages/PublicApp';
-import { IconAgent, IconBook, IconData, IconChat, IconFlow, IconGear, IconMoon, IconRuns, IconSearch, IconStack, IconSun } from './icons';
+import { IconAgent, IconBook, IconData, IconChat, IconFlow, IconGear, IconMoon, IconRuns, IconSearch, IconStack, IconStore, IconSun } from './icons';
 import { MediaStudio } from './pages/MediaStudio';
 import { Triggers } from './pages/Triggers';
 import { Connect } from './pages/Connect';
@@ -69,10 +71,11 @@ const NAV: { id: string; label: string; icon: Icon; routes: string[]; tabs?: { i
     id: 'assistants',
     label: 'Assistants',
     icon: IconAgent,
-    routes: ['assistants', 'agents', 'personas', 'memory', 'skills', 'evals'],
+    routes: ['assistants', 'agents', 'personas', 'prompts', 'memory', 'skills', 'evals'],
     tabs: [
       { id: 'assistants', label: 'Assistants' },
       { id: 'personas', label: 'Personas' },
+      { id: 'prompts', label: 'Prompts' },
       { id: 'memory', label: 'Memory' },
       { id: 'skills', label: 'Skills' },
       { id: 'evals', label: 'Tests' },
@@ -109,6 +112,7 @@ const NAV: { id: string; label: string; icon: Icon; routes: string[]; tabs?: { i
       { id: 'dashboards', label: 'Dashboards' },
     ],
   },
+  { id: 'marketplace', label: 'Marketplace', icon: IconStore, routes: ['marketplace'] },
   {
     id: 'activity',
     label: 'Activity',
@@ -273,6 +277,7 @@ function Dashboard({ route }: { route: Route }) {
       { id: 'new-chat', group: 'Do', label: 'New chat', onSelect: go('/chat'), keywords: ['message', 'talk'] },
       { id: 'new-assistant', group: 'Do', label: 'New assistant', onSelect: go('/assistants?new=1'), keywords: ['agent', 'create'] },
       { id: 'new-persona', group: 'Do', label: 'New persona', onSelect: go('/personas?new=1'), keywords: ['voice', 'tone', 'character'] },
+      { id: 'new-prompt', group: 'Do', label: 'New prompt', onSelect: go('/prompts?new=1'), keywords: ['instructions', 'template', 'system'] },
       { id: 'new-app', group: 'Do', label: 'New app', onSelect: go('/apps?new=1'), keywords: ['publish', 'form', 'share', 'endpoint'] },
       {
         id: 'add-knowledge',
@@ -335,6 +340,12 @@ function Dashboard({ route }: { route: Route }) {
         break;
       case 'automations':
         page = <Workflows selected={route.parts[1] ? decodeURIComponent(route.parts[1]) : undefined} />;
+        break;
+      case 'prompts':
+        page = <Prompts selected={route.parts[1] ? decodeURIComponent(route.parts[1]) : undefined} creating={route.query.get('new') === '1'} />;
+        break;
+      case 'marketplace':
+        page = <Marketplace />;
         break;
       case 'apps':
         page = <Apps selected={route.parts[1] ? decodeURIComponent(route.parts[1]) : undefined} creating={route.query.get('new') === '1'} />;

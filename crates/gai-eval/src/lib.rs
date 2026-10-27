@@ -27,6 +27,7 @@
 //! [`EvalRun`]: gai_store::EvalRun
 
 mod compare;
+mod optimize;
 mod run;
 mod score;
 
@@ -34,6 +35,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 pub use compare::{CaseDelta, Comparison, Verdict, compare, gate};
+pub use optimize::{Attempt, OptimizeOptions, OptimizeProgress, OptimizeReport};
 pub use run::{EvalOptions, EvalProgress, EvalReport, Evaluator, Progress, Summary, Target};
 pub use score::{ScoreResult, Scorer};
 

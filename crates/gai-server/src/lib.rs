@@ -12,12 +12,15 @@ mod error;
 mod evals;
 mod governance;
 mod knowledge;
+mod marketplace;
 pub mod mcp_server;
 mod media;
 mod openai;
 mod openapi;
+mod optimizer;
 mod orgs;
 mod personas;
+mod prompts;
 mod recordings;
 mod setup;
 mod sources;
@@ -105,8 +108,11 @@ pub async fn router(
         .merge(apps::routes())
         .merge(versions::routes())
         .merge(personas::routes())
+        .merge(prompts::routes())
+        .merge(marketplace::routes())
         .merge(bundles::routes())
         .merge(evals::routes())
+        .merge(optimizer::routes())
         .merge(governance::routes())
         .merge(sources::routes())
         .merge(data::routes())
@@ -151,6 +157,7 @@ pub async fn serve(
     sources::start_scheduler(gai.clone());
     data::start_scheduler(gai.clone());
     recordings::recover(gai.clone());
+    optimizer::recover(gai.clone());
     let app = router(gai, policy, opts.dashboard).await?;
     let listener = tokio::net::TcpListener::bind(opts.bind).await?;
     axum::serve(listener, app)

@@ -19,10 +19,13 @@ use crate::data::*;
 use crate::evals::*;
 use crate::governance::*;
 use crate::knowledge::*;
+use crate::marketplace::*;
 use crate::media::*;
 use crate::openai::ChatCompletionRequest;
+use crate::optimizer::*;
 use crate::orgs::*;
 use crate::personas::*;
+use crate::prompts::*;
 use crate::recordings::*;
 use crate::setup::*;
 use crate::sso::AuthConfig;
@@ -990,6 +993,72 @@ pub fn document() -> Value {
             "Remove a label",
         )
         .ok(s::<Done>(&mut g)),
+        op("get", "/v1/prompts", "prompts", "Prompt templates, with the agents that use them")
+            .ok(list::<PromptEntry>(&mut g)),
+        op("post", "/v1/prompts", "prompts", "Save a prompt template as its next version")
+            .body(s::<gai::agent::PromptSpec>(&mut g))
+            .ok(s::<Saved>(&mut g))
+            .query(&[("note", "Version note")]),
+        op("post", "/v1/prompts/render", "prompts", "A prompt's text with these variables (and its defaults)")
+            .body(s::<RenderPrompt>(&mut g))
+            .ok(s::<RenderedPrompt>(&mut g)),
+        op("get", "/v1/prompts/{name}", "prompts", "A prompt template (latest, or ?version=)")
+            .ok(s::<PromptView>(&mut g))
+            .query(&[("version", "Version number")]),
+        op("delete", "/v1/prompts/{name}", "prompts", "Delete a prompt template no agent uses"),
+        op("get", "/v1/prompts/{name}/versions", "prompts", "A prompt's versions, newest first")
+            .ok(list::<gai::store::LibraryVersion>(&mut g)),
+        op("get", "/v1/prompts/{name}/diff", "prompts", "What changed between two versions")
+            .ok(s::<VersionDiff>(&mut g))
+            .query(&[("from", "Version (default: the one before to)"), ("to", "Version (default: latest)")]),
+        op("post", "/v1/prompts/{name}/rollback", "prompts", "Save an old version as the newest")
+            .body(s::<Rollback>(&mut g))
+            .ok(s::<Saved>(&mut g)),
+        op("post", "/v1/prompts/{name}/labels/{label}", "prompts", "Point a label at a version (agents use name@label)")
+            .body(s::<LabelBody>(&mut g))
+            .ok(s::<Done>(&mut g)),
+        op("delete", "/v1/prompts/{name}/labels/{label}", "prompts", "Remove a label")
+            .ok(s::<Done>(&mut g)),
+        op("post", "/v1/evals/{name}/optimize", "evals", "Rewrite the agent's instructions (or its prompt template) to raise its score on this set, in the background; follow GET /v1/optimizations/{id}")
+            .body(s::<StartOptimize>(&mut g))
+            .ok(s::<Started>(&mut g)),
+        op("get", "/v1/optimizations", "evals", "Prompt optimizations, newest first")
+            .ok(list::<Optimization>(&mut g))
+            .query(&[("limit", "Max rows")]),
+        op("get", "/v1/optimizations/{id}", "evals", "An optimization and what it found so far")
+            .ok(s::<Optimization>(&mut g)),
+        op("post", "/v1/optimizations/{id}/apply", "evals", "Save the best instructions as the agent's (or prompt template's) next version")
+            .body(s::<Apply>(&mut g))
+            .ok(s::<Saved>(&mut g)),
+        op("get", "/v1/marketplace/listings", "marketplace", "What this server publishes (other servers browse it as a registry)")
+            .ok(list::<Listing>(&mut g)),
+        op("post", "/v1/marketplace/listings", "marketplace", "Export a bundle from this server and publish it as a listing's next version")
+            .body(s::<Publish>(&mut g))
+            .ok(s::<Listing>(&mut g)),
+        op("get", "/v1/marketplace/listings/{name}", "marketplace", "A listing with its versions and reviews")
+            .ok(s::<ListingDetail>(&mut g)),
+        op("delete", "/v1/marketplace/listings/{name}", "marketplace", "Unpublish a listing and its bundles"),
+        op("get", "/v1/marketplace/listings/{name}/bundle", "marketplace", "A listing's bundle (a zip; latest, or ?version=)")
+            .query(&[("version", "Version number")]),
+        op("post", "/v1/marketplace/listings/{name}/ratings", "marketplace", "Rate a listing 1 to 5; rating again replaces your rating")
+            .body(s::<RateListing>(&mut g))
+            .ok(s::<Done>(&mut g)),
+        op("get", "/v1/marketplace/registries", "marketplace", "Other registries (gai servers) to browse and install from")
+            .ok(list::<RegistryView>(&mut g)),
+        op("put", "/v1/marketplace/registries", "marketplace", "Replace the list of registries; one sent without a token keeps its saved token")
+            .body(json!({"type": "array", "items": s::<Registry>(&mut g)}))
+            .ok(list::<RegistryView>(&mut g)),
+        op("get", "/v1/marketplace/browse", "marketplace", "Listings of this server or of a registry")
+            .ok(list::<Listing>(&mut g))
+            .query(&[("registry", "A registry's name; this server without one"), ("q", "Words to look for")]),
+        op("get", "/v1/marketplace/browse/{registry}/{name}", "marketplace", "A listing of this server (registry local) or another registry")
+            .ok(s::<ListingDetail>(&mut g)),
+        op("post", "/v1/marketplace/browse/{registry}/{name}/ratings", "marketplace", "Rate a listing here or in another registry")
+            .body(s::<RateListing>(&mut g))
+            .ok(s::<Done>(&mut g)),
+        op("post", "/v1/marketplace/install", "marketplace", "Install a listing's bundle, or with dry_run see what it holds and needs")
+            .body(s::<Install>(&mut g))
+            .ok(s::<gai::bundle::ImportReport>(&mut g)),
     ];
 
     let mut paths = Map::new();

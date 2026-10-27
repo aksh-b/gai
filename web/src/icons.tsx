@@ -30,6 +30,7 @@ import {
   SquareIcon,
   SunIcon,
   Trash2Icon,
+  StoreIcon,
   UploadIcon,
   Volume2Icon,
   WorkflowIcon,
@@ -81,3 +82,4 @@ export const IconSun = icon(SunIcon);
 export const IconMoon = icon(MoonIcon);
 export const IconClip = icon(PaperclipIcon);
 export const IconUpload = icon(UploadIcon);
+export const IconStore = icon(StoreIcon);

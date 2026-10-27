@@ -17,6 +17,7 @@ import { api, type EvalReport, type EvalResult, type EvalRun } from '../api';
 import { IconPlus, IconTrash } from '../icons';
 import { modelLabel } from '../labels';
 import { modelOptions, useModelGroups } from '../models';
+import { OptimizePanel } from '../Optimizer';
 import { useDevMode } from '../prefs';
 import { navigate } from '../router';
 import { ago, money, useLoad } from '../util';
@@ -116,6 +117,7 @@ function SetPanel({ name, onChanged }: { name: string; onChanged: () => void }) 
         items={[
           { id: 'run', label: 'Run' },
           { id: 'results', label: 'Results' },
+          { id: 'improve', label: 'Improve' },
           { id: 'edit', label: 'Edit' },
         ]}
         value={tab}
@@ -125,6 +127,7 @@ function SetPanel({ name, onChanged }: { name: string; onChanged: () => void }) 
       />
       {tab === 'run' && <RunForm name={name} defaultAgent={s.agent ?? undefined} onStarted={() => setTab('results')} />}
       {tab === 'results' && <ResultsList name={name} />}
+      {tab === 'improve' && <OptimizePanel set={name} defaultAgent={s.agent ?? undefined} />}
       {tab === 'edit' && (
         <>
           <SetEditor

@@ -8,6 +8,8 @@ use gai::bundle::{ExportOptions, ImportOptions, ImportReport};
 
 use crate::style::{bold, dim, green, yellow};
 
+// Parsed once per command line, so the variants' sizes don't matter.
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 pub enum BundleCmd {
     /// Write agents and what they use (personas, skills, delegates,
@@ -23,6 +25,9 @@ pub enum BundleCmd {
         workflows: Vec<String>,
         #[arg(long = "persona")]
         personas: Vec<String>,
+        /// Prompt templates
+        #[arg(long = "prompt")]
+        prompts: Vec<String>,
         #[arg(long = "skill")]
         skills: Vec<String>,
         /// MCP servers added through the API
@@ -66,6 +71,7 @@ pub async fn bundle(gai: &Gai, cmd: BundleCmd) -> anyhow::Result<()> {
             agents,
             workflows,
             personas,
+            prompts,
             skills,
             mcp_servers,
             knowledge,
@@ -82,6 +88,7 @@ pub async fn bundle(gai: &Gai, cmd: BundleCmd) -> anyhow::Result<()> {
                 agents,
                 workflows,
                 personas,
+                prompts,
                 skills,
                 mcp_servers,
                 knowledge,
@@ -163,6 +170,7 @@ fn print_contents(r: &ImportReport) {
         ("agents", &c.agents),
         ("workflows", &c.workflows),
         ("personas", &c.personas),
+        ("prompts", &c.prompts),
         ("skills", &c.skills),
         ("MCP servers", &c.mcp_servers),
         ("knowledge", &c.knowledge),

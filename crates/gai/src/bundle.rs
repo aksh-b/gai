@@ -6,6 +6,7 @@
 //! agents/<name>.yaml
 //! workflows/<name>.yaml
 //! personas/<name>.yaml
+//! prompts/<name>.yaml           prompt templates (latest version), labels in prompts/<name>.labels
 //! skills/<name>/SKILL.md         plus the skill's files
 //! mcp/<name>.json                MCP server configs, secrets replaced by ${VARS}
 //! memory/blocks.json             memory blocks the agents start with
@@ -45,6 +46,8 @@ pub struct ExportOptions {
     pub agents: Vec<String>,
     pub workflows: Vec<String>,
     pub personas: Vec<String>,
+    /// Prompt templates.
+    pub prompts: Vec<String>,
     pub skills: Vec<String>,
     /// MCP servers added through the API.
     pub mcp_servers: Vec<String>,
@@ -84,6 +87,7 @@ pub struct Contents {
     pub agents: Vec<String>,
     pub workflows: Vec<String>,
     pub personas: Vec<String>,
+    pub prompts: Vec<String>,
     pub skills: Vec<String>,
     pub mcp_servers: Vec<String>,
     pub knowledge: Vec<String>,
@@ -148,6 +152,13 @@ pub async fn export(gai: &Gai, opts: &ExportOptions) -> Result<Vec<u8>, Error> {
             .extend(store.list_workflows().await?.into_iter().map(|w| w.name));
         want.personas
             .extend(store.list_personas().await?.into_iter().map(|p| p.name));
+        want.prompts.extend(
+            store
+                .list_items(gai_agent::PROMPT_KIND)
+                .await?
+                .into_iter()
+                .map(|p| p.name),
+        );
         want.skills
             .extend(store.list_skills().await?.into_iter().map(|s| s.name));
         want.mcp
@@ -160,6 +171,7 @@ pub async fn export(gai: &Gai, opts: &ExportOptions) -> Result<Vec<u8>, Error> {
     want.agents.extend(opts.agents.iter().cloned());
     want.workflows.extend(opts.workflows.iter().cloned());
     want.personas.extend(opts.personas.iter().cloned());
+    want.prompts.extend(opts.prompts.iter().cloned());
     want.skills.extend(opts.skills.iter().cloned());
     want.mcp.extend(opts.mcp_servers.iter().cloned());
     want.knowledge.extend(opts.knowledge.iter().cloned());
@@ -235,6 +247,10 @@ pub async fn export(gai: &Gai, opts: &ExportOptions) -> Result<Vec<u8>, Error> {
                     want.personas.insert(p.to_owned());
                 }
             }
+            if let Some(p) = &spec.prompt {
+                want.prompts
+                    .insert(p.split('@').next().unwrap_or(p).to_owned());
+            }
             want.skills
                 .extend(spec.skills.iter().filter(|s| !s.contains('*')).cloned());
             want.knowledge.extend(spec.knowledge.iter().cloned());
@@ -257,6 +273,27 @@ pub async fn export(gai: &Gai, opts: &ExportOptions) -> Result<Vec<u8>, Error> {
         };
         files.insert(format!("personas/{name}.yaml"), yaml(&p.spec)?);
         manifest.contents.personas.push(name.clone());
+    }
+
+    for name in &want.prompts {
+        let (Some(item), Some(p)) = (
+            store.item(gai_agent::PROMPT_KIND, name).await?,
+            store.get_item(gai_agent::PROMPT_KIND, name, None).await?,
+        ) else {
+            if opts.prompts.iter().any(|x| x == name) {
+                return Err(Error::NotFound(format!("prompt {name}")));
+            }
+            continue;
+        };
+        files.insert(format!("prompts/{name}.yaml"), yaml(&p.spec)?);
+        if !item.labels.is_empty() {
+            let labels: Vec<&str> = item.labels.keys().map(String::as_str).collect();
+            files.insert(
+                format!("prompts/{name}.labels"),
+                labels.join("\n").into_bytes(),
+            );
+        }
+        manifest.contents.prompts.push(name.clone());
     }
 
     let skills = rt.skills();
@@ -460,6 +497,43 @@ pub async fn import(gai: &Gai, bytes: &[u8], opts: &ImportOptions) -> Result<Imp
         report.installed.push(format!("persona/{name}@v{v}"));
     }
 
+    // Prompt templates, before the agents that use them. The labels they
+    // had point at the imported version, so `name@prod` keeps working.
+    for (name, path) in in_dir("prompts/", ".yaml") {
+        let spec: gai_agent::PromptSpec =
+            serde_yaml::from_str(text(&path)?).map_err(|e| invalid(format!("{path}: {e}")))?;
+        spec.validate()
+            .map_err(|e| invalid(format!("{path}: {e}")))?;
+        if opts.skip_existing
+            && store
+                .get_item(gai_agent::PROMPT_KIND, &name, None)
+                .await?
+                .is_some()
+        {
+            report.skipped.push(format!("prompt/{name}"));
+            continue;
+        }
+        let v = store
+            .put_item(
+                gai_agent::PROMPT_KIND,
+                &name,
+                &serde_json::to_value(&spec).expect("json"),
+                Some(&note),
+            )
+            .await?;
+        if let Some(labels) = files.get(&format!("prompts/{name}.labels")) {
+            for label in String::from_utf8_lossy(labels)
+                .lines()
+                .filter(|l| !l.trim().is_empty())
+            {
+                store
+                    .set_item_label(gai_agent::PROMPT_KIND, &name, label.trim(), Some(v))
+                    .await?;
+            }
+        }
+        report.installed.push(format!("prompt/{name}@v{v}"));
+    }
+
     let skill_names: BTreeSet<String> = files
         .keys()
         .filter_map(|p| p.strip_prefix("skills/")?.strip_suffix("/SKILL.md"))
@@ -658,6 +732,7 @@ struct Selection {
     agents: BTreeSet<String>,
     workflows: BTreeSet<String>,
     personas: BTreeSet<String>,
+    prompts: BTreeSet<String>,
     skills: BTreeSet<String>,
     mcp: BTreeSet<String>,
     knowledge: BTreeSet<String>,
@@ -668,6 +743,7 @@ impl Selection {
         self.agents.is_empty()
             && self.workflows.is_empty()
             && self.personas.is_empty()
+            && self.prompts.is_empty()
             && self.skills.is_empty()
             && self.mcp.is_empty()
             && self.knowledge.is_empty()

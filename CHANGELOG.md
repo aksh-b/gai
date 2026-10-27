@@ -16,6 +16,21 @@ initial development and will ship as 0.1.0.
 
 ### Added
 
+- **Marketplace.** Publish assistants, workflows and prompts from a server
+  as listings (bundles with a title, tags and versions), rate them, and
+  install them in a click, after seeing what they need. Other gai servers
+  can be added as registries to browse and install from. See
+  [docs/marketplace.md](docs/marketplace.md).
+- **Prompt templates.** Instructions kept on their own under
+  **Assistants › Prompts**, versioned and labelled like agents, with
+  variables and defaults. Agents use one with `prompt: name@label`, before
+  their own `system`; bundles carry them. See [docs/prompts.md](docs/prompts.md).
+- **Prompt optimizer.** **Improve** on a test set rewrites an assistant's
+  instructions (or its prompt template) from the cases that failed, keeps
+  only rewrites that score higher, and saves the best as a new version
+  when you say so. `POST /v1/evals/{name}/optimize`.
+- **Mock models** `mock/obey` and `mock/rewriter`, to try the optimizer
+  without a real model.
 - **Apps.** Publish an assistant or workflow as a small app under
   **Automations › Apps**: a form (text, numbers, yes/no, choices) with
   its own link, made without YAML. Share it with a link carrying the

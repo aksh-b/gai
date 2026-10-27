@@ -85,6 +85,19 @@ export type TriggerView = Schemas['TriggerView'];
 export type TriggerEvent = Schemas['TriggerEvent'];
 export type Fired = Schemas['Fired'];
 export type PersonaSpec = Schemas['PersonaSpec'];
+export type PromptSpec = Schemas['PromptSpec'];
+export type PromptEntry = Schemas['PromptEntry'];
+export type PromptView = Schemas['PromptView'];
+export type LibraryVersion = Schemas['LibraryVersion'];
+export type Listing = Schemas['Listing'];
+export type ListingDetail = Schemas['ListingDetail'];
+export type RegistryView = Schemas['RegistryView'];
+export type Registry = Schemas['Registry'];
+export type Publish = Schemas['Publish'];
+export type Optimization = Schemas['Optimization'];
+export type OptimizeReport = Schemas['OptimizeReport'];
+export type OptimizeAttempt = Schemas['Attempt'];
+export type StartOptimize = Schemas['StartOptimize'];
 export type PersonaSummary = Schemas['PersonaSummary'];
 export type PersonaEntry = Schemas['PersonaEntry'];
 export type PersonaVersion = Schemas['PersonaVersion'];
@@ -555,6 +568,48 @@ export const api = {
       ? request<unknown>('DELETE', `/v1/personas/${encodeURIComponent(name)}/labels/${encodeURIComponent(label)}`)
       : request<unknown>('POST', `/v1/personas/${encodeURIComponent(name)}/labels/${encodeURIComponent(label)}`, { version }),
   renderPersona: (spec: PersonaSpec) => request<{ text: string }>('POST', '/v1/personas/render', spec),
+  prompts: () => get<PromptEntry[]>('/v1/prompts'),
+  prompt: (name: string, version?: number) =>
+    get<PromptView>(`/v1/prompts/${encodeURIComponent(name)}${version ? `?version=${version}` : ''}`),
+  savePrompt: (spec: PromptSpec, note?: string) =>
+    request<{ name: string; version: number }>('POST', `/v1/prompts${note ? `?note=${encodeURIComponent(note)}` : ''}`, spec),
+  deletePrompt: (name: string) => request<void>('DELETE', `/v1/prompts/${encodeURIComponent(name)}`),
+  promptVersions: (name: string) => get<LibraryVersion[]>(`/v1/prompts/${encodeURIComponent(name)}/versions`),
+  promptDiff: (name: string, from?: number, to?: number) =>
+    get<VersionDiff>(`/v1/prompts/${encodeURIComponent(name)}/diff?${versionPair(from, to)}`),
+  rollbackPrompt: (name: string, version: number) =>
+    request<{ name: string; version: number }>('POST', `/v1/prompts/${encodeURIComponent(name)}/rollback`, { version }),
+  setPromptLabel: (name: string, label: string, version: number | null) =>
+    version === null
+      ? request<unknown>('DELETE', `/v1/prompts/${encodeURIComponent(name)}/labels/${encodeURIComponent(label)}`)
+      : request<unknown>('POST', `/v1/prompts/${encodeURIComponent(name)}/labels/${encodeURIComponent(label)}`, { version }),
+  renderPrompt: (prompt: PromptSpec, vars: Record<string, unknown> = {}) =>
+    request<{ text: string }>('POST', '/v1/prompts/render', { prompt, vars }),
+  browse: (registry?: string, q?: string) => {
+    const p = new URLSearchParams();
+    if (registry) p.set('registry', registry);
+    if (q) p.set('q', q);
+    return get<Listing[]>(`/v1/marketplace/browse?${p}`);
+  },
+  listing: (registry: string, name: string) =>
+    get<ListingDetail>(`/v1/marketplace/browse/${encodeURIComponent(registry)}/${encodeURIComponent(name)}`),
+  rateListing: (registry: string, name: string, stars: number, comment?: string) =>
+    request<unknown>('POST', `/v1/marketplace/browse/${encodeURIComponent(registry)}/${encodeURIComponent(name)}/ratings`, {
+      stars,
+      comment: comment || null,
+    }),
+  publishListing: (body: Publish) => request<Listing>('POST', '/v1/marketplace/listings', body),
+  unpublishListing: (name: string) => request<void>('DELETE', `/v1/marketplace/listings/${encodeURIComponent(name)}`),
+  registries: () => get<RegistryView[]>('/v1/marketplace/registries'),
+  saveRegistries: (list: Registry[]) => request<RegistryView[]>('PUT', '/v1/marketplace/registries', list),
+  installListing: (body: { registry: string; name: string; version?: number; skip_existing?: boolean; dry_run?: boolean }) =>
+    request<BundleReport>('POST', '/v1/marketplace/install', body),
+  optimize: (set: string, body: Partial<StartOptimize>) =>
+    request<{ id: string }>('POST', `/v1/evals/${encodeURIComponent(set)}/optimize`, body),
+  optimizations: () => get<Optimization[]>('/v1/optimizations'),
+  optimization: (id: string) => get<Optimization>(`/v1/optimizations/${encodeURIComponent(id)}`),
+  applyOptimization: (id: string, note?: string) =>
+    request<{ name: string; version: number }>('POST', `/v1/optimizations/${encodeURIComponent(id)}/apply`, { note: note || null }),
   personaDefaults: () => get<PersonaDefaults>('/v1/personas/defaults'),
   setPersonaDefaults: (body: { persona: string | null; placement?: Placement } | { reset: true }) =>
     request<PersonaDefaults>('PUT', '/v1/personas/defaults', body),

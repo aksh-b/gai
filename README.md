@@ -183,6 +183,8 @@ Run `gai <command> --help` for details.
 - [Users, teams and organizations](docs/users.md): roles, SSO (OIDC or a proxy), teams that own resources, several organizations on one server
 - [Safety and governance](docs/safety.md): personal data, prompt injection, guardrails, audit log, retention
 - [Bundles](docs/bundles.md): sharing agents between servers
+- [The marketplace](docs/marketplace.md): publish, rate and install bundles, here and from other gai servers
+- [Prompt templates and the optimizer](docs/prompts.md): versioned instructions any agent can use, and rewriting them to score higher on a test set
 - [Deploying](docs/deploy.md): Docker, auth and keys, data and backups
 - [API reference](http://localhost:8484/docs): served by every gai server at `/docs`
 

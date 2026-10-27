@@ -9,6 +9,7 @@ license.workspace = true
 gai-agent.workspace = true
 gai-core.workspace = true
 gai-llm.workspace = true
+minijinja.workspace = true
 gai-store.workspace = true
 futures.workspace = true
 regex.workspace = true
@@ -23,3 +24,4 @@ tracing.workspace = true
 [dev-dependencies]
 gai-memory.workspace = true
 gai-tools.workspace = true
+tempfile.workspace = true

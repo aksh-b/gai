@@ -198,6 +198,65 @@ pub trait DataStore: Send + Sync {
     async fn save_dashboard_results(&self, name: &str, results: &Value) -> Result<()>;
 }
 
+/// Named, versioned JSON items of a kind (prompt templates, marketplace
+/// listings), with labels and ratings; and background jobs.
+#[async_trait]
+pub trait LibraryStore: Send + Sync {
+    /// Save a spec as the item's next version (or return the latest version
+    /// when nothing changed).
+    async fn put_item(
+        &self,
+        kind: &str,
+        name: &str,
+        spec: &Value,
+        note: Option<&str>,
+    ) -> Result<u32>;
+    async fn get_item(
+        &self,
+        kind: &str,
+        name: &str,
+        version: Option<u32>,
+    ) -> Result<Option<LibraryVersion>>;
+    async fn item(&self, kind: &str, name: &str) -> Result<Option<LibraryItem>>;
+    async fn list_items(&self, kind: &str) -> Result<Vec<LibraryItem>>;
+    /// Newest first.
+    async fn list_item_versions(&self, kind: &str, name: &str) -> Result<Vec<LibraryVersion>>;
+    /// Point `label` at a version; `None` removes the label.
+    async fn set_item_label(
+        &self,
+        kind: &str,
+        name: &str,
+        label: &str,
+        version: Option<u32>,
+    ) -> Result<()>;
+    async fn delete_item(&self, kind: &str, name: &str) -> Result<bool>;
+    /// Rate an item 1 to 5; rating again replaces the rater's rating.
+    async fn rate_item(
+        &self,
+        kind: &str,
+        name: &str,
+        rater: &str,
+        stars: u8,
+        comment: Option<&str>,
+    ) -> Result<()>;
+    /// Newest first.
+    async fn list_ratings(&self, kind: &str, name: &str) -> Result<Vec<LibraryRating>>;
+
+    /// Starts as `running`.
+    async fn create_job(&self, kind: &str, input: &Value) -> Result<Job>;
+    async fn get_job(&self, id: &str) -> Result<Option<Job>>;
+    /// Newest first.
+    async fn list_jobs(&self, kind: &str, limit: u32) -> Result<Vec<Job>>;
+    /// Set the status and what the job made so far (or why it failed).
+    async fn update_job(
+        &self,
+        id: &str,
+        status: &str,
+        result: Option<&Value>,
+        error: Option<&str>,
+    ) -> Result<()>;
+}
+
 /// Apps: agents and workflows published as forms and endpoints.
 #[async_trait]
 pub trait AppStore: Send + Sync {
@@ -676,6 +735,7 @@ pub trait Store:
     DirectoryStore
     + DataStore
     + AppStore
+    + LibraryStore
     + RecordingStore
     + GraphStore
     + AgentStore
@@ -701,6 +761,7 @@ impl<T> Store for T where
     T: DirectoryStore
         + DataStore
         + AppStore
+        + LibraryStore
         + RecordingStore
         + GraphStore
         + AgentStore

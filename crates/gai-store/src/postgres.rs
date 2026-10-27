@@ -29,6 +29,8 @@ mod directory;
 mod governance;
 #[path = "pg_graph.rs"]
 mod graph;
+#[path = "pg_library.rs"]
+mod library;
 #[path = "pg_memory.rs"]
 mod memory;
 #[path = "pg_personas.rs"]

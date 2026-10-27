@@ -25,6 +25,8 @@ mod directory;
 mod governance;
 #[path = "sqlite_graph.rs"]
 mod graph;
+#[path = "sqlite_library.rs"]
+mod library;
 #[path = "sqlite_memory.rs"]
 mod memory;
 #[path = "sqlite_personas.rs"]

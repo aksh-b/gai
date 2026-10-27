@@ -205,6 +205,7 @@ pub fn required_scope(method: &Method, path: &str) -> Scope {
         && path != "/v1/workflows/validate";
     let build = (path.starts_with("/v1/agents")
         || (path.starts_with("/v1/personas") && path != "/v1/personas/render")
+        || (path.starts_with("/v1/prompts") && path != "/v1/prompts/render")
         || (path.starts_with("/v1/triggers") && path != "/v1/triggers/preview")
         || path.starts_with("/v1/skills")
         || path.starts_with("/v1/templates")
@@ -213,6 +214,8 @@ pub fn required_scope(method: &Method, path: &str) -> Scope {
         || (path.starts_with("/v1/dashboards") && !path.ends_with("/refresh"))
         // Saving or deleting eval sets and evaluations; running one is `run`.
         || (path.starts_with("/v1/evals") && !path.ends_with("/runs"))
+        // Applying what the prompt optimizer found.
+        || path.starts_with("/v1/optimizations")
         // Saving apps and their keys; running one is `run`.
         || (path.starts_with("/v1/apps") && !path.ends_with("/run"))
         || path.starts_with("/v1/eval-runs/")
@@ -222,6 +225,8 @@ pub fn required_scope(method: &Method, path: &str) -> Scope {
         || path.starts_with("/v1/settings")
         || path.starts_with("/v1/providers")
         || path.starts_with("/v1/bundles")
+        // Publishing, installing and choosing registries; rating is `run`.
+        || (path.starts_with("/v1/marketplace") && !path.ends_with("/ratings"))
         || path.starts_with("/v1/members")
         || path.starts_with("/v1/teams")
         || path.starts_with("/v1/orgs")
@@ -255,6 +260,7 @@ pub fn owned_resource(path: &str) -> Option<(&'static str, String)> {
         "workflows" => "workflow",
         "apps" => "app",
         "personas" => "persona",
+        "prompts" => "prompt",
         "skills" => "skill",
         "triggers" => "trigger",
         "sources" => "source",
@@ -275,6 +281,7 @@ async fn body_resource(path: &str, req: &mut Request) -> Option<(&'static str, S
         "/v1/workflows" => "workflow",
         "/v1/apps" => "app",
         "/v1/personas" => "persona",
+        "/v1/prompts" => "prompt",
         "/v1/evals" => "eval",
         "/v1/sources" => "source",
         _ => return None,
@@ -773,6 +780,31 @@ mod tests {
         );
         assert_eq!(required_scope(&Method::GET, "/v1/members"), Scope::Read);
         assert_eq!(required_scope(&Method::POST, "/v1/apps"), Scope::Build);
+        assert_eq!(required_scope(&Method::POST, "/v1/prompts"), Scope::Build);
+        assert_eq!(
+            required_scope(&Method::POST, "/v1/evals/support/optimize"),
+            Scope::Build
+        );
+        assert_eq!(
+            required_scope(&Method::POST, "/v1/optimizations/job_1/apply"),
+            Scope::Build
+        );
+        assert_eq!(
+            required_scope(&Method::POST, "/v1/prompts/render"),
+            Scope::Run
+        );
+        assert_eq!(
+            required_scope(&Method::POST, "/v1/marketplace/install"),
+            Scope::Admin
+        );
+        assert_eq!(
+            required_scope(&Method::POST, "/v1/marketplace/listings/kit/ratings"),
+            Scope::Run
+        );
+        assert_eq!(
+            required_scope(&Method::GET, "/v1/marketplace/browse"),
+            Scope::Read
+        );
         assert_eq!(
             required_scope(&Method::POST, "/v1/apps/intake/key"),
             Scope::Build

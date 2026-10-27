@@ -867,8 +867,12 @@ impl Runtime {
         req: RunRequest,
         extra_meta: Map<String, Value>,
     ) -> Result<Launch, AgentError> {
-        let spec = req.agent.clone();
+        let mut spec = req.agent.clone();
         spec.validate().map_err(AgentError::Invalid)?;
+        // A prompt template becomes part of `system`; the run records the
+        // result, so resuming it later uses the same text.
+        let mut vars = req.vars.clone();
+        let prompt = self.apply_prompt(&mut spec, &mut vars).await?;
         if let Some(url) = &req.callback_url {
             self.check_callback_url(url)?;
         }
@@ -954,13 +958,7 @@ impl Runtime {
         std::fs::create_dir_all(&workspace)
             .map_err(|e| AgentError::Invalid(format!("workspace {}: {e}", workspace.display())))?;
         let system = join_prompt(
-            system_with_persona(
-                &spec,
-                &model.info().id,
-                &workspace,
-                &req.vars,
-                persona.as_ref(),
-            )?,
+            system_with_persona(&spec, &model.info().id, &workspace, &vars, persona.as_ref())?,
             &extras.prompt,
         );
 
@@ -977,7 +975,10 @@ impl Runtime {
         );
         metadata.insert("model".into(), json!(model.info().id));
         metadata.insert("auto_approve".into(), json!(req.auto_approve));
-        metadata.insert("vars".into(), Value::Object(req.vars.clone()));
+        metadata.insert("vars".into(), Value::Object(vars.clone()));
+        if let Some((name, version)) = prompt {
+            metadata.insert("prompt".into(), json!({"name": name, "version": version}));
+        }
         metadata.insert("workspace".into(), json!(workspace.display().to_string()));
         metadata.insert("user_id".into(), json!(user));
         if let Some(url) = &req.callback_url {
