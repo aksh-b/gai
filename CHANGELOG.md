@@ -16,6 +16,17 @@ initial development and will ship as 0.1.0.
 
 ### Added
 
+- **Apps.** Publish an assistant or workflow as a small app under
+  **Automations › Apps**: a form (text, numbers, yes/no, choices) with
+  its own link, made without YAML. Share it with a link carrying the
+  app's own key, which runs that app and nothing else, or make it public.
+  Every app is also an endpoint, `POST /v1/apps/{name}/run`, that checks
+  its input against the fields, can answer in a JSON Schema you give, and
+  has its own OpenAPI document. See [docs/apps.md](docs/apps.md).
+- **Workflow designer.** Workflows open on a canvas: add steps, drag
+  between them to make one wait for another, delete steps and lines, and
+  arrange them. Positions are saved under the workflow's new `layout`, so
+  the canvas, the step list and the YAML stay in step.
 - **Voice conversations.** **Talk** in the chat holds a spoken conversation
   with any agent: each pause ends a turn, the answer is spoken sentence by
   sentence as it is written, and talking over it interrupts. Agents with

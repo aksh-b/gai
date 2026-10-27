@@ -51,6 +51,11 @@ export type GraphNode = Schemas['GraphNode'];
 export type WorkflowEntry = Schemas['WorkflowEntry'];
 export type WorkflowView = Schemas['WorkflowView'];
 export type WorkflowSpec = Schemas['WorkflowSpec'];
+export type AppSpec = Schemas['AppSpec'];
+export type AppField = Schemas['AppField'];
+export type AppView = Schemas['AppView'];
+export type AppForm = Schemas['AppForm'];
+export type AppResult = Schemas['AppResult'];
 export type BundleReport = Schemas['ImportReport'];
 export type Feedback = Schemas['Feedback'];
 export type FeedbackSummary = Schemas['FeedbackSummary'];
@@ -596,6 +601,12 @@ export const api = {
   ) => request<Ingested>('POST', `/v1/collections/${encodeURIComponent(name)}/documents`, body),
   deleteDocument: (name: string, id: string) =>
     request<void>('DELETE', `/v1/collections/${encodeURIComponent(name)}/documents/${id}`),
+  apps: () => get<AppView[]>('/v1/apps'),
+  app: (name: string) => get<AppView>(`/v1/apps/${encodeURIComponent(name)}`),
+  saveApp: (spec: AppSpec) => request<AppView>('POST', '/v1/apps', spec),
+  deleteApp: (name: string) => request<void>('DELETE', `/v1/apps/${encodeURIComponent(name)}`),
+  newAppKey: (name: string) => request<{ secret: string; prefix: string }>('POST', `/v1/apps/${encodeURIComponent(name)}/key`),
+  removeAppKey: (name: string) => request<void>('DELETE', `/v1/apps/${encodeURIComponent(name)}/key`),
   dashboards: () => get<DashboardView[]>('/v1/dashboards'),
   saveDashboard: (yaml: string) => request<DashboardView>('POST', '/v1/dashboards', { yaml }),
   deleteDashboard: (name: string) => request<{ ok: boolean }>('DELETE', `/v1/dashboards/${encodeURIComponent(name)}`),
@@ -837,4 +848,36 @@ export function voiceSocket(): WebSocket {
   const key = getApiKey();
   if (org && !key) url.searchParams.set('org', org);
   return new WebSocket(url, key ? ['gai', `bearer.${key}`] : ['gai']);
+}
+
+/**
+ * Calls an app's page makes: with the app's own key (from its link) when
+ * there is one, else this browser's sign-in, else nothing (a public app).
+ */
+export function appClient(name: string, appKey: string | null, org: string | null) {
+  const base = `/v1/apps/${encodeURIComponent(name)}`;
+  const call = async <T,>(method: string, path: string, body?: unknown): Promise<T> => {
+    const h: Record<string, string> = {};
+    if (body !== undefined) h['content-type'] = 'application/json';
+    const key = appKey ?? getApiKey();
+    if (key) h.authorization = `Bearer ${key}`;
+    const o = org ?? (key ? null : getOrg());
+    if (o) h['x-gai-org'] = o;
+    const res = await fetch(base + path, { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body) });
+    if (!res.ok) {
+      let message = `${res.status} ${res.statusText}`;
+      try {
+        message = (await res.json())?.error?.message ?? message;
+      } catch {
+        /* not JSON */
+      }
+      throw new ApiError(res.status, message);
+    }
+    return res.json() as Promise<T>;
+  };
+  return {
+    form: () => call<AppForm>('GET', '/form'),
+    start: (inputs: Record<string, unknown>) => call<{ run_id: string }>('POST', '/run?mode=background', inputs),
+    result: (runId: string) => call<AppResult>('GET', `/runs/${encodeURIComponent(runId)}`),
+  };
 }

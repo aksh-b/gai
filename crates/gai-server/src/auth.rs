@@ -213,6 +213,8 @@ pub fn required_scope(method: &Method, path: &str) -> Scope {
         || (path.starts_with("/v1/dashboards") && !path.ends_with("/refresh"))
         // Saving or deleting eval sets and evaluations; running one is `run`.
         || (path.starts_with("/v1/evals") && !path.ends_with("/runs"))
+        // Saving apps and their keys; running one is `run`.
+        || (path.starts_with("/v1/apps") && !path.ends_with("/run"))
         || path.starts_with("/v1/eval-runs/")
         || workflow_build)
         && write;
@@ -251,6 +253,7 @@ pub fn owned_resource(path: &str) -> Option<(&'static str, String)> {
     let kind = match parts.next()? {
         "agents" => "agent",
         "workflows" => "workflow",
+        "apps" => "app",
         "personas" => "persona",
         "skills" => "skill",
         "triggers" => "trigger",
@@ -270,6 +273,7 @@ async fn body_resource(path: &str, req: &mut Request) -> Option<(&'static str, S
     let kind = match path {
         "/v1/agents" => "agent",
         "/v1/workflows" => "workflow",
+        "/v1/apps" => "app",
         "/v1/personas" => "persona",
         "/v1/evals" => "eval",
         "/v1/sources" => "source",
@@ -526,25 +530,28 @@ async fn authorize(s: &AppState, req: &mut Request) -> Result<(), Response> {
     }
     if public {
         // Webhooks and OAuth callbacks of another organization name it.
-        if let Some(slug) = org_hint(req).filter(|_| !path.starts_with("/v1/auth/")) {
-            let org = s
-                .orgs
-                .control()
-                .get_org(&slug)
-                .await
-                .map_err(|e| ApiError::from(e).into_response())?
-                .ok_or_else(|| deny(StatusCode::NOT_FOUND, format!("no organization {slug}")))?;
-            let state = s
-                .orgs
-                .state(s, &org)
-                .await
-                .map_err(IntoResponse::into_response)?;
-            req.extensions_mut().insert(state);
+        if !path.starts_with("/v1/auth/") {
+            enter_named_org(s, req).await?;
         }
         return Ok(());
     }
     let headers = req.headers().clone();
-    let (principal, by_cookie) = identify(s, &headers, org_hint(req)).await?;
+    // Using an app takes its own key, or no credentials at all for a
+    // public app; the app's handlers check which.
+    let app_use = crate::apps::is_app_use(&path);
+    let token = header_token(&headers);
+    if app_use
+        && token
+            .as_deref()
+            .is_some_and(|t| t.starts_with(crate::apps::APP_KEY_PREFIX))
+    {
+        return enter_named_org(s, req).await;
+    }
+    let (principal, by_cookie) = match identify(s, &headers, org_hint(req)).await {
+        Ok(found) => found,
+        Err(_) if app_use && token.is_none() => return enter_named_org(s, req).await,
+        Err(e) => return Err(e),
+    };
     if by_cookie && !matches!(*req.method(), Method::GET | Method::HEAD) && !same_origin(&headers) {
         return Err(deny(StatusCode::FORBIDDEN, "cross-site request refused"));
     }
@@ -656,6 +663,29 @@ async fn authorize(s: &AppState, req: &mut Request) -> Result<(), Response> {
     Ok(())
 }
 
+/// Serve a request without a caller in the organization it names (the
+/// default one when it names none).
+// Middleware answers with whole responses.
+#[allow(clippy::result_large_err)]
+async fn enter_named_org(s: &AppState, req: &mut Request) -> Result<(), Response> {
+    if let Some(slug) = org_hint(req) {
+        let org = s
+            .orgs
+            .control()
+            .get_org(&slug)
+            .await
+            .map_err(|e| ApiError::from(e).into_response())?
+            .ok_or_else(|| deny(StatusCode::NOT_FOUND, format!("no organization {slug}")))?;
+        let state = s
+            .orgs
+            .state(s, &org)
+            .await
+            .map_err(IntoResponse::into_response)?;
+        req.extensions_mut().insert(state);
+    }
+    Ok(())
+}
+
 /// What a non-admin may find in knowledge with an `acl`: who they are,
 /// their teams, and their role and every role below it.
 async fn access(control: &SharedStore, p: &Principal) -> Option<gai::memory::Access> {
@@ -742,6 +772,19 @@ mod tests {
             Scope::Admin
         );
         assert_eq!(required_scope(&Method::GET, "/v1/members"), Scope::Read);
+        assert_eq!(required_scope(&Method::POST, "/v1/apps"), Scope::Build);
+        assert_eq!(
+            required_scope(&Method::POST, "/v1/apps/intake/key"),
+            Scope::Build
+        );
+        assert_eq!(
+            required_scope(&Method::POST, "/v1/apps/intake/run"),
+            Scope::Run
+        );
+        assert_eq!(
+            required_scope(&Method::GET, "/v1/apps/intake/form"),
+            Scope::Read
+        );
         assert_eq!(required_scope(&Method::GET, "/v1/secrets"), Scope::Admin);
         assert_eq!(
             required_scope(&Method::PUT, "/v1/owners/agent/x"),

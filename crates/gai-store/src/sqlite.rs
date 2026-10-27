@@ -13,6 +13,8 @@ use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
 
 use crate::*;
 
+#[path = "sqlite_apps.rs"]
+mod apps;
 #[path = "sqlite_blobs.rs"]
 mod blobs;
 #[path = "sqlite_data.rs"]

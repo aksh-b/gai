@@ -487,7 +487,7 @@ function Editor({ initial, isNew, onSaved }: { initial: string; isNew: boolean; 
   const [dev] = useDevMode();
   const [text, setText] = useState(initial);
   const [spec, setSpec] = useState<Record<string, unknown>>(() => parse(initial) ?? {});
-  const [mode, setMode] = useState<'form' | 'yaml'>(() => (formCanEdit(parse(initial) ?? {}) ? 'form' : 'yaml'));
+  const [mode, setMode] = useState<'canvas' | 'form' | 'yaml'>(() => (formCanEdit(parse(initial) ?? {}) ? 'canvas' : 'yaml'));
   const [graph, setGraph] = useState<GraphNode[]>([]);
   const [error, setError] = useState<string | undefined>();
   const [note, setNote] = useState('');
@@ -541,33 +541,31 @@ function Editor({ initial, isNew, onSaved }: { initial: string; isNew: boolean; 
     }
   }
 
-  const showTabs = dev || !formOk;
   return (
     <div className="flex flex-col gap-4">
-      {showTabs && (
-        <TabBar
-          items={[
-            { id: 'form', label: 'Steps', disabled: !formOk },
-            { id: 'yaml', label: 'YAML' },
-          ]}
-          value={mode}
-          onValueChange={(m) => setMode(m as 'form' | 'yaml')}
-          variant="underline"
-          aria-label="Workflow editor"
-        />
-      )}
+      <TabBar
+        items={[
+          { id: 'canvas', label: 'Designer', disabled: !formOk },
+          { id: 'form', label: 'List', disabled: !formOk },
+          ...(dev || !formOk ? [{ id: 'yaml', label: 'YAML' }] : []),
+        ]}
+        value={mode}
+        onValueChange={(m) => setMode(m as 'canvas' | 'form' | 'yaml')}
+        variant="underline"
+        aria-label="Workflow editor"
+      />
       {!formOk && (
         <Alert>
           <InfoIcon />
           <AlertDescription>This workflow uses steps the form can't show yet, so it opens as YAML.</AlertDescription>
         </Alert>
       )}
-      {mode === 'form' && formOk ? (
-        <WorkflowForm spec={spec} onChange={fromForm} isNew={isNew} />
+      {mode !== 'yaml' && formOk ? (
+        <WorkflowForm spec={spec} onChange={fromForm} isNew={isNew} view={mode === 'canvas' ? 'canvas' : 'list'} />
       ) : (
         <CodeEditor language="yaml" schema="WorkflowSpec" minHeight="24rem" aria-label="Workflow YAML" value={text} onChange={fromYaml} />
       )}
-      {graph.length > 0 && (
+      {graph.length > 0 && mode !== 'canvas' && (
         <Card>
           <CardHeader>
             <CardTitle>Preview</CardTitle>

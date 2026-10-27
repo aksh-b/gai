@@ -4,6 +4,7 @@
 
 mod a2a;
 mod api;
+mod apps;
 mod auth;
 mod bundles;
 mod data;
@@ -101,6 +102,7 @@ pub async fn router(
     let app = routes
         .merge(knowledge::routes())
         .merge(workflows::routes())
+        .merge(apps::routes())
         .merge(versions::routes())
         .merge(personas::routes())
         .merge(bundles::routes())

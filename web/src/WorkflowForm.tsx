@@ -2,7 +2,7 @@
 // Covers the common shapes (assistant, tool, a person's OK, text); anything
 // else is kept as written and edited in YAML.
 
-import { useRef } from 'react';
+import { lazy, Suspense, useRef } from 'react';
 import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
 import { SelectField, TextField } from '@/components/fields';
 import { Badge } from '@/components/ui/badge';
@@ -19,10 +19,12 @@ import { useDevMode } from './prefs';
 import { useLoad } from './util';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-type Node = Record<string, any>;
-type Spec = Record<string, any> & { nodes?: Node[]; inputs?: Record<string, { description?: string; default?: unknown }> };
+export type Node = Record<string, any>;
+export type Spec = Record<string, any> & { nodes?: Node[]; inputs?: Record<string, { description?: string; default?: unknown }> };
 
-const KINDS = [
+const Canvas = lazy(() => import('./WorkflowCanvas'));
+
+export const KINDS = [
   { value: 'agent', label: 'Ask an assistant', description: 'An assistant does a task and answers' },
   { value: 'tool', label: 'Use a tool', description: 'Read a page, calculate, write a file…' },
   { value: 'human', label: 'Ask a person', description: 'Wait for someone to OK it (and maybe reply)' },
@@ -50,10 +52,54 @@ const freshId = (nodes: Node[]) => {
   return `step${i}`;
 };
 
-export function WorkflowForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s: Spec) => void; isNew: boolean }) {
-  const [dev] = useDevMode();
+/** A new step of a kind, using the last step's result (or the first input). */
+export function newStep(kind: string, spec: Spec, agent?: string): Node {
+  const nodes = spec.nodes ?? [];
+  const id = freshId(nodes);
+  const prev = nodes[nodes.length - 1];
+  const first = Object.keys(spec.inputs ?? {})[0];
+  const ref = prev ? `{{ nodes.${prev.id}.output }}` : first ? `{{ inputs.${first} }}` : '';
+  return kind === 'agent'
+    ? { id, agent: agent ?? { name: id }, input: ref }
+    : kind === 'tool'
+      ? { id, tool: 'http_fetch', args: { url: '' } }
+      : kind === 'human'
+        ? { id, human: `Does this look right?\n\n${ref}` }
+        : { id, template: ref };
+}
+
+/** The assistants and tools a step can use, for its editor. */
+export function useStepChoices() {
   const agents = useLoad(() => api.agents(), []);
   const tools = useLoad(() => api.tools(), []);
+  return {
+    agents: (agents.data ?? []).map((a) => ({ name: a.summary.name, description: a.spec?.description ?? '' })),
+    tools: (tools.data ?? []).map((t) => ({ name: t.spec.name, description: t.spec.description, schema: t.spec.input_schema as any })),
+  };
+}
+
+/** Chips that insert a reference to an input or an earlier step's result. */
+export function refsFor(spec: Spec, before: Node[]) {
+  return [
+    ...Object.keys(spec.inputs ?? {}).map((k) => ({ label: k, text: `{{ inputs.${k} }}`, hint: 'What you type when you run it' })),
+    ...before.map((n) => ({ label: `${n.id}'s result`, text: `{{ nodes.${n.id}.output }}`, hint: `The output of step “${n.id}”` })),
+  ];
+}
+
+export function WorkflowForm({
+  spec,
+  onChange,
+  isNew,
+  view = 'list',
+}: {
+  spec: Spec;
+  onChange: (s: Spec) => void;
+  isNew: boolean;
+  /** Steps as a list, or on the drag-and-drop canvas. */
+  view?: 'list' | 'canvas';
+}) {
+  const [dev] = useDevMode();
+  const choices = useStepChoices();
   const nodes = spec.nodes ?? [];
   const inputs = Object.entries(spec.inputs ?? {});
 
@@ -71,20 +117,7 @@ export function WorkflowForm({ spec, onChange, isNew }: { spec: Spec; onChange: 
     [next[i], next[j]] = [next[j], next[i]];
     set({ nodes: next });
   };
-  const addStep = (kind: string) => {
-    const id = freshId(nodes);
-    const prev = nodes[nodes.length - 1];
-    const ref = prev ? `{{ nodes.${prev.id}.output }}` : inputs[0] ? `{{ inputs.${inputs[0][0]} }}` : '';
-    const n: Node =
-      kind === 'agent'
-        ? { id, agent: agents.data?.[0]?.summary.name ?? { name: id }, input: ref }
-        : kind === 'tool'
-          ? { id, tool: 'http_fetch', args: { url: '' } }
-          : kind === 'human'
-            ? { id, human: `Does this look right?\n\n${ref}` }
-            : { id, template: ref };
-    set({ nodes: [...nodes, n] });
-  };
+  const addStep = (kind: string) => set({ nodes: [...nodes, newStep(kind, spec, choices.agents[0]?.name)] });
 
   const renameInput = (from: string, to: string) => {
     const clean = to.replace(/[^A-Za-z0-9_]/g, '_');
@@ -99,13 +132,7 @@ export function WorkflowForm({ spec, onChange, isNew }: { spec: Spec; onChange: 
     set({ inputs: next });
   };
 
-  /** Chips that insert a reference to an input or an earlier step's result. */
-  const refs = (upTo: number) => [
-    ...inputs.map(([k]) => ({ label: k, text: `{{ inputs.${k} }}`, hint: 'What you type when you run it' })),
-    ...nodes
-      .slice(0, upTo)
-      .map((n) => ({ label: `${n.id}'s result`, text: `{{ nodes.${n.id}.output }}`, hint: `The output of step “${n.id}”` })),
-  ];
+  const refs = (upTo: number) => refsFor(spec, nodes.slice(0, upTo));
 
   const outputStep = typeof spec.output === 'string' ? /^\{\{\s*nodes\.(\w+)\.output\s*\}\}$/.exec(spec.output)?.[1] : undefined;
 
@@ -165,6 +192,11 @@ export function WorkflowForm({ spec, onChange, isNew }: { spec: Spec; onChange: 
         {inputs.length === 0 && <FieldDescription className="col-span-full">None.</FieldDescription>}
       </Section>
 
+      {view === 'canvas' ? (
+        <Suspense fallback={<div className="h-96 w-full animate-pulse rounded-md bg-muted/50" />}>
+          <Canvas spec={spec} onChange={onChange} />
+        </Suspense>
+      ) : (
       <Card>
         <CardHeader>
           <CardTitle>Steps</CardTitle>
@@ -179,12 +211,8 @@ export function WorkflowForm({ spec, onChange, isNew }: { spec: Spec; onChange: 
               index={i}
               node={n}
               count={nodes.length}
-              agents={(agents.data ?? []).map((a) => ({ name: a.summary.name, description: a.spec?.description ?? '' }))}
-              tools={(tools.data ?? []).map((t) => ({
-                name: t.spec.name,
-                description: t.spec.description,
-                schema: t.spec.input_schema as any,
-              }))}
+              agents={choices.agents}
+              tools={choices.tools}
               refs={refs(i)}
               dev={dev}
               onChange={(x) => setNode(i, x)}
@@ -202,6 +230,7 @@ export function WorkflowForm({ spec, onChange, isNew }: { spec: Spec; onChange: 
           ))}
         </CardFooter>
       </Card>
+      )}
 
       <Section title="Result">
         <SelectField
@@ -222,7 +251,7 @@ export function WorkflowForm({ spec, onChange, isNew }: { spec: Spec; onChange: 
   );
 }
 
-function Step({
+export function Step({
   index,
   node,
   count,
@@ -245,7 +274,8 @@ function Step({
   refs: { label: string; text: string; hint: string }[];
   dev: boolean;
   onChange: (n: Node | null) => void;
-  onMove: (by: number) => void;
+  /** Without it (on the canvas) there are no move buttons. */
+  onMove?: (by: number) => void;
 }) {
   const kind = nodeKind(node) ?? 'agent';
   const set = (patch: Node) => {
@@ -275,7 +305,7 @@ function Step({
     <Card size="sm">
       <CardHeader>
         <CardTitle className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">{index + 1}</Badge>
+          {onMove && <Badge variant="secondary">{index + 1}</Badge>}
           <Input
             className="w-40 font-mono"
             aria-label="Step name"
@@ -286,12 +316,16 @@ function Step({
           <SelectField aria-label="Kind of step" className="w-52" options={KINDS} value={kind} onValueChange={switchKind} />
         </CardTitle>
         <CardAction className="flex gap-1">
-          <Button variant="ghost" size="icon-sm" aria-label="Move up" disabled={index === 0} onClick={() => onMove(-1)}>
-            <ArrowUpIcon />
-          </Button>
-          <Button variant="ghost" size="icon-sm" aria-label="Move down" disabled={index === count - 1} onClick={() => onMove(1)}>
-            <ArrowDownIcon />
-          </Button>
+          {onMove && (
+            <>
+              <Button variant="ghost" size="icon-sm" aria-label="Move up" disabled={index === 0} onClick={() => onMove(-1)}>
+                <ArrowUpIcon />
+              </Button>
+              <Button variant="ghost" size="icon-sm" aria-label="Move down" disabled={index === count - 1} onClick={() => onMove(1)}>
+                <ArrowDownIcon />
+              </Button>
+            </>
+          )}
           <Button variant="ghost" size="icon-sm" aria-label="Remove step" onClick={() => onChange(null)}>
             <IconTrash />
           </Button>

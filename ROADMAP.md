@@ -114,7 +114,14 @@ session end to end.
 
 Done when you can talk to an agent in the playground and drop in a meeting recording.
 
-## 20. Builders and marketplace
+## 20. Builders and marketplace — part 1 done (2026-10-27)
+
+Part 1 built: the workflow designer (a canvas that round-trips with the
+YAML through `needs` and `layout`), apps (a form with its own link and
+key, or public) and their endpoints (`/v1/apps/{name}/run` with input and
+output schemas and a per-app OpenAPI document). Still to do: the template
+library and marketplace, the prompt optimizer, proactive suggestions,
+notifications and the specialist assistants.
 
 - **Visual workflow designer** [24]: drag-and-drop editing on the xyflow graph, round-tripping with the YAML.
 - **App builder** [51]: publish an agent or workflow as a small hosted app (form in, result out) with its own link and key.

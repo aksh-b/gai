@@ -14,6 +14,7 @@ use schemars::{JsonSchema, SchemaGenerator};
 use serde_json::{Map, Value, json};
 
 use crate::api::*;
+use crate::apps::*;
 use crate::data::*;
 use crate::evals::*;
 use crate::governance::*;
@@ -769,6 +770,25 @@ pub fn document() -> Value {
         )
         .body(s::<RunWorkflow>(&mut g))
         .ok(json!({"oneOf": [s::<RunOutcome>(&mut g), s::<RunIds>(&mut g)]})),
+        op("get", "/v1/apps", "apps", "Apps: agents and workflows published as a form and an endpoint")
+            .ok(list::<AppView>(&mut g)),
+        op("post", "/v1/apps", "apps", "Create or replace an app")
+            .body(s::<AppSpec>(&mut g))
+            .ok(s::<AppView>(&mut g)),
+        op("get", "/v1/apps/{name}", "apps", "An app").ok(s::<AppView>(&mut g)),
+        op("delete", "/v1/apps/{name}", "apps", "Delete an app (its runs are kept)"),
+        op("post", "/v1/apps/{name}/key", "apps", "Make the app's own key, which runs this app and nothing else; replaces the old one. Shown once")
+            .ok(s::<AppKey>(&mut g)),
+        op("delete", "/v1/apps/{name}/key", "apps", "Remove the app's key"),
+        op("get", "/v1/apps/{name}/form", "apps", "What the app's page shows: title, fields and button. Takes the app's key, or none for a public app")
+            .ok(s::<AppForm>(&mut g)),
+        op("get", "/v1/apps/{name}/openapi.json", "apps", "An OpenAPI document for this app's endpoint alone, with its input and output schemas"),
+        op("post", "/v1/apps/{name}/run", "apps", "Run the app: the body is its inputs as a JSON object. mode=background answers at once with a run id")
+            .query(&[("mode", "wait (default) or background")])
+            .body(json!({"type": "object"}))
+            .ok(json!({"oneOf": [s::<AppResult>(&mut g), s::<RunIds>(&mut g)]})),
+        op("get", "/v1/apps/{name}/runs/{id}", "apps", "A run started through the app, with its result once done")
+            .ok(s::<AppResult>(&mut g)),
         op("get", "/v1/skills", "skills", "Agent Skills").ok(list::<SkillView>(&mut g)),
         op(
             "post",

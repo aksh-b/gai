@@ -17,6 +17,8 @@ use sqlx::{Postgres, QueryBuilder, Row};
 
 use crate::*;
 
+#[path = "pg_apps.rs"]
+mod apps;
 #[path = "pg_blobs.rs"]
 mod blobs;
 #[path = "pg_data.rs"]

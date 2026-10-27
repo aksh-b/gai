@@ -198,6 +198,18 @@ pub trait DataStore: Send + Sync {
     async fn save_dashboard_results(&self, name: &str, results: &Value) -> Result<()>;
 }
 
+/// Apps: agents and workflows published as forms and endpoints.
+#[async_trait]
+pub trait AppStore: Send + Sync {
+    /// Create or replace the spec; the key is kept.
+    async fn put_app(&self, name: &str, spec: &Value) -> Result<()>;
+    async fn get_app(&self, name: &str) -> Result<Option<AppRecord>>;
+    async fn list_apps(&self) -> Result<Vec<AppRecord>>;
+    async fn delete_app(&self, name: &str) -> Result<bool>;
+    /// Set (or, with `None`, remove) the app's key: its hash and prefix.
+    async fn set_app_key(&self, name: &str, key: Option<(&str, &str)>) -> Result<()>;
+}
+
 /// Recordings and what was made of them.
 #[async_trait]
 pub trait RecordingStore: Send + Sync {
@@ -663,6 +675,7 @@ pub type SharedVectorIndex = Arc<dyn VectorIndex>;
 pub trait Store:
     DirectoryStore
     + DataStore
+    + AppStore
     + RecordingStore
     + GraphStore
     + AgentStore
@@ -687,6 +700,7 @@ pub trait Store:
 impl<T> Store for T where
     T: DirectoryStore
         + DataStore
+        + AppStore
         + RecordingStore
         + GraphStore
         + AgentStore

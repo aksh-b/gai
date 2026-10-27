@@ -178,6 +178,7 @@ Run `gai <command> --help` for details.
 - [Evaluations and feedback](docs/evals.md): eval sets, scorers, benchmarks, CI gates and ratings
 - [Knowledge at scale](docs/knowledge.md): vector indexes (Qdrant, pgvector), reranking, and sources synced from folders, websites, GitHub, Confluence and Notion
 - [Voice, meetings and video](docs/voice.md): talking to agents, meeting notes with speakers and action items, call analysis, video summaries
+- [Apps and the workflow designer](docs/apps.md): publish an assistant or workflow as a form with its own link and an endpoint with schemas; build workflows on a canvas
 - [Databases](docs/data.md): read-only connections to Postgres, MySQL, SQLite, BigQuery and Snowflake, and the SQL tools
 - [Users, teams and organizations](docs/users.md): roles, SSO (OIDC or a proxy), teams that own resources, several organizations on one server
 - [Safety and governance](docs/safety.md): personal data, prompt injection, guardrails, audit log, retention

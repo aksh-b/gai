@@ -1640,6 +1640,7 @@ dependencies = [
  "getrandom 0.3.4",
  "governor",
  "mime_guess",
+ "minijinja",
  "reqwest 0.12.28",
  "rmcp",
  "rust-embed",

@@ -194,6 +194,128 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Apps: agents and workflows published as a form and an endpoint */
+        get: operations["get_v1_apps"];
+        put?: never;
+        /** Create or replace an app */
+        post: operations["post_v1_apps"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/apps/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An app */
+        get: operations["get_v1_apps__name_"];
+        put?: never;
+        post?: never;
+        /** Delete an app (its runs are kept) */
+        delete: operations["delete_v1_apps__name_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/apps/{name}/form": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the app's page shows: title, fields and button. Takes the app's key, or none for a public app */
+        get: operations["get_v1_apps__name__form"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/apps/{name}/key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Make the app's own key, which runs this app and nothing else; replaces the old one. Shown once */
+        post: operations["post_v1_apps__name__key"];
+        /** Remove the app's key */
+        delete: operations["delete_v1_apps__name__key"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/apps/{name}/openapi.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An OpenAPI document for this app's endpoint alone, with its input and output schemas */
+        get: operations["get_v1_apps__name__openapi.json"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/apps/{name}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run the app: the body is its inputs as a JSON object. mode=background answers at once with a run id */
+        post: operations["post_v1_apps__name__run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/apps/{name}/runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A run started through the app, with its result once done */
+        get: operations["get_v1_apps__name__runs__id_"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/audio/speech": {
         parameters: {
             query?: never;
@@ -2711,6 +2833,116 @@ export interface components {
             team_id?: string | null;
             user_id?: string | null;
         };
+        /** @description One field of an app's form, and one property of its endpoint's input. */
+        AppField: {
+            default?: unknown;
+            /** @description Shown under the field. */
+            help?: string | null;
+            label?: string | null;
+            /**
+             * @description Letters, digits and `_`, starting with a letter: the input's key.
+             * @default
+             */
+            name: string;
+            /** @description The choices of a `select`. */
+            options?: string[];
+            placeholder?: string | null;
+            /**
+             * @description A field without a default must be filled in, unless this is false.
+             * @default true
+             */
+            required: boolean;
+            /** @default text */
+            type: components["schemas"]["FieldKind"];
+        };
+        /** @description What the app's page needs: no names of assistants or workflows. */
+        AppForm: {
+            description?: string | null;
+            fields: components["schemas"]["AppField"][];
+            name: string;
+            /** @description The result is JSON (the app has an output schema), not text. */
+            structured: boolean;
+            submit_label: string;
+            title: string;
+        };
+        /** @description A new key for an app, shown once. */
+        AppKey: {
+            prefix: string;
+            secret: string;
+        };
+        /** @description A run started through an app. */
+        AppResult: {
+            /** @description Whether the run has ended. */
+            done: boolean;
+            error?: string | null;
+            /** @description The result: JSON following the output schema, or text. */
+            output?: unknown;
+            run_id: string;
+            /**
+             * @description The run's status (`queued`, `running`, `awaiting_approval`,
+             *     `completed`, `failed`…), or `invalid_output` when a finished
+             *     result doesn't follow the app's output schema.
+             */
+            status: string;
+        };
+        /**
+         * @description An app: what it runs, the form people fill in, and who may use it.
+         *
+         *     ```yaml
+         *     name: summarize
+         *     title: Summarize a page
+         *     agent: researcher
+         *     fields:
+         *       - { name: url, label: Web address }
+         *       - { name: length, type: select, options: [short, long], default: short }
+         *     prompt: "Read {{ url }} and write a {{ length }} summary."
+         *     public: true
+         *     ```
+         */
+        AppSpec: {
+            /** @description The assistant it runs: `name`, `name@v3` or `name@prod`. */
+            agent?: string | null;
+            description?: string | null;
+            /**
+             * @description The form, in order. Without fields, a workflow app asks for each of
+             *     the workflow's inputs and an assistant app for one request.
+             */
+            fields?: components["schemas"]["AppField"][];
+            /**
+             * @description Letters, digits, `-` and `_`. It is part of the app's address.
+             * @default
+             */
+            name: string;
+            /**
+             * @description A JSON Schema the result follows. An assistant is asked to answer
+             *     in it; a workflow's result is checked against it.
+             */
+            output_schema?: unknown;
+            /**
+             * @description An assistant app's task: a template over the fields, e.g. `Read
+             *     {{ url }}`. By default the only field's value, or every field as a
+             *     `Label: value` line.
+             */
+            prompt?: string | null;
+            /** @description Anyone with the link may use the app, without a key. */
+            public?: boolean;
+            /** @description The button's text (default "Run"). */
+            submit_label?: string | null;
+            title?: string | null;
+            /** @description Or the workflow it runs. */
+            workflow?: string | null;
+        };
+        /** @description An app as stored. */
+        AppView: {
+            /** Format: date-time */
+            created_at: string;
+            /** @description The start of the app's key, when it has one. */
+            key_prefix?: string | null;
+            name: string;
+            spec: components["schemas"]["AppSpec"];
+            /** Format: date-time */
+            updated_at: string;
+        };
         /** @enum {string} */
         ArchivalScope: "agent" | "user";
         /** @description What an audio recording is like. */
@@ -3849,6 +4081,7 @@ export interface components {
             /** Format: uint64 */
             good: number;
         };
+        FieldKind: "number" | "text" | "long_text" | "boolean" | "select" | "list";
         /** @description What one firing did. */
         Fired: {
             error?: string | null;
@@ -6158,6 +6391,14 @@ export interface components {
                 [key: string]: components["schemas"]["InputSpec"];
             };
             /**
+             * @description Where each node sits in the visual designer, as `[x, y]`. Only the
+             *     dashboard reads it; nodes without a place are laid out by their
+             *     dependencies.
+             */
+            layout?: {
+                [key: string]: number[];
+            };
+            /**
              * @default {
              *       "max_concurrency": 4
              *     }
@@ -6642,6 +6883,318 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PendingApproval"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_apps: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppView"][];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_apps: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppSpec"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_apps__name_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_apps__name_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_apps__name__form: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppForm"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_apps__name__key: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppKey"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_v1_apps__name__key: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "get_v1_apps__name__openapi.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post_v1_apps__name__run: {
+        parameters: {
+            query?: {
+                /** @description wait (default) or background */
+                mode?: string;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppResult"] | components["schemas"]["RunIds"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get_v1_apps__name__runs__id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppResult"];
                 };
             };
             /** @description Error */

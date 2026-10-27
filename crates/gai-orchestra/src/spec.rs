@@ -49,6 +49,11 @@ pub struct WorkflowSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output: Option<Value>,
     pub limits: WorkflowLimits,
+    /// Where each node sits in the visual designer, as `[x, y]`. Only the
+    /// dashboard reads it; nodes without a place are laid out by their
+    /// dependencies.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub layout: BTreeMap<String, [f64; 2]>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -446,6 +451,17 @@ nodes:
     if: "nodes.sections.status == 'completed'"
     template: "{{ nodes.sections.output | join('\n') }} ({{ inputs.style }})"
 "#;
+
+    #[test]
+    fn layout_round_trips_and_is_left_out_when_empty() {
+        let mut w = WorkflowSpec::parse(BRIEF, "yaml").unwrap();
+        assert!(!serde_yaml::to_string(&w).unwrap().contains("layout"));
+        w.layout.insert("research".into(), [0.0, 40.5]);
+        let yaml = serde_yaml::to_string(&w).unwrap();
+        let back = WorkflowSpec::parse(&yaml, "yaml").unwrap();
+        assert_eq!(back.layout["research"], [0.0, 40.5]);
+        assert!(back.graph().is_ok());
+    }
 
     #[test]
     fn parses_and_finds_dependencies() {

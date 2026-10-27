@@ -949,6 +949,44 @@ pub async fn dashboards(s: SharedStore) {
     assert!(!s.delete_dashboard("ads").await.unwrap());
 }
 
+pub async fn apps(s: SharedStore) {
+    s.put_app("intake", &json!({"title": "Intake"}))
+        .await
+        .unwrap();
+    let a = s.get_app("intake").await.unwrap().unwrap();
+    assert_eq!(
+        (a.spec["title"].clone(), a.key_hash),
+        (json!("Intake"), None)
+    );
+    s.set_app_key("intake", Some(("hash1", "gai_app_ab")))
+        .await
+        .unwrap();
+    s.put_app("intake", &json!({"title": "Intake form"}))
+        .await
+        .unwrap();
+    let a = s.get_app("intake").await.unwrap().unwrap();
+    assert_eq!(a.spec["title"], "Intake form");
+    assert_eq!(
+        (a.key_hash.as_deref(), a.key_prefix.as_deref()),
+        (Some("hash1"), Some("gai_app_ab")),
+        "a new spec keeps the key"
+    );
+    s.put_app("brief", &json!({})).await.unwrap();
+    let names: Vec<String> = s
+        .list_apps()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|a| a.name)
+        .collect();
+    assert_eq!(names, ["brief", "intake"]);
+    s.set_app_key("intake", None).await.unwrap();
+    assert_eq!(s.get_app("intake").await.unwrap().unwrap().key_hash, None);
+    assert!(s.set_app_key("nope", None).await.is_err());
+    assert!(s.delete_app("brief").await.unwrap());
+    assert!(!s.delete_app("brief").await.unwrap());
+}
+
 pub async fn recordings(s: SharedStore) {
     let r = s
         .create_recording(NewRecording {
@@ -1589,6 +1627,12 @@ macro_rules! conformance_tests {
         async fn dashboards() {
             if let Some(s) = $make.await {
                 $crate::conformance::dashboards(s).await;
+            }
+        }
+        #[tokio::test]
+        async fn apps() {
+            if let Some(s) = $make.await {
+                $crate::conformance::apps(s).await;
             }
         }
         #[tokio::test]

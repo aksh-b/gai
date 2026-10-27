@@ -29,7 +29,9 @@ import { SelectField } from '@/components/fields';
 import { KeyDialog } from './KeyDialog';
 import { modelLabel } from './labels';
 import { applyTheme, isDark, setDevMode, useDevMode, useTheme, type Theme } from './prefs';
-import { navigate, useRoute } from './router';
+import { navigate, useRoute, type Route } from './router';
+import { Apps } from './pages/Apps';
+import { PublicApp } from './pages/PublicApp';
 import { IconAgent, IconBook, IconData, IconChat, IconFlow, IconGear, IconMoon, IconRuns, IconSearch, IconStack, IconSun } from './icons';
 import { MediaStudio } from './pages/MediaStudio';
 import { Triggers } from './pages/Triggers';
@@ -80,9 +82,10 @@ const NAV: { id: string; label: string; icon: Icon; routes: string[]; tabs?: { i
     id: 'automations',
     label: 'Automations',
     icon: IconFlow,
-    routes: ['automations', 'workflows', 'schedules', 'triggers'],
+    routes: ['automations', 'workflows', 'apps', 'schedules', 'triggers'],
     tabs: [
       { id: 'automations', label: 'Workflows' },
+      { id: 'apps', label: 'Apps' },
       { id: 'schedules', label: 'Schedules & webhooks' },
     ],
   },
@@ -151,6 +154,12 @@ type Boot = 'loading' | 'ready';
 
 export function App() {
   const route = useRoute();
+  // A shared app is its own page, outside the dashboard and its sign-in.
+  if (route.parts[0] === 'app' && route.parts[1]) return <PublicApp name={decodeURIComponent(route.parts[1])} query={route.query} />;
+  return <Dashboard route={route} />;
+}
+
+function Dashboard({ route }: { route: Route }) {
   const raw = route.parts[0] ?? 'chat';
   const [boot, setBoot] = useState<Boot>('loading');
   const [health, setHealth] = useState<{ ok: boolean; version?: string; model?: string | null; auth?: string }>({ ok: true });
@@ -264,6 +273,7 @@ export function App() {
       { id: 'new-chat', group: 'Do', label: 'New chat', onSelect: go('/chat'), keywords: ['message', 'talk'] },
       { id: 'new-assistant', group: 'Do', label: 'New assistant', onSelect: go('/assistants?new=1'), keywords: ['agent', 'create'] },
       { id: 'new-persona', group: 'Do', label: 'New persona', onSelect: go('/personas?new=1'), keywords: ['voice', 'tone', 'character'] },
+      { id: 'new-app', group: 'Do', label: 'New app', onSelect: go('/apps?new=1'), keywords: ['publish', 'form', 'share', 'endpoint'] },
       {
         id: 'add-knowledge',
         group: 'Do',
@@ -325,6 +335,9 @@ export function App() {
         break;
       case 'automations':
         page = <Workflows selected={route.parts[1] ? decodeURIComponent(route.parts[1]) : undefined} />;
+        break;
+      case 'apps':
+        page = <Apps selected={route.parts[1] ? decodeURIComponent(route.parts[1]) : undefined} creating={route.query.get('new') === '1'} />;
         break;
       case 'dashboards':
         page = <DashboardsPage selected={route.parts[1] ? decodeURIComponent(route.parts[1]) : undefined} />;

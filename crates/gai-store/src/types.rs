@@ -56,6 +56,20 @@ pub struct DashboardRecord {
     pub updated_at: DateTime<Utc>,
 }
 
+/// An agent or workflow published as an app. The server owns the spec's
+/// shape; only a hash of the app's key is kept.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct AppRecord {
+    pub name: String,
+    pub spec: Value,
+    #[serde(skip)]
+    pub key_hash: Option<String>,
+    /// The start of the app's key, safe to show.
+    pub key_prefix: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 /// A meeting, call or video, and what processing it made: the media crate
 /// owns `options` and `result`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
