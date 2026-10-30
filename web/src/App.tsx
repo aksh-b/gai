@@ -461,8 +461,8 @@ function Dashboard({ route }: { route: Route }) {
               <SidebarMenuButton size="lg" asChild>
                 <a href="#/chat">
                   <Avatar className="rounded-lg">
-                    {logo ? (
-                      <img src={logo} alt="" className="size-full rounded-lg object-contain" />
+                    {logo || brand === 'gai' ? (
+                      <img src={logo || '/logo.svg'} alt="" className="size-full rounded-lg object-contain" />
                     ) : (
                       <AvatarFallback className="rounded-lg bg-primary font-semibold text-primary-foreground">
                         {brand.charAt(0).toLowerCase()}

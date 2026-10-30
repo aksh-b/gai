@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>gai · agentic AI platform in Rust</title>
 <meta name="description" content="gai is a self-hostable agentic AI platform in Rust: any model, tools and MCP, memory and RAG, multi-agent workflows, an OpenAI-compatible API and a web dashboard.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23e8590c'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='16' font-weight='700' fill='white' text-anchor='middle'%3Eg%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="assets/logo.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -59,7 +59,8 @@
   nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 60px; }
   .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; color: var(--text); }
   .logo:hover { text-decoration: none; }
-  .logo-mark { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: #fff; display: grid; place-items: center; font: 700 16px "JetBrains Mono", monospace; }
+  .logo-mark { width: 30px; height: 30px; display: block; }
+  .logo-mark svg { width: 100%; height: 100%; display: block; }
   .nav-links { display: flex; gap: 24px; align-items: center; font-size: 15px; }
   .nav-links a { color: var(--muted); }
   .nav-links a:hover { color: var(--text); text-decoration: none; }
@@ -138,7 +139,7 @@
 
 <nav>
   <div class="wrap">
-    <a class="logo" href="#"><span class="logo-mark">g</span>gai</a>
+    <a class="logo" href="#"><span class="logo-mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="gai"><defs><linearGradient id="gai-bg-site" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9a3c"/><stop offset="1" stop-color="#e8561c"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#gai-bg-site)"/><circle cx="29" cy="28" r="10.5" fill="none" stroke="#fff" stroke-width="6"/><path d="M39.5 22v17.5c0 7.5-5 11.5-11.5 11.5c-4.2 0-7.6-1.6-9.6-4.4" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round"/><circle cx="48.5" cy="15.5" r="4.2" fill="#fff"/><path d="M44.2 19.8l-3.2 3.2" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg></span>gai</a>
     <div class="nav-links">
       <a href="#features">Features</a>
       <a href="#agents">Agents</a>

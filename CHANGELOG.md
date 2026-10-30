@@ -16,6 +16,9 @@ initial development and will ship as 0.1.0.
 
 ### Changed
 
+- gai has a logo: an orange "g" with a spark for the agents it runs. It is
+  the dashboard's icon and sidebar mark (organizations with their own logo
+  keep it), and is in `docs/assets/` with light and dark wordmarks.
 - The dashboard runs on TanStack Router and TanStack Query: pages you
   come back to show their last data straight away while they refresh.
   Links and bookmarks (`#/runs/...`) work as before.

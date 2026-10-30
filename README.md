@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/wordmark-dark.svg">
+    <img src="docs/assets/wordmark-light.svg" alt="gai" height="80">
+  </picture>
+</p>
+
 # gai
 
 A self-hostable agentic AI platform in Rust. You define agents in YAML or in Rust. They can use any model provider, call tools and MCP servers, browse the web, run code in a sandbox, remember things, search your documents and delegate to each other. You run them from a CLI, an HTTP API (including an OpenAI-compatible one), a web dashboard, or your own Rust program. It ships as one binary with one SQLite file, or runs on Postgres.
