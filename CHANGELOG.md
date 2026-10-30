@@ -16,6 +16,10 @@ initial development and will ship as 0.1.0.
 
 ### Added
 
+- **Bundles carry triggers.** Schedules, webhooks and file watchers go
+  into `.gaibundle` files with the agent or workflow they run
+  (`gai bundle export --trigger <name>`, or `--all`), and come in turned
+  off. Webhooks get a new address and secret on the importing server.
 - **Model servers.** Run open models with llama.cpp, vLLM or Ollama in
   Docker or Podman, started, stopped and watched (health, logs) under
   **Settings › AI models › Model servers**, next to this machine's GPUs

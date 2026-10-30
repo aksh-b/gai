@@ -33,6 +33,7 @@ const KINDS: [keyof BundleReport['manifest']['contents'], string][] = [
   ['skills', 'Skills'],
   ['mcp_servers', 'Connected apps'],
   ['knowledge', 'Knowledge'],
+  ['triggers', 'Schedules (imported turned off)'],
 ];
 
 /**

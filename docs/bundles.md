@@ -17,10 +17,12 @@ needs before anything is saved).
 ## What goes in
 
 Name agents (`-a`), workflows (`-w`), personas, skills, MCP servers
-(`--mcp`) or knowledge collections (`-k`), or pass `--all` for every stored
-agent, workflow, persona, skill and MCP server (`--all-knowledge` adds the
-collections). By default a bundle also takes what the chosen items use:
+(`--mcp`), knowledge collections (`-k`) or triggers (`--trigger`), or pass
+`--all` for every stored agent, workflow, persona, skill, MCP server and
+trigger (`--all-knowledge` adds the collections). By default a bundle also
+takes what the chosen items use:
 
+- the agent or workflow a trigger runs;
 - the agents a workflow runs, and workflows it nests;
 - an agent's delegates, persona, skills and knowledge collections;
 - MCP servers whose tools an agent lists (`mcp__<server>__*`);
@@ -73,6 +75,12 @@ Each item is saved as a new version of the item with the same name, noted
 existing items alone. Memory blocks that already exist are always left
 alone, since they hold what the agent has learned since.
 
+Triggers come in turned off, so a schedule doesn't start firing (or a file
+watcher start reading a folder) before someone has looked at it: turn
+them on under **Automations › Schedules & webhooks**. A webhook gets a new
+address and secret on the importing server, and the import warns about a
+file watcher's folder, which may not exist there.
+
 ## The file
 
 A bundle is a zip:
@@ -81,6 +89,7 @@ A bundle is a zip:
 bundle.toml
 agents/<name>.yaml
 workflows/<name>.yaml
+triggers/<name>.yaml
 personas/<name>.yaml
 prompts/<name>.yaml              plus prompts/<name>.labels
 skills/<name>/SKILL.md, plus the skill's files

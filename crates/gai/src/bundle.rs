@@ -5,6 +5,7 @@
 //! bundle.toml                    what is inside, and what it needs (env vars, models)
 //! agents/<name>.yaml
 //! workflows/<name>.yaml
+//! triggers/<name>.yaml           schedules, webhooks and file watchers (imported turned off)
 //! personas/<name>.yaml
 //! prompts/<name>.yaml           prompt templates (latest version), labels in prompts/<name>.labels
 //! skills/<name>/SKILL.md         plus the skill's files
@@ -53,6 +54,8 @@ pub struct ExportOptions {
     pub mcp_servers: Vec<String>,
     /// Knowledge collections, with their documents.
     pub knowledge: Vec<String>,
+    /// Triggers: schedules, webhooks and file watchers, with what they run.
+    pub triggers: Vec<String>,
     /// Everything stored (knowledge only when also listed or `knowledge_all`).
     pub all: bool,
     /// With `all`: every knowledge collection too.
@@ -91,6 +94,8 @@ pub struct Contents {
     pub skills: Vec<String>,
     pub mcp_servers: Vec<String>,
     pub knowledge: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub triggers: Vec<String>,
     pub memory_blocks: usize,
 }
 
@@ -163,6 +168,8 @@ pub async fn export(gai: &Gai, opts: &ExportOptions) -> Result<Vec<u8>, Error> {
             .extend(store.list_skills().await?.into_iter().map(|s| s.name));
         want.mcp
             .extend(store.list_mcp_servers().await?.into_iter().map(|(n, _)| n));
+        want.triggers
+            .extend(store.list_triggers().await?.into_iter().map(|t| t.name));
         if opts.knowledge_all {
             want.knowledge
                 .extend(store.list_collections().await?.into_iter().map(|c| c.name));
@@ -175,6 +182,7 @@ pub async fn export(gai: &Gai, opts: &ExportOptions) -> Result<Vec<u8>, Error> {
     want.skills.extend(opts.skills.iter().cloned());
     want.mcp.extend(opts.mcp_servers.iter().cloned());
     want.knowledge.extend(opts.knowledge.iter().cloned());
+    want.triggers.extend(opts.triggers.iter().cloned());
     if want.is_empty() {
         return Err(invalid("nothing to export: name some items, or pass `all`"));
     }
@@ -199,7 +207,43 @@ pub async fn export(gai: &Gai, opts: &ExportOptions) -> Result<Vec<u8>, Error> {
         }
     };
 
-    // Workflows first: they can pull in agents.
+    // Triggers first: they pull in what they run. Webhook secrets stay
+    // here; the importing server makes its own.
+    for name in &want.triggers {
+        let rec = store
+            .list_triggers()
+            .await?
+            .into_iter()
+            .find(|t| &t.name == name)
+            .ok_or_else(|| Error::NotFound(format!("trigger {name}")))?;
+        let spec = gai_triggers::Triggers::spec_of(&rec)
+            .map_err(|e| invalid(format!("trigger {name}: {e}")))?;
+        if deps {
+            let base = |r: &str| r.split('@').next().unwrap_or(r).to_owned();
+            match &spec.target {
+                gai_triggers::Target::Agent(a) if !a.contains('/') => {
+                    want.agents.insert(base(a));
+                }
+                gai_triggers::Target::Workflow(w) if !w.contains('/') => {
+                    want.workflows.insert(base(w));
+                }
+                _ => {}
+            }
+            for var in [&spec.deliver.webhook_secret_env, &spec.deliver.slack_env]
+                .into_iter()
+                .flatten()
+            {
+                env.insert(EnvVar {
+                    name: var.clone(),
+                    used_by: format!("trigger/{name}"),
+                });
+            }
+        }
+        files.insert(format!("triggers/{name}.yaml"), yaml(&rec.spec)?);
+        manifest.contents.triggers.push(name.clone());
+    }
+
+    // Workflows next: they can pull in agents.
     let mut done_workflows = BTreeSet::new();
     let mut queue: Vec<String> = want.workflows.iter().cloned().collect();
     while let Some(name) = queue.pop() {
@@ -617,6 +661,45 @@ pub async fn import(gai: &Gai, bytes: &[u8], opts: &ImportOptions) -> Result<Imp
         report.installed.push(format!("workflow/{name}@v{v}"));
     }
 
+    // Triggers come in turned off: a schedule shouldn't start firing, or a
+    // file watcher start reading folders, before someone looks at it.
+    let triggers = gai.triggers().await?;
+    for (name, path) in in_dir("triggers/", ".yaml") {
+        let mut spec = gai_triggers::TriggerSpec::parse(text(&path)?)
+            .map_err(|e| invalid(format!("{path}: {e}")))?;
+        spec.name = name.clone();
+        let existing = triggers.get(&name).await.ok();
+        if opts.skip_existing && existing.is_some() {
+            report.skipped.push(format!("trigger/{name}"));
+            continue;
+        }
+        if let gai_triggers::Source::File { path: dir, .. } = &spec.source {
+            report.warnings.push(format!(
+                "trigger {name} watches {dir}: check that folder exists here"
+            ));
+        }
+        let saved = match &existing {
+            Some(rec) => triggers.update(&rec.id, spec).await,
+            None => triggers.create(spec).await,
+        }
+        .map_err(|e| invalid(format!("trigger {name}: {e}")))?;
+        triggers
+            .set_enabled(&saved.id, false)
+            .await
+            .map_err(|e| invalid(format!("trigger {name}: {e}")))?;
+        if saved.kind == "webhook" && existing.is_none() {
+            report.warnings.push(format!(
+                "trigger {name} has a new webhook address and secret: update whatever calls it"
+            ));
+        }
+        report.installed.push(format!("trigger/{name}"));
+    }
+    if report.installed.iter().any(|i| i.starts_with("trigger/")) {
+        report
+            .warnings
+            .push("triggers are imported turned off: turn them on under Schedules".into());
+    }
+
     if let Some(data) = files.get("memory/blocks.json") {
         let blocks: Vec<NewBlock> = serde_json::from_slice(data)
             .map_err(|e| invalid(format!("memory/blocks.json: {e}")))?;
@@ -736,6 +819,7 @@ struct Selection {
     skills: BTreeSet<String>,
     mcp: BTreeSet<String>,
     knowledge: BTreeSet<String>,
+    triggers: BTreeSet<String>,
 }
 
 impl Selection {
@@ -747,6 +831,7 @@ impl Selection {
             && self.skills.is_empty()
             && self.mcp.is_empty()
             && self.knowledge.is_empty()
+            && self.triggers.is_empty()
     }
 
     fn explicit_persona(&self, opts: &ExportOptions, name: &str) -> bool {

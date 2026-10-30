@@ -119,11 +119,22 @@ async fn bundles_round_trip_without_secrets() {
         .await
         .unwrap();
 
+    src.triggers()
+        .await
+        .unwrap()
+        .create(
+            gai::triggers::TriggerSpec::parse(
+                "name: morning\nkind: cron\nschedule: \"0 8 * * 1-5\"\ntarget: { agent: main }\ninput: Good morning\n",
+            )
+            .unwrap(),
+        )
+        .await
+        .unwrap();
     let bundle = gai::bundle::export(
         &src,
         &ExportOptions {
             name: Some("Main kit".into()),
-            agents: vec!["main".into()],
+            triggers: vec!["morning".into()],
             ..Default::default()
         },
     )
@@ -133,6 +144,7 @@ async fn bundles_round_trip_without_secrets() {
     let names: Vec<&str> = listing.iter().map(|(n, _)| n.as_str()).collect();
     for want in [
         "bundle.toml",
+        "triggers/morning.yaml",
         "agents/main.yaml",
         "agents/helper.yaml",
         "personas/tutor.yaml",
@@ -172,7 +184,13 @@ async fn bundles_round_trip_without_secrets() {
     let report = gai::bundle::import(&dst, &bundle, &ImportOptions::default())
         .await
         .unwrap();
-    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+    assert_eq!(
+        report.warnings,
+        ["triggers are imported turned off: turn them on under Schedules"]
+    );
+    let morning = dst.triggers().await.unwrap().get("morning").await.unwrap();
+    assert!(!morning.enabled);
+    assert_eq!(morning.spec["schedule"], "0 8 * * 1-5");
     let drt = dst.runtime().await.unwrap();
     let (got, _) = dst.find_agent("main").await.unwrap();
     assert_eq!(got, main);

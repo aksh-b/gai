@@ -3821,6 +3821,8 @@ export interface components {
              */
             memory_blocks: number;
             /** @default [] */
+            triggers?: string[];
+            /** @default [] */
             personas: string[];
             /** @default [] */
             prompts: string[];
@@ -4386,6 +4388,11 @@ export interface components {
              * @default []
              */
             mcp_servers: string[];
+            /**
+             * @description Triggers: schedules, webhooks and file watchers, with what they run.
+             * @default []
+             */
+            triggers?: string[];
             /**
              * @description Shown when the bundle is imported.
              * @default null

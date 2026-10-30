@@ -36,6 +36,9 @@ pub enum BundleCmd {
         /// Knowledge collections, with their documents
         #[arg(long = "knowledge", short)]
         knowledge: Vec<String>,
+        /// Triggers (schedules, webhooks, file watchers), with what they run
+        #[arg(long = "trigger")]
+        triggers: Vec<String>,
         /// Everything stored (add --all-knowledge for every collection)
         #[arg(long)]
         all: bool,
@@ -75,6 +78,7 @@ pub async fn bundle(gai: &Gai, cmd: BundleCmd) -> anyhow::Result<()> {
             skills,
             mcp_servers,
             knowledge,
+            triggers,
             all,
             all_knowledge,
             no_deps,
@@ -92,6 +96,7 @@ pub async fn bundle(gai: &Gai, cmd: BundleCmd) -> anyhow::Result<()> {
                 skills,
                 mcp_servers,
                 knowledge,
+                triggers,
                 all,
                 knowledge_all: all_knowledge,
                 no_dependencies: no_deps,
