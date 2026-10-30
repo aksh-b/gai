@@ -14,6 +14,12 @@ initial development and will ship as 0.1.0.
 
 ## [Unreleased]
 
+### Changed
+
+- The dashboard runs on TanStack Router and TanStack Query: pages you
+  come back to show their last data straight away while they refresh.
+  Links and bookmarks (`#/runs/...`) work as before.
+
 ### Added
 
 - **Bundles carry triggers.** Schedules, webhooks and file watchers go

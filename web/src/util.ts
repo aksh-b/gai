@@ -1,24 +1,47 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
+import { QueryClient, keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { ContentBlock, RunStatus, Usage } from './api';
 
-/** Load data once (and again on `reload`), tracking loading and errors. */
+/** The dashboard's query cache. */
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Pages show errors as they happen and poll where they need to.
+      retry: false,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
+/**
+ * Load data (and again on `reload`, or when `deps` change), tracking
+ * loading and errors. Results are cached with TanStack Query by the loader
+ * and its deps, so a page opened again shows its last data at once while
+ * it refreshes, and two parts of a page asking the same thing share one
+ * request.
+ */
 export function useLoad<T>(load: () => Promise<T>, deps: unknown[] = []) {
-  const [data, setData] = useState<T | undefined>();
-  const [error, setError] = useState<string | undefined>();
-  const [loading, setLoading] = useState(true);
-  const run = useCallback(load, deps);
-  const reload = useCallback(() => {
-    setLoading(true);
-    run()
-      .then((d) => {
-        setData(d);
-        setError(undefined);
-      })
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [run]);
-  useEffect(reload, [reload]);
-  return { data, error, loading, reload, setData };
+  const queryKey = ['load', load.toString(), ...deps];
+  const q = useQuery({ queryKey, queryFn: load, placeholderData: keepPreviousData });
+  const { refetch } = q;
+  const reload = useCallback(() => void refetch(), [refetch]);
+  const key = JSON.stringify(queryKey);
+  const setData = useCallback(
+    (d: T | undefined | ((old: T | undefined) => T | undefined)) => queryClient.setQueryData<T>(JSON.parse(key), d as never),
+    [key],
+  );
+  return {
+    data: q.data,
+    error: q.error ? (q.error as Error).message : undefined,
+    loading: q.isFetching,
+    reload,
+    setData,
+  };
+}
+
+/** Load everything again (after a change that touches many pages). */
+export function reloadAll() {
+  void queryClient.invalidateQueries();
 }
 
 export function ago(iso: string | null | undefined): string {
