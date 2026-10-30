@@ -33,8 +33,8 @@ gai agents diff researcher 1 2           # also: versions, label, rollback
 | `description` | One line. Other agents see it when this one is a delegate, and the dashboard shows it. |
 | `model` | `provider/model`, an alias from `[aliases]`, or `router/<name>`. Defaults to `default_model`. |
 | `system` | The instructions, a [minijinja](https://docs.rs/minijinja) template. Variables: `agent`, `model`, `date`, `datetime`, `workspace`, `persona`, and the run's `vars`. |
-| `tools` | Tool names, or prefixes ending in `*` (`fs_*`, `browser_*`, `mcp__tracker__*`). |
-| `tool_policy` | Per tool: `auto`, `approve` (a person approves each call) or `deny`. Overrides the tool's default. |
+| `tools` | Tool names, or prefixes ending in `*` (`fs_*`, `browser_*`, `mcp__tracker__*`). An entry ending in `?` is optional (`mcp__github__*?`): the agent uses those tools when they exist and runs without them when they don't, instead of failing. |
+| `tool_policy` | Per tool: `auto`, `approve` (a person approves each call) or `deny`. Overrides the tool's default. Keys are tool names or prefixes ending in `*` (`mcp__gmail__send*: approve`); the longest match wins. |
 | `reasoning` | `effort: off\|low\|medium\|high\|max`, optional `budget_tokens`, and `expose: true` to keep readable reasoning. Mapped to what each provider offers. |
 | `max_tokens`, `temperature` | Passed to the model. |
 | `output_schema` | A JSON Schema the final answer must follow; the run's `output` is then parsed JSON. |

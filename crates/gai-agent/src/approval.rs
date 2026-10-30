@@ -3,7 +3,7 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::oneshot;
+use tokio::sync::{broadcast, oneshot};
 
 /// A human's answer to a tool call that needs approval.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -46,15 +46,30 @@ pub struct PendingApproval {
 type CallKey = (String, String);
 
 /// Tool calls waiting on a human, keyed by run and call.
-#[derive(Default)]
 pub struct ApprovalHub {
     pending: Mutex<HashMap<CallKey, (PendingApproval, oneshot::Sender<Decision>)>>,
+    requested: broadcast::Sender<PendingApproval>,
+}
+
+impl Default for ApprovalHub {
+    fn default() -> Self {
+        Self {
+            pending: Mutex::default(),
+            requested: broadcast::channel(256).0,
+        }
+    }
 }
 
 impl ApprovalHub {
+    /// Hear about every call that starts waiting from now on.
+    pub fn watch(&self) -> broadcast::Receiver<PendingApproval> {
+        self.requested.subscribe()
+    }
+
     /// Register a pending call; the receiver gets the decision.
     pub fn wait(&self, p: PendingApproval) -> oneshot::Receiver<Decision> {
         let (tx, rx) = oneshot::channel();
+        let _ = self.requested.send(p.clone());
         self.pending
             .lock()
             .expect("approval lock")

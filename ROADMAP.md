@@ -114,7 +114,7 @@ session end to end.
 
 Done when you can talk to an agent in the playground and drop in a meeting recording.
 
-## 20. Builders and marketplace — parts 1 and 2 done (2026-10-27)
+## 20. Builders and marketplace — done (2026-10-30)
 
 Part 1 built: the workflow designer (a canvas that round-trips with the
 YAML through `needs` and `layout`), apps (a form with its own link and
@@ -126,8 +126,14 @@ every server, other servers as registries, install with a dry run),
 versioned prompt templates that agents use with `prompt:` and bundles
 carry, and the prompt optimizer (rewrites from failing cases, kept only
 when they score higher, applied as a new version). Not checked: the
-optimizer with a real model. Still to do: proactive suggestions,
-notifications and the specialist assistants.
+optimizer with a real model.
+
+Part 3 built: notification rules (email, Slack, webhooks and web push for
+approvals, failed or finished runs, alerts and suggestions), a
+suggestions inbox fed by usage and by agents' `suggest` tool (with a
+proactive watcher template to run on a schedule), and specialist
+templates: code assistant, translator, email drafter and a GitHub
+connection. Not checked: real push services, Slack and mail MCP servers.
 
 - **Visual workflow designer** [24]: drag-and-drop editing on the xyflow graph, round-tripping with the YAML.
 - **App builder** [51]: publish an agent or workflow as a small hosted app (form in, result out) with its own link and key.

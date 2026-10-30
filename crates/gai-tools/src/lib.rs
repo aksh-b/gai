@@ -11,6 +11,7 @@ pub mod mcp;
 pub mod notify;
 mod registry;
 mod typed;
+pub mod webpush;
 
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;

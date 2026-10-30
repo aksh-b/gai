@@ -16,6 +16,33 @@ initial development and will ship as 0.1.0.
 
 ### Added
 
+- **Notifications.** Rules under **Settings › Notifications** say who
+  hears when something needs an OK, a run fails or finishes, or a
+  dashboard alert fires: by email, Slack (an incoming webhook), a webhook,
+  or as browser notifications (web push, no third-party service). Rules
+  can be narrowed to some assistants and sent as a test. New `[notify]`
+  options `dashboard_url`, `push_subject` and `push_key_env`. See
+  [docs/notifications.md](docs/notifications.md).
+- **Suggestions.** **Activity › Suggestions** collects things worth
+  doing, each with a button that does it: improve an assistant that keeps
+  failing, add the Database analyst for a database nothing queries, put a
+  connected GitHub or Gmail to work, schedule a question you keep asking.
+  Agents add their own with the new `suggest` tool; the **Proactive
+  watcher** template checks your data on a schedule and suggests what to
+  do. See [docs/suggestions.md](docs/suggestions.md).
+- **Specialist assistant templates:** a Code assistant (writes, runs and
+  reviews code; reviews GitHub pull requests when GitHub is connected), a
+  Translator that keeps a glossary of your terms, and an Email and message
+  drafter that reads threads and saves drafts in Gmail or Outlook when
+  they are connected. A **GitHub** connection template sets up GitHub's
+  MCP server in a click under **Settings › Tools & connections**.
+- **Optional tools.** An agent's tool ending in `?` (`mcp__github__*?`)
+  is used when it exists, and the agent runs without it otherwise.
+- `tool_policy` keys can be prefixes ending in `*`
+  (`mcp__gmail__send*: approve`).
+- Dashboard alerts and report deliveries can go to **Slack**
+  (`slack` or `slack_env` next to `email` and `webhook`).
+
 - **Marketplace.** Publish assistants, workflows and prompts from a server
   as listings (bundles with a title, tags and versions), rate them, and
   install them in a click, after seeing what they need. Other gai servers

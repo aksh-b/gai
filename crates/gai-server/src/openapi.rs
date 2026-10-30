@@ -278,6 +278,29 @@ pub fn document() -> Value {
         op("delete", "/v1/dashboards/{name}", "data", "Delete a dashboard").ok(s::<Done>(&mut g)),
         op("post", "/v1/dashboards/{name}/refresh", "data", "Run its queries now (and send alerts that start firing)")
             .ok(s::<gai::data::dashboards::DashboardResults>(&mut g)),
+        op("get", "/v1/notifications/rules", "notifications", "Notification rules: who hears about approvals, failed or finished runs and dashboard alerts, and how (email, Slack, webhook, web push)")
+            .ok(list::<gai::notifications::NotificationRule>(&mut g)),
+        op("post", "/v1/notifications/rules", "notifications", "Save a rule (JSON, or {\"yaml\": \"...\"}), replacing one of the same name")
+            .body(s::<gai::notifications::NotificationRule>(&mut g))
+            .ok(s::<gai::notifications::NotificationRule>(&mut g)),
+        op("get", "/v1/notifications/rules/{name}", "notifications", "One rule").ok(s::<gai::notifications::NotificationRule>(&mut g)),
+        op("delete", "/v1/notifications/rules/{name}", "notifications", "Delete a rule").ok(s::<Done>(&mut g)),
+        op("post", "/v1/notifications/rules/{name}/test", "notifications", "Send a sample notification through the rule now")
+            .ok(s::<gai::notifications::Sent>(&mut g)),
+        op("get", "/v1/notifications/push", "notifications", "The web push public key, and the browsers subscribed")
+            .ok(s::<crate::notifications::PushInfo>(&mut g)),
+        op("post", "/v1/notifications/push", "notifications", "Subscribe this browser to web push (the PushSubscription's JSON)")
+            .body(s::<gai::tools::webpush::PushSubscription>(&mut g))
+            .ok(s::<gai::notifications::PushDevice>(&mut g)),
+        op("post", "/v1/notifications/push/unsubscribe", "notifications", "Forget a browser, by device id or endpoint")
+            .body(s::<crate::notifications::Unsubscribe>(&mut g))
+            .ok(s::<Done>(&mut g)),
+        op("get", "/v1/suggestions", "suggestions", "Open suggestions, newest first: from how gai is used (assistants that fail, data nothing uses, repeated questions) and from agents' suggest tool")
+            .ok(list::<gai::suggestions::Suggestion>(&mut g)),
+        op("post", "/v1/suggestions/{id}/accept", "suggestions", "Do what it suggests (start the run, install the template, or give the page to open) and mark it accepted")
+            .ok(s::<crate::suggestions::Accepted>(&mut g)),
+        op("post", "/v1/suggestions/{id}/dismiss", "suggestions", "Dismiss it; suggestions from usage are not made again")
+            .ok(s::<gai::suggestions::Suggestion>(&mut g)),
         op("get", "/v1/sessions/search", "sessions", "Find messages across conversations, best first, with the words marked [like this]")
             .ok(list::<gai::store::MessageHit>(&mut g))
             .query(&[("q", "Words to find"), ("agent", "One agent"), ("user", "One user id"), ("since", "RFC 3339 time"), ("until", "RFC 3339 time"), ("limit", "Max hits")]),

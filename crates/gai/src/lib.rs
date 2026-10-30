@@ -33,6 +33,8 @@
 pub mod bundle;
 pub mod client;
 mod config;
+pub mod notifications;
+pub mod suggestions;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -229,6 +231,8 @@ pub struct Gai {
     /// Database connections, made when the runtime opens.
     data: std::sync::OnceLock<gai_data::Data>,
     dashboards: std::sync::OnceLock<gai_data::dashboards::Dashboards>,
+    notifications: std::sync::OnceLock<notifications::Notifications>,
+    suggestions: std::sync::OnceLock<suggestions::Suggestions>,
 }
 
 impl Gai {
@@ -253,6 +257,8 @@ impl Gai {
             triggers: OnceCell::new(),
             data: std::sync::OnceLock::new(),
             dashboards: std::sync::OnceLock::new(),
+            notifications: std::sync::OnceLock::new(),
+            suggestions: std::sync::OnceLock::new(),
         })
     }
 
@@ -596,6 +602,15 @@ impl Gai {
                     gai_data::dashboards::Dashboards::new(data.clone(), Some(self.notifier()))
                 });
                 rt.register_tool(dashboards.tool());
+                let notifications = self.notifications.get_or_init(|| {
+                    notifications::Notifications::new(store.clone(), self.notifier())
+                });
+                notifications.attach(&rt);
+                dashboards.set_alert_hook(Some(notifications.alert_hook()));
+                let suggestions = self.suggestions.get_or_init(|| {
+                    suggestions::Suggestions::new(store.clone(), notifications.clone())
+                });
+                rt.register_tool(suggestions.tool());
                 // Scheduled reports: a trigger's run sends what it made.
                 let (notifier, reports_store) = (self.notifier(), store.clone());
                 rt.set_finish_hook(
@@ -703,6 +718,18 @@ impl Gai {
     pub async fn dashboards(&self) -> Result<&gai_data::dashboards::Dashboards, Error> {
         self.runtime().await?;
         Ok(self.dashboards.get().expect("made with the runtime"))
+    }
+
+    /// Notification rules and web push.
+    pub async fn notifications(&self) -> Result<&notifications::Notifications, Error> {
+        self.runtime().await?;
+        Ok(self.notifications.get().expect("made with the runtime"))
+    }
+
+    /// Suggestions from usage and from agents' `suggest` tool.
+    pub async fn suggestions(&self) -> Result<&suggestions::Suggestions, Error> {
+        self.runtime().await?;
+        Ok(self.suggestions.get().expect("made with the runtime"))
     }
 
     /// Meeting recordings, calls and videos: transcribed with speakers,

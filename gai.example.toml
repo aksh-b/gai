@@ -75,6 +75,10 @@
 # smtp_url = "smtps://gai%40example.com@smtp.example.com:465"
 # password_env = "GAI_SMTP_PASSWORD"
 # from = "gai <gai@example.com>"
+# dashboard_url = "https://gai.example.com"   # links in notifications
+# push_subject = "mailto:ops@example.com"     # web push contact (default: from)
+# push_key_env = "GAI_PUSH_KEY"               # else a key is made once and kept
+# Who hears about what is set in Settings > Notifications (or /v1/notifications/rules).
 
 # ---- media: image_gen, speak, transcribe and /v1/audio, /v1/images ----
 # [media]

@@ -104,6 +104,65 @@ export type PersonaVersion = Schemas['PersonaVersion'];
 export type PersonaDefaults = Schemas['PersonaDefaultsView'];
 export type Placement = Schemas['Placement'];
 
+export type NotifyEvent = 'approval' | 'run_failed' | 'run_finished' | 'alert' | 'suggestion';
+
+export type SuggestedAction =
+  | { kind: 'run_agent'; agent: string; input: string }
+  | { kind: 'install_template'; template: string }
+  | { kind: 'open'; link: string };
+
+export interface Suggestion {
+  id: string;
+  title: string;
+  details?: string;
+  action?: SuggestedAction;
+  source: string;
+  run_id?: string;
+  status: 'open' | 'accepted' | 'dismissed';
+  created_at: string;
+  decided_at?: string;
+}
+
+export interface SuggestionAccepted {
+  suggestion: Suggestion;
+  run_id?: string;
+  installed?: string;
+  link?: string;
+}
+
+export interface NotificationRule {
+  name: string;
+  description?: string;
+  on: NotifyEvent[];
+  agents?: string[];
+  email?: string[];
+  webhook?: string;
+  webhook_secret_env?: string;
+  slack?: string;
+  slack_env?: string;
+  subject?: string;
+  push?: boolean;
+  enabled?: boolean;
+}
+
+export interface NotificationSent {
+  rule: string;
+  to: string[];
+  error?: string;
+}
+
+export interface PushDevice {
+  id: string;
+  endpoint: string;
+  owner?: string;
+  created_at: string;
+}
+
+export interface PushInfo {
+  public_key: string;
+  devices: PushDevice[];
+}
+
 export type Role = 'user' | 'assistant';
 
 export type MediaSource =
@@ -362,7 +421,7 @@ export interface PullProgress {
 
 export interface Template {
   id: string;
-  kind: 'agent' | 'workflow' | 'persona';
+  kind: 'agent' | 'workflow' | 'persona' | 'skill' | 'mcp';
   title: string;
   description: string;
   needs: string[];
@@ -662,6 +721,16 @@ export const api = {
   deleteApp: (name: string) => request<void>('DELETE', `/v1/apps/${encodeURIComponent(name)}`),
   newAppKey: (name: string) => request<{ secret: string; prefix: string }>('POST', `/v1/apps/${encodeURIComponent(name)}/key`),
   removeAppKey: (name: string) => request<void>('DELETE', `/v1/apps/${encodeURIComponent(name)}/key`),
+  suggestions: () => get<Suggestion[]>('/v1/suggestions'),
+  acceptSuggestion: (id: string) => request<SuggestionAccepted>('POST', `/v1/suggestions/${encodeURIComponent(id)}/accept`),
+  dismissSuggestion: (id: string) => request<Suggestion>('POST', `/v1/suggestions/${encodeURIComponent(id)}/dismiss`),
+  notificationRules: () => get<NotificationRule[]>('/v1/notifications/rules'),
+  saveNotificationRule: (rule: NotificationRule) => request<NotificationRule>('POST', '/v1/notifications/rules', rule),
+  deleteNotificationRule: (name: string) => request<{ ok: boolean }>('DELETE', `/v1/notifications/rules/${encodeURIComponent(name)}`),
+  testNotificationRule: (name: string) => request<NotificationSent>('POST', `/v1/notifications/rules/${encodeURIComponent(name)}/test`),
+  pushInfo: () => get<PushInfo>('/v1/notifications/push'),
+  subscribePush: (sub: PushSubscriptionJSON) => request<PushDevice>('POST', '/v1/notifications/push', sub),
+  unsubscribePush: (id: string) => request<{ ok: boolean }>('POST', '/v1/notifications/push/unsubscribe', { id }),
   dashboards: () => get<DashboardView[]>('/v1/dashboards'),
   saveDashboard: (yaml: string) => request<DashboardView>('POST', '/v1/dashboards', { yaml }),
   deleteDashboard: (name: string) => request<{ ok: boolean }>('DELETE', `/v1/dashboards/${encodeURIComponent(name)}`),

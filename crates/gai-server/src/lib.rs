@@ -15,6 +15,7 @@ mod knowledge;
 mod marketplace;
 pub mod mcp_server;
 mod media;
+mod notifications;
 mod openai;
 mod openapi;
 mod optimizer;
@@ -25,6 +26,7 @@ mod recordings;
 mod setup;
 mod sources;
 mod sso;
+mod suggestions;
 mod triggers;
 mod ui;
 mod versions;
@@ -116,6 +118,8 @@ pub async fn router(
         .merge(governance::routes())
         .merge(sources::routes())
         .merge(data::routes())
+        .merge(notifications::routes())
+        .merge(suggestions::routes())
         .merge(orgs::routes())
         .merge(sso::routes())
         .merge(media::routes())

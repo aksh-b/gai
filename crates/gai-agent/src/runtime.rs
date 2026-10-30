@@ -2423,9 +2423,7 @@ impl RunTask {
         let tool = self.tools.get(&name);
         let mut policy = self
             .spec
-            .tool_policy
-            .get(&name)
-            .copied()
+            .policy_for(&name)
             .or_else(|| tool.map(|t| t.default_policy()))
             .unwrap_or(ToolPolicy::Auto);
         // A call that was in flight when the process stopped may have had

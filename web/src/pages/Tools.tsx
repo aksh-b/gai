@@ -22,10 +22,23 @@ export function Tools() {
   const tools = useLoad(() => api.tools(), []);
   const mcp = useLoad(() => api.mcp(), []);
   const hooks = useLoad(() => api.hooks(), []);
+  const templates = useLoad(() => api.templates(), []);
+  const ready = (templates.data ?? []).filter((t) => t.kind === 'mcp' && !t.installed);
   const reload = () => {
     tools.reload();
     mcp.reload();
+    templates.reload();
   };
+
+  async function connect(id: string) {
+    try {
+      await api.installTemplate(id);
+      toast.success('Connected. If it needs a token, its status says so.');
+      reload();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
 
   const builtin = tools.data?.filter((t) => !t.spec.name.startsWith('mcp__')) ?? [];
 
@@ -64,6 +77,24 @@ export function Tools() {
             <ItemGroup className="gap-2">
               {mcp.data?.map((s) => (
                 <McpCard key={s.name} s={s} onChange={reload} />
+              ))}
+            </ItemGroup>
+          )}
+          {ready.length > 0 && (
+            <ItemGroup className="gap-2">
+              {ready.map((t) => (
+                <Item key={t.id} variant="outline" size="sm">
+                  <ItemContent>
+                    <ItemTitle>{t.title}</ItemTitle>
+                    <ItemDescription>{t.description}</ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    <Button size="sm" variant="outline" onClick={() => connect(t.id)}>
+                      <IconPlus data-icon="inline-start" />
+                      Connect
+                    </Button>
+                  </ItemActions>
+                </Item>
               ))}
             </ItemGroup>
           )}

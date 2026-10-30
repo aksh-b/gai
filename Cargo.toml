@@ -61,6 +61,7 @@ sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio",
 tempfile = "3"
 textwrap = "0.16"
 regex = "1"
+ring = "0.17"
 rmcp = { version = "3.5", default-features = false, features = ["client", "transport-child-process", "transport-streamable-http-client-reqwest", "reqwest", "auth"] }
 # rmcp's HTTP transport is built on reqwest 0.13; gai names its client type.
 reqwest013 = { package = "reqwest", version = "0.13", default-features = false }

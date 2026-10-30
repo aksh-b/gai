@@ -47,13 +47,19 @@ impl ToolRegistry {
     }
 
     /// Tools matching an agent's tool list. Entries are exact names, or
-    /// prefixes ending in `*` (`fs_*`, `mcp:github/*`, `*`).
+    /// prefixes ending in `*` (`fs_*`, `mcp__github__*`, `*`). An entry
+    /// ending in `?` is optional (`mcp__github__*?`): used when there,
+    /// never reported missing.
     /// Returns the matches and any entries that matched nothing.
     pub fn select(&self, patterns: &[String]) -> (Vec<SharedTool>, Vec<String>) {
         let mut chosen: BTreeMap<&str, SharedTool> = BTreeMap::new();
         let mut unmatched = Vec::new();
         for p in patterns {
-            let mut matched = false;
+            let (p, optional) = match p.strip_suffix('?') {
+                Some(p) => (p, true),
+                None => (p.as_str(), false),
+            };
+            let mut matched = optional;
             for (name, t) in &self.tools {
                 let hit = match p.strip_suffix('*') {
                     Some(prefix) => name.starts_with(prefix),
@@ -65,7 +71,7 @@ impl ToolRegistry {
                 }
             }
             if !matched {
-                unmatched.push(p.clone());
+                unmatched.push(p.to_owned());
             }
         }
         (chosen.into_values().collect(), unmatched)
@@ -79,7 +85,13 @@ mod tests {
     #[test]
     fn selects_by_name_and_prefix() {
         let r = ToolRegistry::with_builtins();
-        let (tools, missing) = r.select(&["fs_*".into(), "calculator".into(), "nope".into()]);
+        let (tools, missing) = r.select(&[
+            "fs_*".into(),
+            "calculator".into(),
+            "nope".into(),
+            "mcp__github__*?".into(),
+            "fs_read?".into(),
+        ]);
         let names: Vec<String> = tools.iter().map(|t| t.spec().name).collect();
         assert!(names.contains(&"fs_read".to_owned()));
         assert!(names.contains(&"calculator".to_owned()));

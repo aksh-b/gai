@@ -26,6 +26,33 @@ pub struct NotifySettings {
     pub password_env: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub from: Option<String>,
+    /// The dashboard's address, for links in notifications
+    /// (`https://gai.example.com`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dashboard_url: Option<String>,
+    /// Contact for web push services (`mailto:` or `https:`); default from
+    /// `from`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub push_subject: Option<String>,
+    /// Environment variable with the web push (VAPID) private key, base64url
+    /// PKCS#8. Without it a key is made once and kept in the database.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub push_key_env: Option<String>,
+}
+
+impl NotifySettings {
+    /// The contact push services see.
+    pub fn push_subject(&self) -> String {
+        if let Some(s) = &self.push_subject {
+            return s.clone();
+        }
+        let addr = self
+            .from
+            .as_deref()
+            .and_then(|f| f.parse::<lettre::message::Mailbox>().ok())
+            .map(|m| m.email.to_string());
+        format!("mailto:{}", addr.as_deref().unwrap_or("gai@localhost"))
+    }
 }
 
 /// Where to send something.
@@ -42,6 +69,13 @@ pub struct Delivery {
     /// (`X-Gai-Signature: sha256=<hex HMAC of the body>`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub webhook_secret_env: Option<String>,
+    /// A Slack incoming-webhook URL (`https://hooks.slack.com/services/...`).
+    /// It is a secret: prefer `slack_env`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slack: Option<String>,
+    /// Environment variable holding the Slack incoming-webhook URL.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slack_env: Option<String>,
     /// The email subject (default: from the message).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subject: Option<String>,
@@ -49,7 +83,10 @@ pub struct Delivery {
 
 impl Delivery {
     pub fn is_empty(&self) -> bool {
-        self.email.is_empty() && self.webhook.is_none()
+        self.email.is_empty()
+            && self.webhook.is_none()
+            && self.slack.is_none()
+            && self.slack_env.is_none()
     }
 
     pub fn validate(&self) -> Result<(), String> {
@@ -62,6 +99,12 @@ impl Delivery {
             let u = reqwest::Url::parse(w).map_err(|e| format!("webhook: {e}"))?;
             if !matches!(u.scheme(), "http" | "https") {
                 return Err("webhook must be http(s)".into());
+            }
+        }
+        if let Some(s) = &self.slack {
+            let u = reqwest::Url::parse(s).map_err(|e| format!("slack: {e}"))?;
+            if u.scheme() != "https" {
+                return Err("slack must be an https webhook URL".into());
             }
         }
         Ok(())
@@ -105,6 +148,14 @@ impl Notifier {
         }
     }
 
+    pub fn settings(&self) -> &NotifySettings {
+        &self.settings
+    }
+
+    pub fn http(&self) -> &reqwest::Client {
+        &self.http
+    }
+
     /// Send `notice` everywhere `to` says; what was sent, or the first
     /// failure (the others are still tried).
     pub async fn send(&self, to: &Delivery, notice: &Notice) -> Result<Vec<String>, String> {
@@ -124,6 +175,21 @@ impl Notifier {
                 Ok(()) => sent.push(format!("webhook {url}")),
                 Err(e) => errors.push(format!("webhook: {e}")),
             }
+        }
+        let slack = match (&to.slack, &to.slack_env) {
+            (Some(url), _) => Some(Ok(url.clone())),
+            (None, Some(var)) => {
+                Some(std::env::var(var).map_err(|_| format!("set {var} (the Slack webhook URL)")))
+            }
+            (None, None) => None,
+        };
+        match slack {
+            Some(Ok(url)) => match self.slack(&url, notice).await {
+                Ok(()) => sent.push("slack".to_owned()),
+                Err(e) => errors.push(format!("slack: {e}")),
+            },
+            Some(Err(e)) => errors.push(format!("slack: {e}")),
+            None => {}
         }
         match errors.first() {
             Some(e) => Err(e.clone()),
@@ -181,6 +247,29 @@ impl Notifier {
         Ok(())
     }
 
+    /// Slack's incoming webhooks take `{"text": ...}` in their own markup.
+    async fn slack(&self, url: &str, notice: &Notice) -> Result<(), String> {
+        let mut text = format!("*{}*", notice.subject.replace('*', ""));
+        if !notice.text.is_empty() {
+            text.push('\n');
+            text.push_str(&slack_text(&notice.text));
+        }
+        if let Some(link) = notice.meta["url"].as_str() {
+            text.push_str(&format!("\n<{link}|Open in gai>"));
+        }
+        let r = self
+            .http
+            .post(url)
+            .json(&json!({ "text": text }))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        if !r.status().is_success() {
+            return Err(format!("Slack answered {}", r.status()));
+        }
+        Ok(())
+    }
+
     async fn webhook(
         &self,
         url: &str,
@@ -234,9 +323,55 @@ impl Notifier {
     }
 }
 
+/// Markdown to Slack's mrkdwn: `**bold**` to `*bold*`, `[a](b)` to `<b|a>`,
+/// and `&`, `<`, `>` escaped.
+fn slack_text(md: &str) -> String {
+    let escaped = md
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
+    let bold = regex::Regex::new(r"\*\*([^*]+)\*\*").expect("valid");
+    let link = regex::Regex::new(r"\[([^\]]+)\]\((https?://[^)\s]+)\)").expect("valid");
+    let s = bold.replace_all(&escaped, "*$1*");
+    link.replace_all(&s, "<$2|$1>").into_owned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn markdown_becomes_slack_markup() {
+        assert_eq!(
+            slack_text("**Run failed** in [triage](https://gai.example.com/#/runs/1) <now>"),
+            "*Run failed* in <https://gai.example.com/#/runs/1|triage> &lt;now&gt;"
+        );
+    }
+
+    #[tokio::test]
+    async fn slack_gets_text() {
+        use wiremock::matchers::{body_partial_json, method};
+        let server = wiremock::MockServer::start().await;
+        wiremock::Mock::given(method("POST"))
+            .and(body_partial_json(
+                json!({"text": "*Approval needed*\nshell wants to run"}),
+            ))
+            .respond_with(wiremock::ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let n = Notifier::new(NotifySettings::default(), true);
+        let to = Delivery {
+            slack: Some(server.uri()),
+            ..Default::default()
+        };
+        let notice = Notice {
+            subject: "Approval needed".into(),
+            text: "shell wants to run".into(),
+            ..Default::default()
+        };
+        assert_eq!(n.send(&to, &notice).await.unwrap(), ["slack"]);
+    }
 
     #[tokio::test]
     async fn email_to_a_folder() {

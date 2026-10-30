@@ -52,7 +52,9 @@ import { Memory } from './pages/Memory';
 import { Personas } from './pages/Personas';
 import { Evals } from './pages/Evals';
 import { Audit } from './pages/Audit';
+import { NotificationsPage } from './pages/Notifications';
 import { People } from './pages/People';
+import { SuggestionsPage } from './pages/Suggestions';
 import { DataPage } from './pages/Data';
 import { DashboardsPage } from './pages/Dashboards';
 import { RecordingsPage } from './pages/Recordings';
@@ -117,12 +119,13 @@ const NAV: { id: string; label: string; icon: Icon; routes: string[]; tabs?: { i
     id: 'activity',
     label: 'Activity',
     icon: IconRuns,
-    routes: ['activity', 'runs', 'search', 'analytics', 'approvals', 'usage'],
+    routes: ['activity', 'runs', 'search', 'analytics', 'approvals', 'suggestions', 'usage'],
     tabs: [
       { id: 'activity', label: 'History' },
       { id: 'search', label: 'Search chats' },
       { id: 'analytics', label: 'By assistant' },
       { id: 'approvals', label: 'Needs your OK' },
+      { id: 'suggestions', label: 'Suggestions' },
       { id: 'usage', label: 'Spending' },
     ],
   },
@@ -130,12 +133,13 @@ const NAV: { id: string; label: string; icon: Icon; routes: string[]; tabs?: { i
     id: 'settings',
     label: 'Settings',
     icon: IconGear,
-    routes: ['settings', 'models', 'tools', 'media', 'people', 'keys', 'audit', 'connect', 'preferences'],
+    routes: ['settings', 'models', 'tools', 'media', 'people', 'notifications', 'keys', 'audit', 'connect', 'preferences'],
     tabs: [
       { id: 'settings', label: 'AI models' },
       { id: 'tools', label: 'Tools & connections' },
       { id: 'media', label: 'Voice & images' },
       { id: 'people', label: 'People & teams' },
+      { id: 'notifications', label: 'Notifications' },
       { id: 'keys', label: 'Access keys' },
       { id: 'audit', label: 'Audit & data' },
       { id: 'connect', label: 'Use from other apps' },
@@ -400,6 +404,9 @@ function Dashboard({ route }: { route: Route }) {
       case 'people':
         page = <People />;
         break;
+      case 'notifications':
+        page = <NotificationsPage />;
+        break;
       case 'search':
         page = <ConversationSearch />;
         break;
@@ -414,6 +421,9 @@ function Dashboard({ route }: { route: Route }) {
         break;
       case 'approvals':
         page = <Approvals />;
+        break;
+      case 'suggestions':
+        page = <SuggestionsPage />;
         break;
       default:
         page = <Playground route={route} />;

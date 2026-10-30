@@ -15,6 +15,7 @@ use gai::agent::{AgentSpec, PersonaSpec};
 use gai::llm::{Capabilities, ChatRequest, KeyStatus, ModelConfig, ModelKind};
 use gai::orchestra::WorkflowSpec;
 use gai::store::{Scope, keys};
+use gai::tools::mcp::{McpServer, McpServerConfig};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -930,6 +931,46 @@ const TEMPLATES: &[Template] = &[
         files: &[],
     },
     Template {
+        id: "code-assistant",
+        kind: "agent",
+        title: "Code assistant (writes, runs and reviews code)",
+        needs: &[],
+        yaml: include_str!("../../../examples/agents/code-assistant.yaml"),
+        files: &[],
+    },
+    Template {
+        id: "github",
+        kind: "mcp",
+        title: "GitHub (repositories, issues and pull requests)",
+        needs: &[],
+        yaml: include_str!("../../../examples/mcp/github.json"),
+        files: &[],
+    },
+    Template {
+        id: "translator",
+        kind: "agent",
+        title: "Translator (keeps your terms)",
+        needs: &[],
+        yaml: include_str!("../../../examples/agents/translator.yaml"),
+        files: &[],
+    },
+    Template {
+        id: "email-drafter",
+        kind: "agent",
+        title: "Email and message drafter (Gmail, Outlook)",
+        needs: &[],
+        yaml: include_str!("../../../examples/agents/email-drafter.yaml"),
+        files: &[],
+    },
+    Template {
+        id: "watcher",
+        kind: "agent",
+        title: "Proactive watcher (suggests what to do)",
+        needs: &[],
+        yaml: include_str!("../../../examples/agents/watcher.yaml"),
+        files: &[],
+    },
+    Template {
         id: "supervisor",
         kind: "agent",
         title: "Team lead (researcher + writer)",
@@ -990,7 +1031,7 @@ const TEMPLATES: &[Template] = &[
 #[derive(Serialize, JsonSchema)]
 pub struct TemplateView {
     pub id: String,
-    /// `agent`, `workflow` or `persona`.
+    /// `agent`, `workflow`, `persona`, `skill` or `mcp` (a server to connect).
     pub kind: String,
     pub title: String,
     pub description: String,
@@ -1031,6 +1072,10 @@ async fn exists(s: &AppState, kind: &str, name: &str) -> bool {
         "agent" => matches!(store.get_agent(name, None).await, Ok(Some(_))),
         "skill" => matches!(s.rt.skills().get(name).await, Ok(Some(_))),
         "persona" => matches!(store.get_persona(name, None).await, Ok(Some(_))),
+        "mcp" => {
+            s.gai.config().mcp_servers.contains_key(name)
+                || matches!(store.list_mcp_servers().await, Ok(l) if l.iter().any(|(n, _)| n == name))
+        }
         _ => matches!(store.get_workflow(name, None).await, Ok(Some(_))),
     }
 }
@@ -1042,6 +1087,7 @@ async fn list_templates(Tenant(s): Tenant) -> Json<Vec<TemplateView>> {
             "agent" => template_agent(t).ok().and_then(|a| a.description),
             "skill" => gai::skills::parse(t.yaml).ok().map(|(_, d, _, _)| d),
             "persona" => template_persona(t).ok().and_then(|p| p.description),
+            "mcp" => Some(mcp_description(t)),
             _ => template_workflow(t).ok().and_then(|w| w.description),
         }
         .unwrap_or_default();
@@ -1066,8 +1112,37 @@ pub struct Installed {
     pub also: Vec<String>,
 }
 
+fn template_mcp(t: &Template) -> Result<McpServerConfig, String> {
+    let cfg: McpServerConfig = serde_json::from_str(t.yaml).map_err(|e| e.to_string())?;
+    cfg.validate()?;
+    Ok(cfg)
+}
+
+/// What an MCP template connects to and the variables it needs.
+fn mcp_description(t: &Template) -> String {
+    let vars: Vec<&str> = t
+        .yaml
+        .split("${")
+        .skip(1)
+        .filter_map(|r| r.split('}').next())
+        .collect();
+    let mut d = format!("Connects {} as an MCP server", t.title);
+    if !vars.is_empty() {
+        d.push_str(&format!("; set {} on the server first", vars.join(" and ")));
+    }
+    d.push('.');
+    d
+}
+
 async fn install_one(s: &AppState, t: &Template) -> ApiResult<()> {
     match t.kind {
+        "mcp" => {
+            let cfg = template_mcp(t).map_err(ApiError::bad_request)?;
+            s.rt.check_mcp(&cfg).map_err(ApiError::bad_request)?;
+            let value = serde_json::to_value(&cfg).expect("serializable config");
+            s.rt.store().put_mcp_server(t.id, &value).await?;
+            let _ = s.rt.connect_mcp(McpServer::new(t.id, cfg, "api")).await;
+        }
         "agent" => {
             let spec = template_agent(t).map_err(ApiError::bad_request)?;
             s.rt.save_agent(&spec, Some("from template")).await?;
@@ -1098,6 +1173,11 @@ async fn install_template(
     Tenant(s): Tenant,
     Path(id): Path<String>,
 ) -> ApiResult<(StatusCode, Json<Installed>)> {
+    Ok((StatusCode::CREATED, Json(install(&s, &id).await?)))
+}
+
+/// Install a template by id, with what it needs.
+pub(crate) async fn install(s: &AppState, id: &str) -> ApiResult<Installed> {
     let t = TEMPLATES
         .iter()
         .find(|t| t.id == id)
@@ -1108,22 +1188,19 @@ async fn install_template(
             .iter()
             .find(|d| d.id == *need)
             .ok_or_else(|| ApiError::not_found(format!("template {need}")))?;
-        if !exists(&s, dep.kind, dep.id).await {
-            install_one(&s, dep).await?;
+        if !exists(s, dep.kind, dep.id).await {
+            install_one(s, dep).await?;
             also.push((*need).to_owned());
         }
     }
-    if !exists(&s, t.kind, t.id).await {
-        install_one(&s, t).await?;
+    if !exists(s, t.kind, t.id).await {
+        install_one(s, t).await?;
     }
-    Ok((
-        StatusCode::CREATED,
-        Json(Installed {
-            kind: t.kind.into(),
-            name: t.id.into(),
-            also,
-        }),
-    ))
+    Ok(Installed {
+        kind: t.kind.into(),
+        name: t.id.into(),
+        also,
+    })
 }
 
 #[cfg(test)]
@@ -1163,6 +1240,10 @@ mod tests {
                 }
                 "skill" => {
                     gai::skills::parse(t.yaml).unwrap();
+                }
+                "mcp" => {
+                    template_mcp(t).unwrap();
+                    assert!(mcp_description(t).contains("GITHUB_TOKEN") || !t.yaml.contains("${"));
                 }
                 _ => {
                     template_workflow(t).unwrap();

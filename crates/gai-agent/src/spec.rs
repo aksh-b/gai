@@ -46,10 +46,13 @@ pub struct AgentSpec {
     /// Defaults to the global setting, else `prepend`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub persona_placement: Option<crate::persona::Placement>,
-    /// Tool names, or prefixes ending in `*`.
+    /// Tool names, or prefixes ending in `*`. Ending in `?` makes an entry
+    /// optional: `mcp__github__*?` uses those tools when the server is
+    /// there and runs without them when it isn't.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tools: Vec<String>,
-    /// Overrides of each tool's default policy.
+    /// Overrides of each tool's default policy, by name or by a prefix
+    /// ending in `*` (`mcp__gmail__send*: approve`); the longest match wins.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub tool_policy: BTreeMap<String, ToolPolicy>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -118,6 +121,20 @@ impl AgentSpec {
     pub fn policy(mut self, tool: &str, policy: ToolPolicy) -> Self {
         self.tool_policy.insert(tool.to_owned(), policy);
         self
+    }
+
+    /// The policy `tool_policy` sets for a tool: its exact name, else the
+    /// longest `prefix*` that matches.
+    pub fn policy_for(&self, tool: &str) -> Option<ToolPolicy> {
+        if let Some(p) = self.tool_policy.get(tool) {
+            return Some(*p);
+        }
+        self.tool_policy
+            .iter()
+            .filter_map(|(k, p)| Some((k.strip_suffix('*')?, p)))
+            .filter(|(prefix, _)| tool.starts_with(prefix))
+            .max_by_key(|(prefix, _)| prefix.len())
+            .map(|(_, p)| *p)
     }
 
     pub fn limits(mut self, limits: Limits) -> Self {
@@ -282,6 +299,18 @@ mod tests {
         assert_eq!(s.limits.max_steps, 3);
         assert_eq!(s.limits.max_parallel_tools, 8);
         assert_eq!(s.tool_policy["fs_write"], ToolPolicy::Approve);
+        let wild = AgentSpec::new("x")
+            .policy("mcp__gmail__*", ToolPolicy::Auto)
+            .policy("mcp__gmail__send*", ToolPolicy::Approve);
+        assert_eq!(
+            wild.policy_for("mcp__gmail__send_email"),
+            Some(ToolPolicy::Approve)
+        );
+        assert_eq!(
+            wild.policy_for("mcp__gmail__search"),
+            Some(ToolPolicy::Auto)
+        );
+        assert_eq!(wild.policy_for("fs_read"), None);
         assert!(s.context.cache);
         s.validate().unwrap();
         assert!(AgentSpec::new("bad name").validate().is_err());

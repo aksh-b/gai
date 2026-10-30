@@ -131,7 +131,12 @@ pub struct DashboardView {
 pub struct Dashboards {
     data: Data,
     notifier: Option<Notifier>,
+    on_alert: Arc<std::sync::RwLock<Option<AlertHook>>>,
 }
+
+/// Called with every alert a refresh fires, besides the dashboard's own
+/// `notify` (for notification rules).
+pub type AlertHook = Arc<dyn Fn(Notice) -> futures::future::BoxFuture<'static, ()> + Send + Sync>;
 
 fn number(v: &Value) -> Option<f64> {
     match v {
@@ -143,7 +148,15 @@ fn number(v: &Value) -> Option<f64> {
 
 impl Dashboards {
     pub fn new(data: Data, notifier: Option<Notifier>) -> Self {
-        Self { data, notifier }
+        Self {
+            data,
+            notifier,
+            on_alert: Arc::default(),
+        }
+    }
+
+    pub fn set_alert_hook(&self, hook: Option<AlertHook>) {
+        *self.on_alert.write().expect("alert hook lock") = hook;
     }
 
     pub fn parse(value: Value) -> Result<DashboardSpec> {
@@ -267,20 +280,26 @@ impl Dashboards {
             }
             out.panels.push(r);
         }
+        let notice = Notice {
+            subject: format!("Alert: {}", view.spec.title),
+            text: format!("{}\n\nDashboard: {}", fired.join("\n"), view.spec.title),
+            attachments: Vec::new(),
+            meta: json!({"kind": "alert", "dashboard": view.spec.name, "alerts": fired}),
+        };
         if !fired.is_empty()
             && !view.spec.notify.is_empty()
             && let Some(n) = &self.notifier
         {
-            let notice = Notice {
-                subject: format!("Alert: {}", view.spec.title),
-                text: format!("{}\n\nDashboard: {}", fired.join("\n"), view.spec.title),
-                attachments: Vec::new(),
-                meta: json!({"kind": "alert", "dashboard": view.spec.name, "alerts": fired}),
-            };
             match n.send(&view.spec.notify, &notice).await {
                 Ok(_) => {}
                 Err(e) => tracing::warn!(dashboard = %name, error = %e, "could not send an alert"),
             }
+        }
+        let hook = self.on_alert.read().expect("alert hook lock").clone();
+        if !fired.is_empty()
+            && let Some(hook) = hook
+        {
+            hook(notice).await;
         }
         out.alerts = fired;
         self.data

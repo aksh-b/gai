@@ -230,6 +230,8 @@ pub fn required_scope(method: &Method, path: &str) -> Scope {
         || path.starts_with("/v1/members")
         || path.starts_with("/v1/teams")
         || path.starts_with("/v1/orgs")
+        // Rules and their tests; a browser subscribing to push is `run`.
+        || path.starts_with("/v1/notifications/rules")
         || (path.starts_with("/v1/connections") && !path.ends_with("/query")))
         && write;
     // The audit log, forgetting users, retention, keys and secrets: admin,
@@ -779,6 +781,14 @@ mod tests {
             Scope::Admin
         );
         assert_eq!(required_scope(&Method::GET, "/v1/members"), Scope::Read);
+        assert_eq!(
+            required_scope(&Method::POST, "/v1/notifications/rules"),
+            Scope::Admin
+        );
+        assert_eq!(
+            required_scope(&Method::POST, "/v1/notifications/push"),
+            Scope::Run
+        );
         assert_eq!(required_scope(&Method::POST, "/v1/apps"), Scope::Build);
         assert_eq!(required_scope(&Method::POST, "/v1/prompts"), Scope::Build);
         assert_eq!(
