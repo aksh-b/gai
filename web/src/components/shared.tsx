@@ -4,6 +4,7 @@ import { Fragment, type ReactElement, type ReactNode } from 'react';
 import { AlertCircleIcon, ChevronRightIcon, CircleCheckIcon, CircleDashedIcon, CircleXIcon, ClockIcon } from 'lucide-react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { t, tr } from '@/i18n';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -66,8 +67,8 @@ export function PageHeader({ title, subtitle, actions }: { title: ReactNode; sub
   return (
     <header className="flex flex-wrap items-end justify-between gap-4">
       <div className="flex flex-col gap-1">
-        <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight">{title}</h1>
-        {subtitle && <p className="text-muted-foreground">{subtitle}</p>}
+        <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight">{tr(title)}</h1>
+        {subtitle && <p className="text-muted-foreground">{tr(subtitle)}</p>}
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}
     </header>
@@ -92,7 +93,7 @@ export function EmptyState({
     <Empty className={className}>
       <EmptyHeader>
         {icon && <EmptyMedia variant="icon">{icon}</EmptyMedia>}
-        <EmptyTitle>{title}</EmptyTitle>
+        <EmptyTitle>{t(title)}</EmptyTitle>
         {children && <EmptyDescription>{children}</EmptyDescription>}
       </EmptyHeader>
       {action && <EmptyContent>{action}</EmptyContent>}

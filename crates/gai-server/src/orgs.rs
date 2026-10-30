@@ -79,6 +79,7 @@ pub(crate) async fn start(gai: Arc<Gai>, control: SharedStore) -> Result<Instanc
         crate::sources::start_scheduler(gai.clone());
         crate::data::start_scheduler(gai.clone());
         crate::recordings::recover(gai.clone());
+        crate::finetune::start_poller(gai.clone());
     }
     Ok(Instance { gai, rt, wf })
 }

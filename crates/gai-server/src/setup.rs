@@ -37,6 +37,7 @@ pub fn routes() -> Router<AppState> {
         .route("/v1/providers/ollama/library", get(ollama_library))
         .route("/v1/providers/ollama/pull", post(ollama_pull))
         .route("/v1/providers/ollama/pulls", get(ollama_pulls))
+        .route("/v1/settings/language", put(put_language))
         .route("/v1/templates", get(list_templates))
         .route("/v1/templates/{id}/install", post(install_template))
 }
@@ -379,19 +380,35 @@ pub struct Settings {
 pub struct SettingsView {
     pub default_model: Option<String>,
     pub default_model_source: Option<String>,
+    /// The language agents answer in unless the agent or the run says
+    /// otherwise; `null` for the user's own.
+    pub default_language: Option<String>,
 }
 
 fn settings_view(s: &AppState) -> SettingsView {
-    match s.gai.default_model_with_source() {
-        Some((m, src)) => SettingsView {
-            default_model: Some(m),
-            default_model_source: Some(src.into()),
-        },
-        None => SettingsView {
-            default_model: None,
-            default_model_source: None,
-        },
+    let (default_model, default_model_source) = match s.gai.default_model_with_source() {
+        Some((m, src)) => (Some(m), Some(src.into())),
+        None => (None, None),
+    };
+    SettingsView {
+        default_model,
+        default_model_source,
+        default_language: s.rt.default_language(),
     }
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct LanguageSetting {
+    /// A code (`fr`, `pt-BR`) or a name; `null` for the user's own.
+    pub language: Option<String>,
+}
+
+async fn put_language(
+    Tenant(s): Tenant,
+    Json(b): Json<LanguageSetting>,
+) -> ApiResult<Json<SettingsView>> {
+    s.gai.set_default_language(b.language).await?;
+    Ok(Json(settings_view(&s)))
 }
 
 async fn get_settings(Tenant(s): Tenant) -> Json<SettingsView> {

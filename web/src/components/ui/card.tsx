@@ -1,5 +1,6 @@
 import * as React from "react"
 import { cn } from "cn"
+import { trChildren } from "@/i18n"
 
 function Card({
   className,
@@ -32,10 +33,11 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+function CardTitle({ className, children, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-title"
+      children={trChildren(children)}
       className={cn(
         "font-heading text-base leading-snug font-medium group-data-[size=sm]/card:text-sm",
         className
@@ -45,10 +47,11 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
+function CardDescription({ className, children, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-description"
+      children={trChildren(children)}
       className={cn("text-sm text-muted-foreground", className)}
       {...props}
     />

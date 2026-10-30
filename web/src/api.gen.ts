@@ -3039,6 +3039,10 @@ export interface components {
              *     Defaults to the global setting, else `prepend`.
              */
             persona_placement?: components["schemas"]["Placement"] | null;
+            /** @description The language it answers in: a code (`fr`, `pt-BR`) or a name. A run
+             *     can pick another; the server's default applies otherwise. The
+             *     prompt can place it with `{{ language }}`. */
+            language?: string | null;
             /**
              * @description A stored prompt template used as the instructions, before `system`:
              *     `name`, `name@v3` or `name@<label>`.

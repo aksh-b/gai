@@ -30,6 +30,8 @@ pub struct ModelRegistry {
     /// Catalog entries added at runtime (say, a model just pulled into
     /// Ollama), by provider. Entries in config win over these.
     added_models: RwLock<BTreeMap<String, Vec<ModelConfig>>>,
+    /// Providers added at runtime (say, a model server gai started).
+    added_providers: RwLock<BTreeMap<String, ProviderConfig>>,
     retry: RetryConfig,
     sink: Option<Arc<dyn UsageSink>>,
 }
@@ -160,6 +162,7 @@ impl RegistryBuilder {
             built: Mutex::new(built),
             stored_keys: RwLock::new(HashMap::new()),
             added_models: RwLock::new(BTreeMap::new()),
+            added_providers: RwLock::new(BTreeMap::new()),
             retry: self.config.retry,
             sink: self.sink,
         })
@@ -323,7 +326,8 @@ impl ModelRegistry {
         let mut info = self.resolve(chain[0])?;
         info.kind = kind;
         if kind == ModelKind::Embedding {
-            let cfg = self.configs[&info.provider].model(&info.model);
+            let provider = self.config(&info.provider);
+            let cfg = provider.as_ref().and_then(|p| p.model(&info.model));
             let (q, d) = (
                 cfg.and_then(|m| m.query_prefix.clone()),
                 cfg.and_then(|m| m.document_prefix.clone()),
@@ -357,16 +361,17 @@ impl ModelRegistry {
             None => spec.to_owned(),
         };
         let (provider, model) = match spec.split_once('/') {
-            Some((p, m)) if self.configs.contains_key(p) => (p.to_owned(), m.to_owned()),
+            Some((p, m)) if self.has_provider(p) => (p.to_owned(), m.to_owned()),
             Some((p, _)) => {
                 return Err(LlmError::Config(format!(
                     "unknown provider {p:?} in {spec:?}; configured: {}",
-                    self.configs.keys().cloned().collect::<Vec<_>>().join(", ")
+                    self.provider_names().join(", ")
                 )));
             }
             None => (self.provider_listing(&spec)?, spec.clone()),
         };
-        let cfg = &self.configs[&provider];
+        let cfg = self.config(&provider).expect("checked above");
+        let cfg = &cfg;
         let mut info = ModelInfo::new(&provider, &model);
         let added = self.added_model(&provider, &model);
         match cfg.model(&model).or(added.as_ref()) {
@@ -386,8 +391,8 @@ impl ModelRegistry {
     }
 
     fn provider_listing(&self, model: &str) -> Result<String, LlmError> {
-        let owners: Vec<&String> = self
-            .configs
+        let all = self.all_configs();
+        let owners: Vec<&String> = all
             .iter()
             .filter(|(_, c)| c.model(model).is_some())
             .map(|(n, _)| n)
@@ -419,19 +424,13 @@ impl ModelRegistry {
         if let Some(p) = built.get(name) {
             return Ok(p.clone());
         }
-        let cfg = self
-            .configs
-            .get(name)
+        let mut cfg = self
+            .config(name)
             .ok_or_else(|| LlmError::Config(format!("unknown provider {name:?}")))?;
-        let stored = self.stored_key(name);
-        let p = match stored {
-            Some(key) => {
-                let mut cfg = cfg.clone();
-                cfg.api_key = Some(key);
-                self.dialects[&cfg.dialect].build(name, &cfg)?
-            }
-            None => self.dialects[&cfg.dialect].build(name, cfg)?,
-        };
+        if let Some(key) = self.stored_key(name) {
+            cfg.api_key = Some(key);
+        }
+        let p = self.dialects[&cfg.dialect].build(name, &cfg)?;
         built.insert(name.to_owned(), p.clone());
         Ok(p)
     }
@@ -447,7 +446,7 @@ impl ModelRegistry {
     /// Use `key` for `provider` from now on (`None` forgets it, falling back
     /// to the configured key). Takes effect for the next model handle.
     pub fn set_key(&self, provider: &str, key: Option<SecretString>) -> Result<(), LlmError> {
-        if !self.configs.contains_key(provider) {
+        if !self.has_provider(provider) {
             return Err(LlmError::Config(format!("unknown provider {provider:?}")));
         }
         {
@@ -485,7 +484,7 @@ impl ModelRegistry {
         if self.stored_key(provider).is_some() {
             return KeyStatus::Present;
         }
-        match self.configs.get(provider) {
+        match self.config(provider) {
             Some(c) => c.key_status(),
             None => KeyStatus::NotNeeded,
         }
@@ -504,7 +503,7 @@ impl ModelRegistry {
     /// Add a model to a provider's catalog (replacing one with the same id
     /// that was added before). Models listed in config are left as they are.
     pub fn add_model(&self, provider: &str, model: ModelConfig) -> Result<(), LlmError> {
-        if !self.configs.contains_key(provider) {
+        if !self.has_provider(provider) {
             return Err(LlmError::Config(format!("unknown provider {provider:?}")));
         }
         let mut added = self.added_models.write().expect("added models lock");
@@ -518,7 +517,7 @@ impl ModelRegistry {
     pub fn catalog(&self) -> Vec<CatalogEntry> {
         let mut out = Vec::new();
         let added = self.added_models.read().expect("added models lock").clone();
-        for (name, cfg) in &self.configs {
+        for (name, cfg) in &self.all_configs() {
             let extra = added
                 .get(name)
                 .into_iter()
@@ -544,8 +543,103 @@ impl ModelRegistry {
         out
     }
 
+    /// Providers from config and presets (not those added at runtime; see
+    /// [`added_providers`](Self::added_providers)).
     pub fn providers(&self) -> impl Iterator<Item = (&str, &ProviderConfig)> {
         self.configs.iter().map(|(n, c)| (n.as_str(), c))
+    }
+
+    /// A provider's base URL and key (stored, configured or from its
+    /// environment variable), for calling its APIs other than chat.
+    pub fn credentials(&self, provider: &str) -> Option<(String, Option<SecretString>)> {
+        let cfg = self.config(provider)?;
+        let key = self.stored_key(provider).or_else(|| cfg.resolve_key());
+        Some((cfg.base_url?, key))
+    }
+
+    /// Providers added at runtime.
+    pub fn added_providers(&self) -> Vec<(String, ProviderConfig)> {
+        self.added_providers
+            .read()
+            .expect("added providers lock")
+            .iter()
+            .map(|(n, c)| (n.clone(), c.clone()))
+            .collect()
+    }
+
+    /// Add (or replace) a provider at runtime. Names from config can't be
+    /// replaced.
+    pub fn add_provider(&self, name: &str, cfg: ProviderConfig) -> Result<(), LlmError> {
+        if self.configs.contains_key(name) {
+            return Err(LlmError::Config(format!(
+                "{name} is a configured provider; pick another name"
+            )));
+        }
+        if !self.dialects.contains_key(&cfg.dialect) {
+            return Err(LlmError::Config(format!(
+                "unknown dialect {:?}",
+                cfg.dialect
+            )));
+        }
+        self.added_providers
+            .write()
+            .expect("added providers lock")
+            .insert(name.to_owned(), cfg);
+        self.built.lock().expect("registry lock").remove(name);
+        Ok(())
+    }
+
+    /// Forget a provider added at runtime, and the models added to it.
+    pub fn remove_provider(&self, name: &str) -> bool {
+        let gone = self
+            .added_providers
+            .write()
+            .expect("added providers lock")
+            .remove(name)
+            .is_some();
+        if gone {
+            self.built.lock().expect("registry lock").remove(name);
+            self.added_models
+                .write()
+                .expect("added models lock")
+                .remove(name);
+        }
+        gone
+    }
+
+    fn has_provider(&self, name: &str) -> bool {
+        self.configs.contains_key(name)
+            || self
+                .added_providers
+                .read()
+                .expect("added providers lock")
+                .contains_key(name)
+    }
+
+    fn config(&self, name: &str) -> Option<ProviderConfig> {
+        match self.configs.get(name) {
+            Some(c) => Some(c.clone()),
+            None => self
+                .added_providers
+                .read()
+                .expect("added providers lock")
+                .get(name)
+                .cloned(),
+        }
+    }
+
+    fn all_configs(&self) -> BTreeMap<String, ProviderConfig> {
+        let mut all = self
+            .added_providers
+            .read()
+            .expect("added providers lock")
+            .clone();
+        all.extend(self.configs.iter().map(|(n, c)| (n.clone(), c.clone())));
+        all
+    }
+
+    fn provider_names(&self) -> Vec<String> {
+        self.all_configs().into_keys().collect()
     }
 
     pub fn aliases(&self) -> &BTreeMap<String, AliasConfig> {
@@ -560,8 +654,7 @@ impl ModelRegistry {
     /// A sensible default when nothing is configured: the first provider
     /// with a usable key.
     pub fn default_model(&self) -> Option<String> {
-        let ready =
-            |p: &str| self.configs.contains_key(p) && self.key_status(p) == KeyStatus::Present;
+        let ready = |p: &str| self.has_provider(p) && self.key_status(p) == KeyStatus::Present;
         [("anthropic", "claude-opus-5-5")]
             .iter()
             .find(|(p, _)| ready(p))

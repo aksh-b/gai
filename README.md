@@ -187,6 +187,8 @@ Run `gai <command> --help` for details.
 - [Notifications](docs/notifications.md): email, Slack, webhooks and browser notifications for approvals, failed runs and alerts
 - [Suggestions](docs/suggestions.md): an inbox of things worth doing, from usage and from assistants that watch your data on a schedule
 - [Prompt templates and the optimizer](docs/prompts.md): versioned instructions any agent can use, and rewriting them to score higher on a test set
+- [Model servers](docs/model-servers.md): run llama.cpp, vLLM or Ollama in containers from the dashboard, with GPU status
+- [Fine-tuning](docs/fine-tuning.md): train a model on the answers people rated thumbs up, with OpenAI, Together or locally
 - [Deploying](docs/deploy.md): Docker, auth and keys, data and backups
 - [API reference](http://localhost:8484/docs): served by every gai server at `/docs`
 

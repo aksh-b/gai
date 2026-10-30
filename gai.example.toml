@@ -80,6 +80,15 @@
 # push_key_env = "GAI_PUSH_KEY"               # else a key is made once and kept
 # Who hears about what is set in Settings > Notifications (or /v1/notifications/rules).
 
+# The language agents answer in unless an agent or run picks one
+# (a code like "fr" or "pt-BR", or a name). Unset: the user's own.
+# language = "en"
+
+# ---- model servers gai runs (Settings > AI models > Model servers) ----
+# [deploy]
+# bind = "127.0.0.1"   # where their ports are published
+# host = "127.0.0.1"   # how gai reaches them (host.containers.internal when gai runs in a container)
+
 # ---- media: image_gen, speak, transcribe and /v1/audio, /v1/images ----
 # [media]
 # image = "openai/gpt-image-1"

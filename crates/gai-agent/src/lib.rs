@@ -11,6 +11,7 @@ mod context;
 mod documents;
 mod event;
 pub mod hooks;
+pub mod language;
 mod media;
 mod multi;
 mod persona;

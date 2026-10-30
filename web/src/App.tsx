@@ -52,6 +52,7 @@ import { Memory } from './pages/Memory';
 import { Personas } from './pages/Personas';
 import { Evals } from './pages/Evals';
 import { Audit } from './pages/Audit';
+import { t } from './i18n';
 import { NotificationsPage } from './pages/Notifications';
 import { People } from './pages/People';
 import { SuggestionsPage } from './pages/Suggestions';
@@ -68,82 +69,82 @@ type Icon = ComponentType<SVGProps<SVGSVGElement>>;
 
 /** Top-level sections. Each owns some route ids (old ones keep working). */
 const NAV: { id: string; label: string; icon: Icon; routes: string[]; tabs?: { id: string; label: string }[] }[] = [
-  { id: 'chat', label: 'Chat', icon: IconChat, routes: ['chat', 'playground'] },
+  { id: 'chat', label: t('Chat'), icon: IconChat, routes: ['chat', 'playground'] },
   {
     id: 'assistants',
-    label: 'Assistants',
+    label: t('Assistants'),
     icon: IconAgent,
     routes: ['assistants', 'agents', 'personas', 'prompts', 'memory', 'skills', 'evals'],
     tabs: [
-      { id: 'assistants', label: 'Assistants' },
-      { id: 'personas', label: 'Personas' },
-      { id: 'prompts', label: 'Prompts' },
-      { id: 'memory', label: 'Memory' },
-      { id: 'skills', label: 'Skills' },
-      { id: 'evals', label: 'Tests' },
+      { id: 'assistants', label: t('Assistants') },
+      { id: 'personas', label: t('Personas') },
+      { id: 'prompts', label: t('Prompts') },
+      { id: 'memory', label: t('Memory') },
+      { id: 'skills', label: t('Skills') },
+      { id: 'evals', label: t('Tests') },
     ],
   },
   {
     id: 'automations',
-    label: 'Automations',
+    label: t('Automations'),
     icon: IconFlow,
     routes: ['automations', 'workflows', 'apps', 'schedules', 'triggers'],
     tabs: [
-      { id: 'automations', label: 'Workflows' },
-      { id: 'apps', label: 'Apps' },
-      { id: 'schedules', label: 'Schedules & webhooks' },
+      { id: 'automations', label: t('Workflows') },
+      { id: 'apps', label: t('Apps') },
+      { id: 'schedules', label: t('Schedules & webhooks') },
     ],
   },
   {
     id: 'knowledge',
-    label: 'Knowledge',
+    label: t('Knowledge'),
     icon: IconStack,
     routes: ['knowledge', 'recordings'],
     tabs: [
-      { id: 'knowledge', label: 'Documents' },
-      { id: 'recordings', label: 'Recordings' },
+      { id: 'knowledge', label: t('Documents') },
+      { id: 'recordings', label: t('Recordings') },
     ],
   },
   {
     id: 'data',
-    label: 'Data',
+    label: t('Data'),
     icon: IconData,
     routes: ['data', 'dashboards'],
     tabs: [
-      { id: 'data', label: 'Databases' },
-      { id: 'dashboards', label: 'Dashboards' },
+      { id: 'data', label: t('Databases') },
+      { id: 'dashboards', label: t('Dashboards') },
     ],
   },
-  { id: 'marketplace', label: 'Marketplace', icon: IconStore, routes: ['marketplace'] },
+  { id: 'marketplace', label: t('Marketplace'), icon: IconStore, routes: ['marketplace'] },
   {
     id: 'activity',
-    label: 'Activity',
+    label: t('Activity'),
     icon: IconRuns,
     routes: ['activity', 'runs', 'search', 'analytics', 'approvals', 'suggestions', 'usage'],
     tabs: [
-      { id: 'activity', label: 'History' },
-      { id: 'search', label: 'Search chats' },
-      { id: 'analytics', label: 'By assistant' },
-      { id: 'approvals', label: 'Needs your OK' },
-      { id: 'suggestions', label: 'Suggestions' },
-      { id: 'usage', label: 'Spending' },
+      { id: 'activity', label: t('History') },
+      { id: 'search', label: t('Search chats') },
+      { id: 'analytics', label: t('By assistant') },
+      { id: 'approvals', label: t('Needs your OK') },
+      { id: 'suggestions', label: t('Suggestions') },
+      { id: 'usage', label: t('Spending') },
     ],
   },
   {
     id: 'settings',
-    label: 'Settings',
+    label: t('Settings'),
     icon: IconGear,
     routes: ['settings', 'models', 'tools', 'media', 'people', 'notifications', 'keys', 'audit', 'connect', 'preferences'],
     tabs: [
-      { id: 'settings', label: 'AI models' },
-      { id: 'tools', label: 'Tools & connections' },
-      { id: 'media', label: 'Voice & images' },
-      { id: 'people', label: 'People & teams' },
-      { id: 'notifications', label: 'Notifications' },
-      { id: 'keys', label: 'Access keys' },
-      { id: 'audit', label: 'Audit & data' },
-      { id: 'connect', label: 'Use from other apps' },
-      { id: 'preferences', label: 'Preferences' },
+      { id: 'settings', label: t('AI models') },
+      { id: 'tools', label: t('Tools & connections') },
+      { id: 'media', label: t('Voice & images') },
+      { id: 'people', label: t('People & teams') },
+      { id: 'notifications', label: t('Notifications') },
+      { id: 'keys', label: t('Access keys') },
+      { id: 'audit', label: t('Audit & data') },
+      { id: 'connect', label: t('Use from other apps') },
+      { id: 'preferences', label: t('Preferences') },
     ],
   },
 ];

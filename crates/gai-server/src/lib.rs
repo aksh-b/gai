@@ -8,8 +8,10 @@ mod apps;
 mod auth;
 mod bundles;
 mod data;
+mod deployments;
 mod error;
 mod evals;
+mod finetune;
 mod governance;
 mod knowledge;
 mod marketplace;
@@ -119,6 +121,8 @@ pub async fn router(
         .merge(sources::routes())
         .merge(data::routes())
         .merge(notifications::routes())
+        .merge(deployments::routes())
+        .merge(finetune::routes())
         .merge(suggestions::routes())
         .merge(orgs::routes())
         .merge(sso::routes())

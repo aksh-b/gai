@@ -141,6 +141,8 @@ pub struct RunRequest {
     /// Speak as this persona instead of the agent's or the global default;
     /// `"none"` for no persona.
     pub persona: Option<PersonaRef>,
+    /// Answer in this language instead of the agent's or the default.
+    pub language: Option<String>,
 }
 
 impl RunRequest {
@@ -161,6 +163,7 @@ impl RunRequest {
             metadata: Map::new(),
             callback_url: None,
             persona: None,
+            language: None,
         }
     }
 
@@ -234,6 +237,7 @@ struct Inner {
     default_model: RwLock<Option<String>>,
     /// Set at runtime (from the dashboard); wins over `config.persona`.
     default_persona: RwLock<Option<PersonaDefaults>>,
+    default_language: RwLock<Option<String>>,
     http: reqwest::Client,
     approvals: ApprovalHub,
     active: Mutex<HashMap<String, Active>>,
@@ -277,6 +281,7 @@ impl Runtime {
                 config,
                 default_model: RwLock::new(None),
                 default_persona: RwLock::new(None),
+                default_language: RwLock::new(None),
                 knowledge,
                 skills,
                 queue: Notify::new(),
@@ -403,6 +408,24 @@ impl Runtime {
             .default_model
             .write()
             .expect("default model lock") = model;
+    }
+
+    /// The language agents answer in when neither the run nor the agent
+    /// says (`None`: whatever the user writes in).
+    pub fn default_language(&self) -> Option<String> {
+        self.inner
+            .default_language
+            .read()
+            .expect("default language lock")
+            .clone()
+    }
+
+    pub fn set_default_language(&self, language: Option<String>) {
+        *self
+            .inner
+            .default_language
+            .write()
+            .expect("default language lock") = language.filter(|l| !l.trim().is_empty());
     }
 
     /// The persona used when neither a run nor its agent picks one: the
@@ -869,6 +892,11 @@ impl Runtime {
     ) -> Result<Launch, AgentError> {
         let mut spec = req.agent.clone();
         spec.validate().map_err(AgentError::Invalid)?;
+        // Resolved now, so the snapshot a resumed run uses has it.
+        let given = |l: Option<String>| l.filter(|l| !l.trim().is_empty());
+        spec.language = given(req.language.clone())
+            .or(given(spec.language.take()))
+            .or_else(|| self.default_language());
         // A prompt template becomes part of `system`; the run records the
         // result, so resuming it later uses the same text.
         let mut vars = req.vars.clone();
@@ -1528,13 +1556,31 @@ fn system_with_persona(
     vars: &Map<String, Value>,
     persona: Option<&ResolvedPersona>,
 ) -> Result<String, AgentError> {
-    let Some(p) = persona else {
-        return render_system(spec, model, workspace, vars, "");
+    let system = match persona {
+        None => render_system(spec, model, workspace, vars, "")?,
+        Some(p) => {
+            let text = p.spec.render();
+            let placed = spec.system.as_deref().is_some_and(template_places_persona);
+            let system = render_system(spec, model, workspace, vars, &text)?;
+            compose(system, &text, p.placement, placed)
+        }
     };
-    let text = p.spec.render();
-    let placed = spec.system.as_deref().is_some_and(template_places_persona);
-    let system = render_system(spec, model, workspace, vars, &text)?;
-    Ok(compose(system, &text, p.placement, placed))
+    Ok(match &spec.language {
+        Some(l)
+            if !spec
+                .system
+                .as_deref()
+                .is_some_and(crate::language::template_uses_language) =>
+        {
+            let line = crate::language::instruction(&crate::language::language_name(l));
+            if system.is_empty() {
+                line
+            } else {
+                format!("{}\n\n{line}", system.trim_end())
+            }
+        }
+        _ => system,
+    })
 }
 
 fn render_system(
@@ -1558,6 +1604,15 @@ fn render_system(
     );
     ctx.insert("workspace".into(), json!(workspace.display().to_string()));
     ctx.insert("persona".into(), json!(persona));
+    ctx.insert(
+        "language".into(),
+        json!(
+            spec.language
+                .as_deref()
+                .map(crate::language::language_name)
+                .unwrap_or_default()
+        ),
+    );
     ctx.insert("vars".into(), Value::Object(vars.clone()));
     for (k, v) in vars {
         ctx.entry(k.clone()).or_insert_with(|| v.clone());

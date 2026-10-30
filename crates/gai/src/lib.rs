@@ -33,6 +33,9 @@
 pub mod bundle;
 pub mod client;
 mod config;
+#[cfg(feature = "sandbox")]
+pub mod deployments;
+pub mod finetune;
 pub mod notifications;
 pub mod suggestions;
 
@@ -40,8 +43,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub use config::{
-    A2aServeSettings, AuthMode, Config, ConfigError, McpServeSettings, OidcSettings,
-    ServerSettings, SsoSettings, TrustedHeader,
+    A2aServeSettings, AuthMode, Config, ConfigError, DeploySettings, McpServeSettings,
+    OidcSettings, ServerSettings, SsoSettings, TrustedHeader,
 };
 pub use gai_agent as agent;
 pub use gai_browser as browser;
@@ -112,6 +115,7 @@ const SETTING_DEFAULT_MODEL: &str = "default_model";
 const SETTING_PROVIDER_KEY: &str = "provider_key:";
 const SETTING_MODEL: &str = "model:";
 const SETTING_DEFAULT_PERSONA: &str = "default_persona";
+pub const SETTING_DEFAULT_LANGUAGE: &str = "default_language";
 
 /// The general assistant used when no agent is named.
 pub fn default_agent() -> AgentSpec {
@@ -233,6 +237,9 @@ pub struct Gai {
     dashboards: std::sync::OnceLock<gai_data::dashboards::Dashboards>,
     notifications: std::sync::OnceLock<notifications::Notifications>,
     suggestions: std::sync::OnceLock<suggestions::Suggestions>,
+    fine_tunes: std::sync::OnceLock<finetune::FineTunes>,
+    #[cfg(feature = "sandbox")]
+    deployments: std::sync::OnceLock<deployments::Deployments>,
 }
 
 impl Gai {
@@ -259,6 +266,9 @@ impl Gai {
             dashboards: std::sync::OnceLock::new(),
             notifications: std::sync::OnceLock::new(),
             suggestions: std::sync::OnceLock::new(),
+            fine_tunes: std::sync::OnceLock::new(),
+            #[cfg(feature = "sandbox")]
+            deployments: std::sync::OnceLock::new(),
         })
     }
 
@@ -386,6 +396,23 @@ impl Gai {
             }
         }
         rt.set_default_model(model);
+        Ok(())
+    }
+
+    /// The language agents answer in by default (`None`: gai.toml's, else
+    /// the user's own). Kept in the database.
+    pub async fn set_default_language(&self, language: Option<String>) -> Result<(), Error> {
+        let rt = self.runtime().await?;
+        let language = language
+            .map(|l| l.trim().to_owned())
+            .filter(|l| !l.is_empty());
+        match &language {
+            Some(l) => rt.store().put_setting(SETTING_DEFAULT_LANGUAGE, l).await?,
+            None => {
+                rt.store().delete_setting(SETTING_DEFAULT_LANGUAGE).await?;
+            }
+        }
+        rt.set_default_language(language.or_else(|| self.config.language.clone()));
         Ok(())
     }
 
@@ -579,9 +606,27 @@ impl Gai {
                         "the pgvector index ({url}) needs gai built with the postgres feature"
                     )));
                 }
+                // Model servers gai started, so agents naming their models
+                // resolve before the servers are checked.
+                #[cfg(feature = "sandbox")]
+                if let Some(d) = self.deployments_for(&store) {
+                    d.restore().await?;
+                }
+                self.fine_tunes.get_or_init(|| {
+                    let f = finetune::FineTunes::new(store.clone(), self.models.clone());
+                    #[cfg(feature = "sandbox")]
+                    let f = f.with_local(self.deployments.get().cloned());
+                    f
+                });
                 if let Some(m) = store.get_setting(SETTING_DEFAULT_MODEL).await? {
                     rt.set_default_model(Some(m));
                 }
+                rt.set_default_language(
+                    store
+                        .get_setting(SETTING_DEFAULT_LANGUAGE)
+                        .await?
+                        .or_else(|| self.config.language.clone()),
+                );
                 if let Some(p) = store.get_setting(SETTING_DEFAULT_PERSONA).await? {
                     match serde_json::from_str(&p) {
                         Ok(d) => rt.set_default_persona(Some(d)),
@@ -724,6 +769,51 @@ impl Gai {
     pub async fn notifications(&self) -> Result<&notifications::Notifications, Error> {
         self.runtime().await?;
         Ok(self.notifications.get().expect("made with the runtime"))
+    }
+
+    /// Model servers this gai runs in containers. Only the default
+    /// organization has them; `None` for others.
+    #[cfg(feature = "sandbox")]
+    pub async fn deployments(&self) -> Result<Option<&deployments::Deployments>, Error> {
+        self.runtime().await?;
+        Ok(self.deployments.get())
+    }
+
+    #[cfg(feature = "sandbox")]
+    fn deployments_for(&self, store: &SharedStore) -> Option<&deployments::Deployments> {
+        if self.config.org.is_some() || self.config.tools.confined {
+            return None;
+        }
+        Some(self.deployments.get_or_init(|| {
+            let engine = self.config.deploy.engine.as_deref().or(self
+                .config
+                .sandbox
+                .engine
+                .as_deref());
+            deployments::Deployments::new(
+                store.clone(),
+                self.models.clone(),
+                Arc::new(gai_sandbox::deploy::DockerEngine::new(engine)),
+                self.config.deploy.clone(),
+            )
+        }))
+    }
+
+    /// Fine-tuning jobs on rated runs.
+    pub async fn fine_tunes(&self) -> Result<&finetune::FineTunes, Error> {
+        self.runtime().await?;
+        Ok(self.fine_tunes.get().expect("made with the runtime"))
+    }
+
+    /// Check running fine-tunes; models that finished are added to the
+    /// catalog (and kept across restarts).
+    pub async fn poll_fine_tunes(&self) -> Result<Vec<finetune::FineTuneJob>, Error> {
+        let f = self.fine_tunes().await?;
+        f.poll(&|provider: &str, model: gai_llm::ModelConfig| {
+            let provider = provider.to_owned();
+            Box::pin(async move { self.add_model(&provider, model).await })
+        })
+        .await
     }
 
     /// Suggestions from usage and from agents' `suggest` tool.
@@ -1132,5 +1222,60 @@ mod tests {
         assert!(gai.find_agent("stored@nope").await.is_err());
         assert!(gai.find_agent("missing").await.is_err());
         assert!(dir.path().join("gai.db").exists());
+    }
+
+    /// The system prompt a run's first model call was sent.
+    async fn sent_system(gai: &Gai, spec: AgentSpec) -> String {
+        let out = gai.agent_spec(spec).run("hello").await.unwrap();
+        let steps = gai
+            .runtime()
+            .await
+            .unwrap()
+            .store()
+            .list_steps(&out.run_id)
+            .await
+            .unwrap();
+        let model = steps
+            .iter()
+            .find(|s| s.kind == gai_store::StepKind::Model)
+            .unwrap();
+        model.input.as_ref().unwrap()["request"]["system"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned()
+    }
+
+    #[tokio::test]
+    async fn agents_answer_in_their_language() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = Config {
+            data_dir: Some(dir.path().to_owned()),
+            default_model: Some("mock/echo".into()),
+            language: Some("de".into()),
+            ..Default::default()
+        };
+        let gai = Gai::from_config(config, None).unwrap();
+        let plain = AgentSpec::new("plain").system("Be brief.");
+        let system = sent_system(&gai, plain.clone()).await;
+        assert!(system.starts_with("Be brief."), "{system}");
+        assert!(system.ends_with("Always reply in German, whatever language the user writes in, unless they ask you to use another one."), "{system}");
+
+        let mut french = plain.clone();
+        french.language = Some("fr".into());
+        assert!(sent_system(&gai, french).await.contains("reply in French"));
+
+        let placed = AgentSpec::new("placed").system("Write in {{ language }} only.");
+        let mut placed = placed;
+        placed.language = Some("pt-BR".into());
+        assert_eq!(
+            sent_system(&gai, placed).await,
+            "Write in Brazilian Portuguese only."
+        );
+
+        gai.set_default_language(Some("ja".into())).await.unwrap();
+        assert!(sent_system(&gai, plain.clone()).await.contains("Japanese"));
+        // Clearing the setting goes back to gai.toml's.
+        gai.set_default_language(None).await.unwrap();
+        assert!(sent_system(&gai, plain).await.contains("German"));
     }
 }

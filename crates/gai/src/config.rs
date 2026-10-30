@@ -72,11 +72,40 @@ pub struct Config {
     pub persona: gai_agent::PersonaDefaults,
     /// Email and webhooks for reports and alerts.
     pub notify: gai_tools::notify::NotifySettings,
+    /// Model servers gai starts in containers (Ollama, vLLM, llama.cpp).
+    pub deploy: DeploySettings,
+    /// The language agents answer in unless the agent or the run says
+    /// otherwise (`fr`, `pt-BR`, or a name). Unset: the user's language.
+    pub language: Option<String>,
     #[serde(flatten)]
     pub llm: LlmConfig,
     /// Set on an organization's instance (see `Gai::for_org`): its slug.
     #[serde(skip)]
     pub org: Option<String>,
+}
+
+/// ```toml
+/// [deploy]
+/// engine = "unix:///run/podman/podman.sock"   # default: [sandbox] engine, DOCKER_HOST, usual sockets
+/// bind = "127.0.0.1"                           # host address model servers are published on
+/// host = "127.0.0.1"                           # how gai reaches them (host.containers.internal when gai runs in a container)
+/// ```
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct DeploySettings {
+    pub engine: Option<String>,
+    pub bind: String,
+    pub host: String,
+}
+
+impl Default for DeploySettings {
+    fn default() -> Self {
+        Self {
+            engine: None,
+            bind: "127.0.0.1".into(),
+            host: "127.0.0.1".into(),
+        }
+    }
 }
 
 /// ```toml

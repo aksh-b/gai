@@ -232,6 +232,9 @@ pub fn required_scope(method: &Method, path: &str) -> Scope {
         || path.starts_with("/v1/orgs")
         // Rules and their tests; a browser subscribing to push is `run`.
         || path.starts_with("/v1/notifications/rules")
+        // Starting and stopping model servers, and training models.
+        || path.starts_with("/v1/deployments")
+        || (path.starts_with("/v1/finetunes") && !path.starts_with("/v1/finetunes/dataset"))
         || (path.starts_with("/v1/connections") && !path.ends_with("/query")))
         && write;
     // The audit log, forgetting users, retention, keys and secrets: admin,
@@ -240,7 +243,11 @@ pub fn required_scope(method: &Method, path: &str) -> Scope {
         || path.starts_with("/v1/secrets")
         || path.starts_with("/v1/audit")
         || path.starts_with("/v1/users")
-        || path.starts_with("/v1/retention");
+        || path.starts_with("/v1/retention")
+        // A model server's output can show its environment.
+        || (path.starts_with("/v1/deployments/") && path.ends_with("/logs"))
+        // Training sets hold whole conversations.
+        || path.starts_with("/v1/finetunes/dataset");
     if admin || admin_write {
         Scope::Admin
     } else if build {
@@ -789,6 +796,21 @@ mod tests {
             required_scope(&Method::POST, "/v1/notifications/push"),
             Scope::Run
         );
+        assert_eq!(
+            required_scope(&Method::POST, "/v1/deployments"),
+            Scope::Admin
+        );
+        assert_eq!(
+            required_scope(&Method::GET, "/v1/deployments/q/logs"),
+            Scope::Admin
+        );
+        assert_eq!(required_scope(&Method::GET, "/v1/deployments"), Scope::Read);
+        assert_eq!(required_scope(&Method::POST, "/v1/finetunes"), Scope::Admin);
+        assert_eq!(
+            required_scope(&Method::POST, "/v1/finetunes/dataset"),
+            Scope::Admin
+        );
+        assert_eq!(required_scope(&Method::GET, "/v1/finetunes"), Scope::Read);
         assert_eq!(required_scope(&Method::POST, "/v1/apps"), Scope::Build);
         assert_eq!(required_scope(&Method::POST, "/v1/prompts"), Scope::Build);
         assert_eq!(

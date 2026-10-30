@@ -13,6 +13,8 @@
 
 #[cfg(feature = "container")]
 pub mod container;
+#[cfg(feature = "container")]
+pub mod deploy;
 pub mod local;
 mod tool;
 mod workspace;

@@ -16,6 +16,26 @@ initial development and will ship as 0.1.0.
 
 ### Added
 
+- **Model servers.** Run open models with llama.cpp, vLLM or Ollama in
+  Docker or Podman, started, stopped and watched (health, logs) under
+  **Settings › AI models › Model servers**, next to this machine's GPUs
+  (memory, use, temperature). Their models appear as
+  `deploy-<name>/<model>` once the server answers. New `[deploy]`
+  settings. See [docs/model-servers.md](docs/model-servers.md).
+- **Languages.** The dashboard comes in English, German, Spanish,
+  French, Portuguese, Hindi, Japanese and Chinese (navigation, page
+  titles and common actions so far; the rest stays English until
+  translated), following the browser or **Settings › Preferences ›
+  Language**. Agents have a `language` they answer in, also settable per
+  run and as a server-wide default (`language` in gai.toml, or
+  Preferences); instructions can use `{{ language }}`.
+- **Fine-tuning.** Train a model on the answers people rated thumbs up,
+  under **Settings › AI models › Fine-tuned models**: with OpenAI, with
+  Together, or as a LoRA adapter on this machine's GPU that gai then
+  serves with vLLM. The training set can be previewed and downloaded as
+  JSON Lines, and the finished model joins the catalog. See
+  [docs/fine-tuning.md](docs/fine-tuning.md).
+
 - **Notifications.** Rules under **Settings › Notifications** say who
   hears when something needs an OK, a run fails or finishes, or a
   dashboard alert fires: by email, Slack (an incoming webhook), a webhook,

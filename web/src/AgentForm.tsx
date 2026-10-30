@@ -1,3 +1,4 @@
+import { REPLY_LANGUAGES } from './i18n';
 import { useMemo, useRef, useState } from 'react';
 import { CheckboxField, SelectField, SwitchField, TextField } from '@/components/fields';
 import { Button } from '@/components/ui/button';
@@ -91,6 +92,7 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
   const [typing, setTyping] = useState(false);
 
   const set = (path: (string | number)[], v: unknown) => onChange(setIn(spec, path, v));
+  const language = typeof spec.language === 'string' ? spec.language : '';
   const promptRef = typeof spec.prompt === 'string' ? spec.prompt : '';
   const get = <T,>(path: (string | number)[]) => getIn(spec, path) as T | undefined;
 
@@ -267,6 +269,21 @@ export function AgentForm({ spec, onChange, isNew }: { spec: Spec; onChange: (s:
             onValueChange={(v) => set(['persona_placement'], v)}
           />
         )}
+      </Section>
+
+      <Section title="Language" hint="The language it answers in, whatever language people write in.">
+        <SelectField
+          label="Answers in"
+          options={[
+            { value: '', label: 'The server default' },
+            ...REPLY_LANGUAGES,
+            ...(language && !REPLY_LANGUAGES.some((l) => l.value === language)
+              ? [{ value: language, label: language, description: 'kept as written' }]
+              : []),
+          ]}
+          value={language}
+          onValueChange={(v) => set(['language'], v)}
+        />
       </Section>
 
       <Section title="Abilities" hint="What the assistant can do. For each one, choose whether it acts on its own or asks you first.">

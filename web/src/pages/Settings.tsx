@@ -8,7 +8,10 @@ import { FieldDescription } from '@/components/ui/field';
 import { api, type SetupStatus } from '../api';
 import { modelLabel } from '../labels';
 import { modelOptions, useModelGroups } from '../models';
+import { Deployments } from '../Deployments';
+import { FineTunes } from '../FineTunes';
 import { CloudConnect, LocalModels } from '../ModelSetup';
+import { LANGUAGES, REPLY_LANGUAGES, chosenLanguage, setLanguage } from '../i18n';
 import { useDevMode, useTheme, type Theme } from '../prefs';
 import { Models } from './Models';
 
@@ -105,6 +108,26 @@ export function ModelsSettings() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Model servers</CardTitle>
+          <CardDescription>Run open models with llama.cpp, vLLM or Ollama in containers, on this machine's CPU or GPUs.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Deployments onUse={(m) => setDefault(m)} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Fine-tuned models</CardTitle>
+          <CardDescription>Train a model on the answers people rated thumbs up, with OpenAI, Together or on this machine.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FineTunes onUse={(m) => setDefault(m)} />
+        </CardContent>
+      </Card>
+
       <Disclosure summary="Every model and provider" open={dev}>
         <Models embedded />
       </Disclosure>
@@ -116,6 +139,24 @@ export function ModelsSettings() {
 export function Preferences() {
   const [dev, setDev] = useDevMode();
   const [theme, setTheme] = useTheme();
+  const [replies, setReplies] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    api
+      .settings()
+      .then((s) => setReplies(s.default_language))
+      .catch(() => setReplies(null));
+  }, []);
+
+  async function changeReplies(v: string) {
+    try {
+      const s = await api.setDefaultLanguage(v || null);
+      setReplies(s.default_language);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
   return (
     <Page className="max-w-4xl">
       <PageHeader title="Preferences" subtitle="These apply to this browser only." />
@@ -134,6 +175,28 @@ export function Preferences() {
               { value: 'dark', label: 'Dark' },
             ]}
           />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Language</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <SelectField
+            label="Dashboard language"
+            options={[{ value: '', label: 'Match the browser' }, ...LANGUAGES.map((l) => ({ value: l.code, label: l.name }))]}
+            value={chosenLanguage() ?? ''}
+            onValueChange={(v) => setLanguage(v || null)}
+          />
+          {replies !== undefined && (
+            <SelectField
+              label="Assistants answer in"
+              description="For everyone on this server, unless an assistant picks its own. Needs admin."
+              options={[{ value: '', label: "The user's own language" }, ...REPLY_LANGUAGES]}
+              value={replies ?? ''}
+              onValueChange={changeReplies}
+            />
+          )}
         </CardContent>
       </Card>
       <Card>

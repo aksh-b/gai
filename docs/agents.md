@@ -34,6 +34,7 @@ gai agents diff researcher 1 2           # also: versions, label, rollback
 | `model` | `provider/model`, an alias from `[aliases]`, or `router/<name>`. Defaults to `default_model`. |
 | `system` | The instructions, a [minijinja](https://docs.rs/minijinja) template. Variables: `agent`, `model`, `date`, `datetime`, `workspace`, `persona`, and the run's `vars`. |
 | `tools` | Tool names, or prefixes ending in `*` (`fs_*`, `browser_*`, `mcp__tracker__*`). An entry ending in `?` is optional (`mcp__github__*?`): the agent uses those tools when they exist and runs without them when they don't, instead of failing. |
+| `language` | The language it answers in: a code (`fr`, `pt-BR`) or a name (`French`). The instructions can place it with `{{ language }}`; otherwise a line asking for replies in it goes at the end. A run can pick another (`"language"` on `POST /v1/runs`), and without either the server's default applies (**Settings › Preferences**, or `language` in gai.toml). |
 | `tool_policy` | Per tool: `auto`, `approve` (a person approves each call) or `deny`. Overrides the tool's default. Keys are tool names or prefixes ending in `*` (`mcp__gmail__send*: approve`); the longest match wins. |
 | `reasoning` | `effort: off\|low\|medium\|high\|max`, optional `budget_tokens`, and `expose: true` to keep readable reasoning. Mapped to what each provider offers. |
 | `max_tokens`, `temperature` | Passed to the model. |

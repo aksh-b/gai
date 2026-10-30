@@ -42,8 +42,13 @@ pub struct ContainerSandbox {
 /// The engine address to use: configured, `DOCKER_HOST`, or the first
 /// socket that exists.
 fn engine_address(settings: &SandboxSettings) -> Option<String> {
-    if let Some(e) = &settings.engine {
-        return Some(e.clone());
+    find_engine(settings.engine.as_deref())
+}
+
+/// `engine` if given, else `DOCKER_HOST`, else the first socket that exists.
+pub(crate) fn find_engine(engine: Option<&str>) -> Option<String> {
+    if let Some(e) = engine {
+        return Some(e.to_owned());
     }
     if let Ok(h) = std::env::var("DOCKER_HOST") {
         return Some(h);

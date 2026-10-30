@@ -295,6 +295,36 @@ pub fn document() -> Value {
         op("post", "/v1/notifications/push/unsubscribe", "notifications", "Forget a browser, by device id or endpoint")
             .body(s::<crate::notifications::Unsubscribe>(&mut g))
             .ok(s::<Done>(&mut g)),
+        op("get", "/v1/deployments", "models", "Model servers gai runs in containers (Ollama, vLLM, llama.cpp): spec, container state and health. Their models are deploy-<name>/<model>")
+            .ok(list::<gai::deployments::DeploymentView>(&mut g)),
+        op("post", "/v1/deployments", "models", "Save a model server (JSON, or {\"yaml\": \"...\"}) and start it. The image and model download in the background")
+            .body(s::<gai::sandbox::deploy::DeploySpec>(&mut g))
+            .ok(s::<gai::deployments::DeploymentView>(&mut g)),
+        op("get", "/v1/deployments/gpus", "models", "This machine's NVIDIA GPUs (memory, use, temperature) and whether the container engine can use them")
+            .ok(s::<gai::deployments::GpuStatus>(&mut g)),
+        op("get", "/v1/deployments/{name}", "models", "One model server").ok(s::<gai::deployments::DeploymentView>(&mut g)),
+        op("delete", "/v1/deployments/{name}", "models", "Stop it and delete its container; downloaded weights are kept").ok(s::<Done>(&mut g)),
+        op("post", "/v1/deployments/{name}/start", "models", "Start it (again)").ok(s::<gai::deployments::DeploymentView>(&mut g)),
+        op("post", "/v1/deployments/{name}/stop", "models", "Stop it").ok(s::<gai::deployments::DeploymentView>(&mut g)),
+        op("get", "/v1/deployments/{name}/logs", "models", "The server's last lines of output (text)")
+            .query(&[("lines", "How many (default 200)")]),
+        op("get", "/v1/finetunes", "models", "Fine-tuning jobs, newest first: status, examples, and the model each made")
+            .ok(list::<gai::finetune::FineTuneJob>(&mut g)),
+        op("post", "/v1/finetunes", "models", "Build a training set from runs rated thumbs up and start training (openai, together, or a local LoRA). The model is added to the catalog when it is done")
+            .body(s::<gai::finetune::FineTuneSpec>(&mut g))
+            .ok(s::<gai::finetune::FineTuneJob>(&mut g)),
+        op("post", "/v1/finetunes/dataset", "models", "What a training set would hold: counts, skipped runs and a few examples")
+            .body(s::<gai::finetune::DatasetFilter>(&mut g))
+            .ok(s::<crate::finetune::DatasetPreview>(&mut g)),
+        op("post", "/v1/finetunes/dataset.jsonl", "models", "The training set as JSON Lines (OpenAI chat format)")
+            .body(s::<gai::finetune::DatasetFilter>(&mut g)),
+        op("get", "/v1/finetunes/{name}", "models", "One job").ok(s::<gai::finetune::FineTuneJob>(&mut g)),
+        op("delete", "/v1/finetunes/{name}", "models", "Forget a finished job (its model stays)").ok(s::<Done>(&mut g)),
+        op("post", "/v1/finetunes/{name}/cancel", "models", "Stop a running job").ok(s::<gai::finetune::FineTuneJob>(&mut g)),
+        op("post", "/v1/finetunes/{name}/check", "models", "Check with the provider now (gai serve checks every minute)").ok(s::<gai::finetune::FineTuneJob>(&mut g)),
+        op("put", "/v1/settings/language", "setup", "The language agents answer in unless the agent or the run picks one ({\"language\": \"fr\"}, or null for the user's own)")
+            .body(s::<crate::setup::LanguageSetting>(&mut g))
+            .ok(s::<crate::setup::SettingsView>(&mut g)),
         op("get", "/v1/suggestions", "suggestions", "Open suggestions, newest first: from how gai is used (assistants that fail, data nothing uses, repeated questions) and from agents' suggest tool")
             .ok(list::<gai::suggestions::Suggestion>(&mut g)),
         op("post", "/v1/suggestions/{id}/accept", "suggestions", "Do what it suggests (start the run, install the template, or give the page to open) and mark it accepted")

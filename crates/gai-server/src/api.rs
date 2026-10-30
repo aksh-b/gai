@@ -214,6 +214,10 @@ pub struct CreateRun {
     /// a stored persona (`name`, `name@v3`, `name@prod`), an inline persona,
     /// or `"none"`.
     pub persona: Option<PersonaRef>,
+    /// Answer in this language (`fr`, `pt-BR`, or a name) instead of the
+    /// agent's or the server's default.
+    #[serde(default)]
+    pub language: Option<String>,
     /// Run `approve`-policy tools without asking.
     #[serde(default)]
     pub auto_approve: bool,
@@ -570,6 +574,7 @@ async fn create_run(
     req.user_id = body.user_id;
     req.callback_url = body.callback_url;
     req.persona = body.persona;
+    req.language = body.language;
     p.stamp(&mut req.metadata);
     // Spend is charged to the key by the runtime's finish hook (see
     // `router`), so every mode and resumed runs are charged alike.

@@ -2,6 +2,7 @@
 // primitives in ./ui. Pages pass data (options, tab items) instead of
 // repeating the Field / Select / Tabs structure each time.
 
+import { tr } from '@/i18n';
 import { useId, type ComponentProps, type ReactNode } from 'react';
 
 import { Checkbox } from '@/components/ui/checkbox';
@@ -29,9 +30,9 @@ export function TextField({ label, description, error, id, className, ...rest }:
   const fid = id ?? auto;
   return (
     <Field data-invalid={error ? true : undefined} className={className}>
-      {label && <FieldLabel htmlFor={fid}>{label}</FieldLabel>}
+      {label && <FieldLabel htmlFor={fid}>{tr(label)}</FieldLabel>}
       <Input id={fid} aria-invalid={error ? true : undefined} {...rest} />
-      {description && <FieldDescription>{description}</FieldDescription>}
+      {description && <FieldDescription>{tr(description)}</FieldDescription>}
       {error && <FieldError>{error}</FieldError>}
     </Field>
   );
@@ -97,9 +98,9 @@ export function SelectField({
   if (!label) return control;
   return (
     <Field className={className}>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <FieldLabel htmlFor={id}>{tr(label)}</FieldLabel>
       {control}
-      {description && <FieldDescription>{description}</FieldDescription>}
+      {description && <FieldDescription>{tr(description)}</FieldDescription>}
     </Field>
   );
 }
@@ -135,11 +136,11 @@ export function CheckboxField({ label, description, className, onCheckedChange, 
 
 function ToggleLabel({ id, label, description }: Labelled & { id: string }) {
   if (!label && !description) return null;
-  if (!description) return <FieldLabel htmlFor={id}>{label}</FieldLabel>;
+  if (!description) return <FieldLabel htmlFor={id}>{tr(label)}</FieldLabel>;
   return (
     <FieldContent>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <FieldDescription>{description}</FieldDescription>
+      <FieldLabel htmlFor={id}>{tr(label)}</FieldLabel>
+      <FieldDescription>{tr(description)}</FieldDescription>
     </FieldContent>
   );
 }
@@ -193,7 +194,7 @@ export function ToggleField({ label, options, value, onValueChange, className, .
   const id = useId();
   return (
     <Field className={className}>
-      {label && <FieldTitle id={id}>{label}</FieldTitle>}
+      {label && <FieldTitle id={id}>{tr(label)}</FieldTitle>}
       <ToggleGroup
         type="single"
         variant="outline"

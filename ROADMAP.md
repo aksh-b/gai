@@ -146,7 +146,17 @@ connection. Not checked: real push services, Slack and mail MCP servers.
 
 Done when a non-developer can build, publish and share an app without YAML.
 
-## 21. Models and localization
+## 21. Models and localization — done (2026-10-30)
+
+Part 1 built (2026-10-30): model servers (llama.cpp, vLLM, Ollama in
+containers, with health, logs and GPU status) and fine-tuning on rated
+runs (OpenAI, Together, or a local LoRA served by vLLM). Not checked:
+vLLM, GPUs and real fine-tuning APIs (none here).
+
+Part 2 built: an agent `language` (per agent, per run, or a server
+default) and a dashboard in eight languages, following the browser.
+Navigation, settings titles and common actions are translated; most page
+bodies are still English.
 
 - **Custom model deployment** [82]: start and stop local model servers (Ollama, vLLM, llama.cpp) from the dashboard, with health and GPU status.
 - **Fine-tuning** [83]: build training sets from rated runs (phase 13), start provider fine-tunes (OpenAI, Together) or local LoRA jobs, and register the result as a model.

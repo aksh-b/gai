@@ -54,3 +54,4 @@ zip.workspace = true
 zip.workspace = true
 regex.workspace = true
 tempfile.workspace = true
+wiremock.workspace = true

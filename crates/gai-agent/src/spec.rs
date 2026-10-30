@@ -46,6 +46,11 @@ pub struct AgentSpec {
     /// Defaults to the global setting, else `prepend`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub persona_placement: Option<crate::persona::Placement>,
+    /// The language it answers in: a code (`fr`, `pt-BR`) or a name. A run
+    /// can pick another; the server's default applies otherwise. The
+    /// prompt can place it with `{{ language }}`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
     /// Tool names, or prefixes ending in `*`. Ending in `?` makes an entry
     /// optional: `mcp__github__*?` uses those tools when the server is
     /// there and runs without them when it isn't.

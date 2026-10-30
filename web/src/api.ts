@@ -104,6 +104,78 @@ export type PersonaVersion = Schemas['PersonaVersion'];
 export type PersonaDefaults = Schemas['PersonaDefaultsView'];
 export type Placement = Schemas['Placement'];
 
+export type Trainer = 'openai' | 'together' | 'local';
+
+export interface DatasetFilter {
+  agent?: string;
+  since?: string;
+  limit?: number;
+  without_tools?: boolean;
+}
+
+export interface FineTuneSpec {
+  name: string;
+  trainer: Trainer;
+  base_model: string;
+  dataset?: DatasetFilter;
+  epochs?: number;
+  learning_rate?: number;
+  lora_rank?: number;
+}
+
+export interface FineTuneJob {
+  spec: FineTuneSpec;
+  status: 'preparing' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+  examples: number;
+  job_id?: string;
+  model?: string;
+  error?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DatasetPreview {
+  stats: { examples: number; skipped: string[] };
+  sample: unknown[];
+}
+
+export type ServerKind = 'ollama' | 'vllm' | 'llamacpp';
+
+export interface DeploySpec {
+  name: string;
+  server: ServerKind;
+  model?: string;
+  gpu?: boolean;
+  port?: number;
+  context?: number;
+  tools?: boolean;
+  tool_parser?: string;
+  image?: string;
+  args?: string[];
+  env?: Record<string, string>;
+}
+
+export interface DeploymentView {
+  spec: DeploySpec;
+  provider: string;
+  base_url?: string;
+  container?: {
+    state: string;
+    running: boolean;
+    host_port?: number;
+    started_at?: string;
+    exit_code?: number;
+    error?: string;
+    image: string;
+  };
+  health: { ok: boolean; models: string[]; error?: string };
+}
+
+export interface GpuStatus {
+  gpus: { index: number; name: string; memory_total_mb: number; memory_used_mb: number; utilization: number; temperature_c?: number }[];
+  engine_gpu: boolean;
+}
+
 export type NotifyEvent = 'approval' | 'run_failed' | 'run_finished' | 'alert' | 'suggestion';
 
 export type SuggestedAction =
@@ -526,6 +598,14 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 const get = <T,>(path: string) => request<T>('GET', path);
 
+/** A request whose answer is plain text. */
+async function requestText(method: string, path: string): Promise<string> {
+  const res = await fetch(path, { method, headers: headers(false) });
+  unauthorized(res);
+  if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`);
+  return res.text();
+}
+
 /** A request whose answer is a file. */
 async function download(method: string, path: string, body?: unknown): Promise<Blob> {
   const res = await fetch(path, { method, headers: headers(body !== undefined), body: body === undefined ? undefined : JSON.stringify(body) });
@@ -544,7 +624,9 @@ function versionPair(from?: number, to?: number) {
 export const api = {
   setupStatus: () => get<SetupStatus>('/v1/setup/status'),
   claim: () => request<{ key: ApiKey; secret: string }>('POST', '/v1/setup/claim'),
-  settings: () => get<{ default_model: string | null; default_model_source: SetupStatus['default_model_source'] }>('/v1/settings'),
+  settings: () =>
+    get<{ default_model: string | null; default_model_source: SetupStatus['default_model_source']; default_language: string | null }>('/v1/settings'),
+  setDefaultLanguage: (language: string | null) => request<{ default_language: string | null }>('PUT', '/v1/settings/language', { language }),
   setDefaultModel: (default_model: string | null) =>
     request<{ default_model: string | null; default_model_source: SetupStatus['default_model_source'] }>('PUT', '/v1/settings', {
       default_model,
@@ -721,6 +803,30 @@ export const api = {
   deleteApp: (name: string) => request<void>('DELETE', `/v1/apps/${encodeURIComponent(name)}`),
   newAppKey: (name: string) => request<{ secret: string; prefix: string }>('POST', `/v1/apps/${encodeURIComponent(name)}/key`),
   removeAppKey: (name: string) => request<void>('DELETE', `/v1/apps/${encodeURIComponent(name)}/key`),
+  fineTunes: () => get<FineTuneJob[]>('/v1/finetunes'),
+  startFineTune: (spec: FineTuneSpec) => request<FineTuneJob>('POST', '/v1/finetunes', spec),
+  checkFineTune: (name: string) => request<FineTuneJob>('POST', `/v1/finetunes/${encodeURIComponent(name)}/check`),
+  cancelFineTune: (name: string) => request<FineTuneJob>('POST', `/v1/finetunes/${encodeURIComponent(name)}/cancel`),
+  deleteFineTune: (name: string) => request<{ ok: boolean }>('DELETE', `/v1/finetunes/${encodeURIComponent(name)}`),
+  previewDataset: (filter: DatasetFilter) => request<DatasetPreview>('POST', '/v1/finetunes/dataset', filter),
+  downloadDataset: async (filter: DatasetFilter) => {
+    const res = await fetch('/v1/finetunes/dataset.jsonl', { method: 'POST', headers: headers(true), body: JSON.stringify(filter) });
+    unauthorized(res);
+    if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`);
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'gai-training.jsonl';
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+  deployments: () => get<DeploymentView[]>('/v1/deployments'),
+  deploy: (spec: DeploySpec) => request<DeploymentView>('POST', '/v1/deployments', spec),
+  startDeployment: (name: string) => request<DeploymentView>('POST', `/v1/deployments/${encodeURIComponent(name)}/start`),
+  stopDeployment: (name: string) => request<DeploymentView>('POST', `/v1/deployments/${encodeURIComponent(name)}/stop`),
+  deleteDeployment: (name: string) => request<{ ok: boolean }>('DELETE', `/v1/deployments/${encodeURIComponent(name)}`),
+  deploymentLogs: (name: string) => requestText('GET', `/v1/deployments/${encodeURIComponent(name)}/logs`),
+  gpus: () => get<GpuStatus>('/v1/deployments/gpus'),
   suggestions: () => get<Suggestion[]>('/v1/suggestions'),
   acceptSuggestion: (id: string) => request<SuggestionAccepted>('POST', `/v1/suggestions/${encodeURIComponent(id)}/accept`),
   dismissSuggestion: (id: string) => request<Suggestion>('POST', `/v1/suggestions/${encodeURIComponent(id)}/dismiss`),
